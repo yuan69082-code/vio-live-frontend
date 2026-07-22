@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import FirstSetupPage from './pages/FirstSetupPage'
+import MainNavigation from './pages/MainNavigation'
 
 type AgreementKey = 'terms' | 'privacy' | 'risk'
 
@@ -39,7 +40,7 @@ function GoogleMark() {
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<'login' | 'setup'>('login')
+  const [currentPage, setCurrentPage] = useState<'login' | 'setup' | 'main'>('login')
   const [email, setEmail] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
   const [agreements, setAgreements] = useState(initialAgreements)
@@ -55,7 +56,13 @@ function App() {
     /^\S+@\S+\.\S+$/.test(email) && /^\d{6}$/.test(verificationCode) && allAgreed
 
   useEffect(() => {
-    document.title = currentPage === 'setup' ? '首次设置 | Vio Live' : '登录 | Vio Live'
+    const pageTitles = {
+      login: '登录 | Vio Live',
+      setup: '首次设置 | Vio Live',
+      main: '工作台 | Vio Live',
+    }
+
+    document.title = pageTitles[currentPage]
   }, [currentPage])
 
   useEffect(() => {
@@ -90,7 +97,11 @@ function App() {
   }
 
   if (currentPage === 'setup') {
-    return <FirstSetupPage />
+    return <FirstSetupPage onComplete={() => setCurrentPage('main')} />
+  }
+
+  if (currentPage === 'main') {
+    return <MainNavigation />
   }
 
   return (

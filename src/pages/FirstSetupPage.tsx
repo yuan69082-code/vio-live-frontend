@@ -71,7 +71,7 @@ function ChoiceGrid<T extends string>({
   )
 }
 
-function FirstSetupPage() {
+function FirstSetupPage({ onComplete }: { onComplete: () => void }) {
   const [agentName, setAgentName] = useState('')
   const [avatar, setAvatar] = useState<string | null>(null)
   const [role, setRole] = useState<RoleKey | ''>('')
@@ -100,13 +100,13 @@ function FirstSetupPage() {
       return
     }
 
-    setMessage('已跳过高级设置。当前是纯前端原型，设置不会被保存。')
+    onComplete()
   }
 
   const completeSetup = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!formReady) return
-    setMessage(`“${agentName.trim()}”的首次设置已完成。当前未连接任何后端服务。`)
+    onComplete()
   }
 
   return (
