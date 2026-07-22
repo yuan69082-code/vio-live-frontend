@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import WorkspacePage from './WorkspacePage'
 
 type NavigationKey =
   | 'workspace'
@@ -102,34 +103,42 @@ function MainNavigation() {
       <div aria-hidden="true" className="main-ambient main-ambient-bottom" />
 
       <section className="main-frame" aria-label="Vio Live 主导航框架">
-        <header className="main-header">
-          <div>
-            <span className="main-wordmark">Vio Live</span>
-            <small>主导航框架</small>
-          </div>
-          <span className="main-avatar" aria-hidden="true">
-            V
-          </span>
-        </header>
-
-        <section
-          className="page-placeholder"
+        <div
+          className={`main-content${activeKey === 'workspace' ? ' workspace-content' : ''}`}
           role="tabpanel"
           aria-labelledby={`navigation-${activeItem.key}`}
         >
-          <div className="placeholder-orbit" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-            <div>
-              <NavigationIcon name={activeItem.icon} />
-            </div>
-          </div>
-          <span className="placeholder-index">{activeItem.index} / 06</span>
-          <h1>{activeItem.label}</h1>
-          <p>页面框架已建立</p>
-          <small>具体功能将在对应页面任务中实现。</small>
-        </section>
+          {activeKey === 'workspace' ? (
+            <WorkspacePage />
+          ) : (
+            <>
+              <header className="main-header">
+                <div>
+                  <span className="main-wordmark">Vio Live</span>
+                  <small>主导航框架</small>
+                </div>
+                <span className="main-avatar" aria-hidden="true">
+                  V
+                </span>
+              </header>
+
+              <section className="page-placeholder">
+                <div className="placeholder-orbit" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                  <div>
+                    <NavigationIcon name={activeItem.icon} />
+                  </div>
+                </div>
+                <span className="placeholder-index">{activeItem.index} / 06</span>
+                <h1>{activeItem.label}</h1>
+                <p>页面框架已建立</p>
+                <small>具体功能将在对应页面任务中实现。</small>
+              </section>
+            </>
+          )}
+        </div>
 
         <nav className="bottom-navigation" aria-label="主导航">
           {navigationItems.map((item) => {
