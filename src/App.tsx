@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
+import FirstSetupPage from './pages/FirstSetupPage'
 
 type AgreementKey = 'terms' | 'privacy' | 'risk'
 
@@ -38,6 +39,7 @@ function GoogleMark() {
 }
 
 function App() {
+  const [currentPage, setCurrentPage] = useState<'login' | 'setup'>('login')
   const [email, setEmail] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
   const [agreements, setAgreements] = useState(initialAgreements)
@@ -51,6 +53,10 @@ function App() {
 
   const formReady =
     /^\S+@\S+\.\S+$/.test(email) && /^\d{6}$/.test(verificationCode) && allAgreed
+
+  useEffect(() => {
+    document.title = currentPage === 'setup' ? '首次设置 | Vio Live' : '登录 | Vio Live'
+  }, [currentPage])
 
   useEffect(() => {
     if (countdown === 0) return
@@ -80,7 +86,11 @@ function App() {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!formReady) return
-    setMessage('登录信息已通过前端校验，当前未连接任何后端服务。')
+    setCurrentPage('setup')
+  }
+
+  if (currentPage === 'setup') {
+    return <FirstSetupPage />
   }
 
   return (
@@ -105,7 +115,7 @@ function App() {
         <button
           className="google-button"
           type="button"
-          onClick={() => setMessage('Google 登录尚未接入，当前仅展示前端界面。')}
+          onClick={() => setCurrentPage('setup')}
         >
           <GoogleMark />
           使用 Google 继续
@@ -199,4 +209,3 @@ function App() {
 }
 
 export default App
-
