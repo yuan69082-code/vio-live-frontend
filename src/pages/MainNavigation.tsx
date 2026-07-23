@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import ConversationPage from './ConversationPage'
 import ContinuityPage from './ContinuityPage'
+import PrivateDomainPage from './PrivateDomainPage'
 import WorkspacePage from './WorkspacePage'
 
 type NavigationKey =
@@ -106,7 +107,7 @@ function MainNavigation() {
 
       <section className="main-frame" aria-label="Vio Live 主导航框架">
         <div
-          className={`main-content${activeKey === 'workspace' ? ' workspace-content' : ''}${activeKey === 'conversation' ? ' conversation-content' : ''}${activeKey === 'continuity' ? ' continuity-content' : ''}`}
+          className={`main-content${activeKey === 'workspace' ? ' workspace-content' : ''}${activeKey === 'conversation' ? ' conversation-content' : ''}${activeKey === 'continuity' ? ' continuity-content' : ''}${activeKey === 'private' ? ' private-domain-content' : ''}`}
           role="tabpanel"
           aria-labelledby={`navigation-${activeItem.key}`}
         >
@@ -116,6 +117,8 @@ function MainNavigation() {
             <ConversationPage />
           ) : activeKey === 'continuity' ? (
             <ContinuityPage />
+          ) : activeKey === 'private' ? (
+            <PrivateDomainPage />
           ) : (
             <>
               <header className="main-header">
