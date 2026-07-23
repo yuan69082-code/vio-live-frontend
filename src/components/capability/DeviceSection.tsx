@@ -1,11 +1,8 @@
-import { useState } from 'react'
 import { capabilityMock } from '../../data/capabilityMock'
 import CapabilityIcon from './CapabilityIcon'
 import CapabilitySection from './CapabilitySection'
 
-function DeviceSection() {
-  const [managedId, setManagedId] = useState<string | null>(null)
-
+function DeviceSection({ onOpenDeviceCenter }: { onOpenDeviceCenter: () => void }) {
   return (
     <CapabilitySection
       id="device"
@@ -37,10 +34,10 @@ function DeviceSection() {
               </span>
               <button
                 type="button"
-                onClick={() => setManagedId(item.id)}
+                onClick={onOpenDeviceCenter}
               >
                 <CapabilityIcon name="settings" />
-                {managedId === item.id ? '管理中' : '管理'}
+                管理
               </button>
             </div>
           </article>

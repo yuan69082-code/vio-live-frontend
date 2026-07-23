@@ -6,8 +6,15 @@ import PluginSection from '../components/capability/PluginSection'
 import SkillSection from '../components/capability/SkillSection'
 import ToolSection from '../components/capability/ToolSection'
 import { capabilityMock } from '../data/capabilityMock'
+import DeviceCenterPage from './DeviceCenterPage'
 
 function CapabilityCenterPage() {
+  const [showDeviceCenter, setShowDeviceCenter] = useState(false)
+
+  if (showDeviceCenter) {
+    return <DeviceCenterPage onBack={() => setShowDeviceCenter(false)} />
+  }
+
   return (
     <div className="capability-page">
       <CapabilityHeader />
@@ -34,10 +41,11 @@ function CapabilityCenterPage() {
         <SkillSection />
         <PluginSection />
         <ToolSection />
-        <DeviceSection />
+        <DeviceSection onOpenDeviceCenter={() => setShowDeviceCenter(true)} />
       </section>
     </div>
   )
 }
 
 export default CapabilityCenterPage
+import { useState } from 'react'
