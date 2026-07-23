@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ConversationPage from './ConversationPage'
 import WorkspacePage from './WorkspacePage'
 
 type NavigationKey =
@@ -104,12 +105,14 @@ function MainNavigation() {
 
       <section className="main-frame" aria-label="Vio Live 主导航框架">
         <div
-          className={`main-content${activeKey === 'workspace' ? ' workspace-content' : ''}`}
+          className={`main-content${activeKey === 'workspace' ? ' workspace-content' : ''}${activeKey === 'conversation' ? ' conversation-content' : ''}`}
           role="tabpanel"
           aria-labelledby={`navigation-${activeItem.key}`}
         >
           {activeKey === 'workspace' ? (
             <WorkspacePage />
+          ) : activeKey === 'conversation' ? (
+            <ConversationPage />
           ) : (
             <>
               <header className="main-header">
