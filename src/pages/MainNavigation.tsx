@@ -3,6 +3,7 @@ import CapabilityCenterPage from './CapabilityCenterPage'
 import ConversationPage from './ConversationPage'
 import ContinuityPage from './ContinuityPage'
 import PrivateDomainPage from './PrivateDomainPage'
+import ProfilePage from './ProfilePage'
 import WorkspacePage from './WorkspacePage'
 
 type NavigationKey =
@@ -108,7 +109,7 @@ function MainNavigation() {
 
       <section className="main-frame" aria-label="Vio Live 主导航框架">
         <div
-          className={`main-content${activeKey === 'workspace' ? ' workspace-content' : ''}${activeKey === 'conversation' ? ' conversation-content' : ''}${activeKey === 'continuity' ? ' continuity-content' : ''}${activeKey === 'private' ? ' private-domain-content' : ''}${activeKey === 'capability' ? ' capability-content' : ''}`}
+          className={`main-content${activeKey === 'workspace' ? ' workspace-content' : ''}${activeKey === 'conversation' ? ' conversation-content' : ''}${activeKey === 'continuity' ? ' continuity-content' : ''}${activeKey === 'private' ? ' private-domain-content' : ''}${activeKey === 'capability' ? ' capability-content' : ''}${activeKey === 'profile' ? ' profile-content' : ''}`}
           role="tabpanel"
           aria-labelledby={`navigation-${activeItem.key}`}
         >
@@ -122,6 +123,8 @@ function MainNavigation() {
             <PrivateDomainPage />
           ) : activeKey === 'capability' ? (
             <CapabilityCenterPage />
+          ) : activeKey === 'profile' ? (
+            <ProfilePage />
           ) : (
             <>
               <header className="main-header">
