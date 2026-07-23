@@ -7,12 +7,19 @@ import UniversalComposer from '../components/workspace/UniversalComposer'
 import WorkspaceIcon from '../components/workspace/WorkspaceIcon'
 import { workspaceMock } from '../data/workspaceMock'
 import LifeCalendarPage from './LifeCalendarPage'
+import LifeLedgerPage from './LifeLedgerPage'
+
+type LifeView = 'workspace' | 'calendar' | 'ledger'
 
 function WorkspacePage() {
-  const [showCalendar, setShowCalendar] = useState(false)
+  const [lifeView, setLifeView] = useState<LifeView>('workspace')
 
-  if (showCalendar) {
-    return <LifeCalendarPage onBack={() => setShowCalendar(false)} />
+  if (lifeView === 'calendar') {
+    return <LifeCalendarPage onBack={() => setLifeView('workspace')} />
+  }
+
+  if (lifeView === 'ledger') {
+    return <LifeLedgerPage onBack={() => setLifeView('workspace')} />
   }
 
   return (
@@ -22,10 +29,14 @@ function WorkspacePage() {
           {workspaceMock.agent.avatar}
         </span>
         <h1>{workspaceMock.agent.name}</h1>
-        <button className="workspace-calendar-entry" type="button" onClick={() => setShowCalendar(true)}>
-          <WorkspaceIcon name="calendar" />
-          生活月历
-        </button>
+        <div className="workspace-life-entries" aria-label="生活管理入口">
+          <button className="workspace-calendar-entry" type="button" onClick={() => setLifeView('calendar')}>
+            <WorkspaceIcon name="calendar" />月历
+          </button>
+          <button className="workspace-calendar-entry" type="button" onClick={() => setLifeView('ledger')}>
+            <WorkspaceIcon name="ledger" />管账
+          </button>
+        </div>
       </header>
 
       <div className="workspace-body">
