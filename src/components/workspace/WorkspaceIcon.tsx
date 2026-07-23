@@ -14,6 +14,7 @@ export type WorkspaceIconName =
   | 'plus'
   | 'calendar'
   | 'ledger'
+  | 'body'
   | 'send'
 
 function WorkspaceIcon({ name }: { name: WorkspaceIconName }) {
@@ -142,6 +143,15 @@ function WorkspaceIcon({ name }: { name: WorkspaceIconName }) {
       <svg {...sharedProps}>
         <path d="M4 6.5h14a2 2 0 0 1 2 2V19H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12" />
         <path d="M15 11h5v4h-5a2 2 0 0 1 0-4Z" />
+      </svg>
+    )
+  }
+
+  if (name === 'body') {
+    return (
+      <svg {...sharedProps}>
+        <rect x="4" y="4" width="16" height="16" rx="4" />
+        <path d="M8 9a4.7 4.7 0 0 1 8 0M12 9l2-2" />
       </svg>
     )
   }

@@ -6,10 +6,11 @@ import TodayOverview from '../components/workspace/TodayOverview'
 import UniversalComposer from '../components/workspace/UniversalComposer'
 import WorkspaceIcon from '../components/workspace/WorkspaceIcon'
 import { workspaceMock } from '../data/workspaceMock'
+import LifeBodyMetricsPage from './LifeBodyMetricsPage'
 import LifeCalendarPage from './LifeCalendarPage'
 import LifeLedgerPage from './LifeLedgerPage'
 
-type LifeView = 'workspace' | 'calendar' | 'ledger'
+type LifeView = 'workspace' | 'calendar' | 'ledger' | 'body-metrics'
 
 function WorkspacePage() {
   const [lifeView, setLifeView] = useState<LifeView>('workspace')
@@ -20,6 +21,10 @@ function WorkspacePage() {
 
   if (lifeView === 'ledger') {
     return <LifeLedgerPage onBack={() => setLifeView('workspace')} />
+  }
+
+  if (lifeView === 'body-metrics') {
+    return <LifeBodyMetricsPage onBack={() => setLifeView('workspace')} />
   }
 
   return (
@@ -35,6 +40,9 @@ function WorkspacePage() {
           </button>
           <button className="workspace-calendar-entry" type="button" onClick={() => setLifeView('ledger')}>
             <WorkspaceIcon name="ledger" />管账
+          </button>
+          <button className="workspace-calendar-entry" type="button" onClick={() => setLifeView('body-metrics')}>
+            <WorkspaceIcon name="body" />体重
           </button>
         </div>
       </header>
