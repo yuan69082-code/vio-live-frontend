@@ -12,6 +12,7 @@ export type WorkspaceIconName =
   | 'continuity'
   | 'plug'
   | 'plus'
+  | 'calendar'
   | 'send'
 
 function WorkspaceIcon({ name }: { name: WorkspaceIconName }) {
@@ -122,6 +123,15 @@ function WorkspaceIcon({ name }: { name: WorkspaceIconName }) {
     return (
       <svg {...sharedProps}>
         <path d="M12 5v14M5 12h14" />
+      </svg>
+    )
+  }
+
+  if (name === 'calendar') {
+    return (
+      <svg {...sharedProps}>
+        <rect x="3.5" y="5" width="17" height="15.5" rx="3" />
+        <path d="M7.5 3v4M16.5 3v4M3.5 9.5h17M7 13h2M12 13h2M7 17h2M12 17h2M17 13h.01" />
       </svg>
     )
   }
