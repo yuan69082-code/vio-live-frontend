@@ -5,3 +5,7 @@ dist
 *.tsbuildinfo
 *.local
 .DS_Store
+backend/data/*.sqlite
+backend/data/*.sqlite-*
+backend/data/*.db
+backend/data/*.db-*

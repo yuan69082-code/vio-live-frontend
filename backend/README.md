@@ -2,61 +2,112 @@
 
 ## 当前状态
 
-Vio Live 平台后端目前处于第二阶段“数据库与核心数据模型设计”。工程边界和文档结构已经建立，核心逻辑对象与关系已经完成设计，但尚未初始化任何可运行服务。
+当前阶段为“平台后端 1｜基础服务、账号与数据库闭环”。后端已经可以独立启动，并完成以下最小闭环：
 
-当前明确不包含：
+```text
+创建用户 → 创建所属 AI 主体 → 写入开发数据库 → 按归属查询 → 返回 JSON 结果
+```
 
-- 后端框架或运行时依赖
-- 数据库连接、表结构和迁移脚本
-- 对外 API 与网络监听
-- AI 模型、MCP、Tool 或设备连接
-- 密钥、Token、用户数据和运行数据
+已实现：
 
-## 目录定位
+- Node.js 22 ESM 后端启动入口
+- 环境变量配置管理
+- 开发期 SQLite 数据库与顺序迁移
+- User 创建和查询
+- Subject 创建、所属用户绑定和查询
+- 基础服务信息与健康检查
+- 版本化 JSON 基础路由和统一错误结果
+- 启动、持久化、冲突和跨用户隔离测试
+
+本阶段没有实现真实登录、正式数据库、连续性引擎、事件总线、权限、模型路由、MCP、Tool、设备或 AI 私域。
+
+## 运行要求
+
+- Node.js `>=22.5.0`
+- pnpm `11.x`
+
+当前使用 Node.js 内置 `node:sqlite`。在 Node.js 22 中该模块仍会显示实验性警告，因此只作为开发环境方案，正式数据库需要后续 ADR 和适配器。
+
+## 快速开始
+
+```bash
+cd backend
+pnpm install
+pnpm start
+```
+
+默认监听 `http://127.0.0.1:8787`，默认数据库文件为 `backend/data/vio-live.dev.sqlite`。数据库运行文件已被 Git 忽略。
+
+开发监听：
+
+```bash
+pnpm dev
+```
+
+测试：
+
+```bash
+pnpm test
+```
+
+## 配置
+
+| 环境变量 | 默认值 | 作用 |
+| --- | --- | --- |
+| `VIO_BACKEND_HOST` | `127.0.0.1` | HTTP 监听地址 |
+| `VIO_BACKEND_PORT` | `8787` | HTTP 监听端口；测试使用 `0` 分配临时端口 |
+| `VIO_BACKEND_DB_PATH` | `backend/data/vio-live.dev.sqlite` | 开发数据库路径 |
+
+完整说明见 [`config/README.md`](config/README.md)。
+
+## 当前路由
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/` | 返回服务名称、版本和运行状态 |
+| `GET` | `/health` | 检查服务与开发数据库 |
+| `POST` | `/api/v1/users` | 创建基础用户 |
+| `GET` | `/api/v1/users/:userId` | 查询用户 |
+| `POST` | `/api/v1/users/:userId/subjects` | 为指定用户创建 AI 主体 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId` | 按用户和主体双重归属查询主体 |
+
+当前路由只服务于本阶段闭环，不代表完整公开 API 已完成。真实认证加入前，不能将该服务直接公开部署。
+
+## 目录结构
 
 ```text
 backend/
-├─ README.md                  # 后端工程入口与边界
-├─ config/README.md           # 未来配置治理约束
-├─ docs/
-│  ├─ ADR.md                 # 后端技术决策记录
-│  ├─ 开发日志.md            # 后端阶段开发记录
-│  └─ 第一阶段实施路线.md     # 工程设计及后续落地门槛
-├─ scripts/README.md          # 未来工程脚本约束
+├─ config/                    # 配置说明
+├─ data/                      # 被忽略的开发数据库运行目录
+├─ docs/                      # ADR、开发日志和阶段路线
+├─ migrations/               # 开发数据库顺序迁移
+├─ scripts/                  # 工程脚本说明
 ├─ src/
-│  ├─ README.md              # 源码层级和依赖方向
-│  ├─ core/README.md         # 共享内核边界
-│  ├─ integrations/README.md # 外部系统适配边界
-│  └─ modules/README.md      # 平台业务模块边界
-└─ tests/README.md            # 测试策略与准入门槛
+│  ├─ core/                  # 错误、ID 和校验
+│  ├─ http/                  # JSON 传输与基础路由
+│  ├─ integrations/database/ # SQLite、迁移和仓储适配
+│  ├─ modules/users/         # User 业务规则
+│  ├─ modules/subjects/      # Subject 业务规则
+│  ├─ app.js                 # 依赖装配和服务生命周期
+│  ├─ config.js              # 配置加载
+│  └─ server.js              # 后端启动入口
+├─ test-support/             # 测试辅助代码
+├─ tests/                    # 闭环测试
+├─ package.json
+└─ pnpm-lock.yaml
 ```
 
-这些 README 用于保存目录和职责边界，不代表对应模块已经实现。
+## 数据库边界
 
-## 平台职责
+- 当前物理结构只有 `schema_migrations`、`users` 和 `subjects`。
+- `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
+- `basicSettings` 在开发 SQLite 中保存为 JSON 文本，业务层只接收普通 JSON 对象。
+- SQL 和 `node:sqlite` 只存在于 `integrations/database` 与 `migrations`；业务服务只依赖仓储行为。
+- 已执行迁移不得修改，后续结构通过新迁移演进。
+- 正式数据库迁移需要新的数据库适配器和迁移计划，不能直接把开发文件当作生产方案。
 
-平台后端负责账号、主体归属、数据隔离、会话与消息版本、软件事件、权限与审计、模型路由、扩展能力适配、设备适配、生活模块数据服务以及数据导出与恢复。
+## 系统边界
 
-平台后端与 continuity-engine 是平行系统：平台后端负责受控数据和调用流程，continuity-engine 负责身份、关系、时间、意图、情绪、记忆影响与状态演化。双方只通过稳定契约交换主体标识、事件、授权记忆范围、状态和写入结果。
+平台后端与 continuity-engine 保持平行。本阶段没有创建 continuity-engine 代码、接口调用或状态模型实现，也没有引入模型、MCP、Skill、插件、Tool 和设备能力。
 
-## 设计原则
-
-- 所有持久化业务数据都必须能够绑定 `user_id` 和 `subject_id`。
-- 前端不直接访问数据库、密钥、模型或设备厂商协议。
-- 外部能力必须经过身份、权限、风险确认和审计流程。
-- 模型、continuity-engine 和设备适配均通过集成边界接入，不进入业务核心。
-- 密钥、密码、验证码、付款密码和用户原始数据不得进入 Git。
-- 页面存在或模拟数据可用，不代表对应后端能力完成。
-
-## 文档关系
-
-- 稳定产品范围与系统边界以 [`../docs/后端/README.md`](../docs/后端/README.md) 及其主题规划为依据。
-- 核心逻辑模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，对象关系见 [`../docs/后端/数据关系图.md`](../docs/后端/数据关系图.md)。
-- 后端局部技术决策记录在 [`docs/ADR.md`](docs/ADR.md)。
-- 跨项目边界的重要决策同步到 [`../docs/决策记录.md`](../docs/决策记录.md)。
-- 后端阶段执行记录写入 [`docs/开发日志.md`](docs/开发日志.md)，项目级摘要同步到 [`../docs/工程日志.md`](../docs/工程日志.md)。
-- 版本变化继续统一记录在 [`../docs/更新记录.md`](../docs/更新记录.md)。
-
-## 下一步门槛
-
-进入可运行工程初始化前，必须单独确认后端运行时与框架、数据库产品、认证与会话方案、API 风格、密钥管理方案、部署目标和测试工具。未形成相应 ADR 前，不应添加依赖或连接外部服务。
+稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。
