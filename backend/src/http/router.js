@@ -39,6 +39,9 @@ export function createRouter({
   userService,
   subjectService,
   eventService,
+  apiProviderService,
+  modelService,
+  modelRouterService,
   logger = console,
 }) {
   return async function route(request, response) {
@@ -152,6 +155,121 @@ export function createRouter({
       if (request.method === 'GET' && eventRoute) {
         sendJson(response, 200, {
           data: eventService.getEvent(eventRoute.userId, eventRoute.eventId),
+        });
+        return;
+      }
+
+      const apiProvidersRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/api-providers$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && apiProvidersRoute) {
+        const input = await readJsonBody(request);
+        const provider = apiProviderService.createProvider(apiProvidersRoute.userId, input);
+        sendJson(response, 201, { data: provider }, {
+          location: `/api/v1/users/${encodeURIComponent(provider.ownerUserId)}/api-providers/${encodeURIComponent(provider.providerId)}`,
+        });
+        return;
+      }
+
+      if (request.method === 'GET' && apiProvidersRoute) {
+        const providers = apiProviderService.listProviders(apiProvidersRoute.userId);
+        sendJson(response, 200, {
+          data: providers,
+          meta: { count: providers.length },
+        });
+        return;
+      }
+
+      const apiProviderStatusRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/api-providers\/([^/]+)\/status$/,
+        ['userId', 'providerId'],
+      );
+      if (request.method === 'PATCH' && apiProviderStatusRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: apiProviderService.updateProviderStatus(
+            apiProviderStatusRoute.userId,
+            apiProviderStatusRoute.providerId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const apiProviderRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/api-providers\/([^/]+)$/,
+        ['userId', 'providerId'],
+      );
+      if (request.method === 'GET' && apiProviderRoute) {
+        sendJson(response, 200, {
+          data: apiProviderService.getProvider(
+            apiProviderRoute.userId,
+            apiProviderRoute.providerId,
+          ),
+        });
+        return;
+      }
+
+      const providerModelsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/api-providers\/([^/]+)\/models$/,
+        ['userId', 'providerId'],
+      );
+      if (request.method === 'POST' && providerModelsRoute) {
+        const input = await readJsonBody(request);
+        const model = modelService.createModel(
+          providerModelsRoute.userId,
+          providerModelsRoute.providerId,
+          input,
+        );
+        sendJson(response, 201, { data: model }, {
+          location: `/api/v1/users/${encodeURIComponent(providerModelsRoute.userId)}/models/${encodeURIComponent(model.modelId)}`,
+        });
+        return;
+      }
+
+      const modelsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/models$/,
+        ['userId'],
+      );
+      if (request.method === 'GET' && modelsRoute) {
+        const models = modelService.findModelsByCapability(
+          modelsRoute.userId,
+          url.searchParams.get('capability'),
+        );
+        sendJson(response, 200, {
+          data: models,
+          meta: { count: models.length },
+        });
+        return;
+      }
+
+      const modelRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/models\/([^/]+)$/,
+        ['userId', 'modelId'],
+      );
+      if (request.method === 'GET' && modelRoute) {
+        sendJson(response, 200, {
+          data: modelService.getModel(modelRoute.userId, modelRoute.modelId),
+        });
+        return;
+      }
+
+      const modelRouterRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/model-router\/select$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && modelRouterRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: modelRouterService.selectModel(modelRouterRoute.userId, input.taskType),
         });
         return;
       }

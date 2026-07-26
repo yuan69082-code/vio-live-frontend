@@ -11,4 +11,4 @@
 7. 模型与扩展能力管理
 8. 设备、AI 私域、生活模块和数据治理
 
-模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前只实现 User、Subject 与 Event；Event 只负责记录和查询，不包含消费、连续性或模型逻辑。
+模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现 User、Subject、Event、APIProvider、Model 与 Model Router；Router 只做本地能力匹配，不调用真实模型，Event 仍只负责记录和查询。

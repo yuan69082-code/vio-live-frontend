@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约已开始实现
-- 实现状态：已建立健康检查、User/Subject 最小路由和 Event 记录/查询路由；完整平台 API 未建立
+- 实现状态：已建立健康检查、User/Subject、Event 和 Provider/Model 规则路由基础；完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -77,6 +77,23 @@
 这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和数据变化仍是规划范围，尚未成为当前接口接受的事件名。
 
 ## 每轮模型契约
+
+当前已实现的模型配置与选择接口：
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/api-providers` | 创建不含真实 Key 的 Provider 配置 |
+| `GET` | `/api/v1/users/:userId/api-providers` | 查询用户 Provider 列表 |
+| `GET` | `/api/v1/users/:userId/api-providers/:providerId` | 查询单个 Provider |
+| `PATCH` | `/api/v1/users/:userId/api-providers/:providerId/status` | 更新 `enabled`/`disabled` 状态 |
+| `POST` | `/api/v1/users/:userId/api-providers/:providerId/models` | 在 Provider 下创建 Model |
+| `GET` | `/api/v1/users/:userId/models?capability=...` | 按五类能力标签查询模型 |
+| `GET` | `/api/v1/users/:userId/models/:modelId` | 查询单个 Model |
+| `POST` | `/api/v1/users/:userId/model-router/select` | 根据 `taskType` 返回启用 Provider 下的规则匹配模型 |
+
+Provider 响应只暴露 API Key 的 `not_configured` 状态，不接受或返回真实 Key、Token、Secret 或凭据引用。Router 响应只包含任务类型、选择规则和模型描述，不包含模型回复，也不产生外部请求。
+
+以下每轮模型内容仍为后续真实接入契约：
 
 上下文装配遵循以下逻辑顺序：系统安全规则、全局设定、主体状态、未解决事件、近期对话、相关长期记忆、用户本轮消息。
 

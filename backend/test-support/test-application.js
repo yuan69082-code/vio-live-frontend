@@ -57,3 +57,18 @@ export async function postJson(baseUrl, path, payload) {
     body: await response.json(),
   };
 }
+
+export async function patchJson(baseUrl, path, payload) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return {
+    response,
+    body: await response.json(),
+  };
+}

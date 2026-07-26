@@ -16,7 +16,7 @@ test('service starts and reports a healthy development database', async () => {
     assert.equal(rootResult.response.status, 200);
     assert.deepEqual(rootResult.body.data, {
       service: 'vio-live-backend',
-      version: '0.2.0',
+      version: '0.3.0',
       status: 'running',
     });
 
@@ -25,7 +25,7 @@ test('service starts and reports a healthy development database', async () => {
     assert.deepEqual(healthResult.body.data, {
       status: 'ok',
       service: 'vio-live-backend',
-      version: '0.2.0',
+      version: '0.3.0',
       database: 'ok',
     });
   } finally {
