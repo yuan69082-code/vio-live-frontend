@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约已开始实现
-- 实现状态：已建立健康检查、User/Subject、Event 和 Provider/Model 规则路由基础；完整平台 API 未建立
+- 实现状态：已建立健康检查、User/Subject、Event、Provider/Model 和 Permission 基础；完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -105,6 +105,19 @@ Provider 响应只暴露 API Key 的 `not_configured` 状态，不接受或返�
 状态更新至少覆盖当前情绪、强度、变化原因、未解决事件和下一轮连续性约束。
 
 ## 权限与错误原则
+
+当前 Permission 接口：
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/permissions` | 创建主体、资源、操作范围的权限规则 |
+| `GET` | `/api/v1/users/:userId/permissions` | 按主体、资源类型、资源 ID、操作或状态筛选规则 |
+| `GET` | `/api/v1/users/:userId/permissions/:permissionId` | 查询单个权限规则 |
+| `PATCH` | `/api/v1/users/:userId/permissions/:permissionId` | 更新权限等级或 `active`/`inactive` 状态 |
+| `DELETE` | `/api/v1/users/:userId/permissions/:permissionId` | 将权限规则标记为 `deleted` |
+| `POST` | `/api/v1/users/:userId/permission-checks` | 输入主体、资源与操作，返回 `allow`、`ask` 或 `deny` |
+
+Checker 只进行完全匹配和平台判断，不执行资源动作。`allow_once` 在首次成功判断后转为 `consumed`；权限变更与 `permission_changed` 事件同事务提交。`canAsk` 只描述是否允许后续申请，不等于已经创建授权申请流程。
 
 - 未登录、主体不匹配或权限不足时不能返回受保护数据。
 - 外部能力不可用时，应明确失败，不伪造成功结果。

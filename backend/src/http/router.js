@@ -42,6 +42,8 @@ export function createRouter({
   apiProviderService,
   modelService,
   modelRouterService,
+  permissionService,
+  permissionChecker,
   logger = console,
 }) {
   return async function route(request, response) {
@@ -270,6 +272,88 @@ export function createRouter({
         const input = await readJsonBody(request);
         sendJson(response, 200, {
           data: modelRouterService.selectModel(modelRouterRoute.userId, input.taskType),
+        });
+        return;
+      }
+
+      const permissionsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/permissions$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && permissionsRoute) {
+        const input = await readJsonBody(request);
+        const permission = permissionService.createPermission(
+          permissionsRoute.userId,
+          input,
+        );
+        sendJson(response, 201, { data: permission }, {
+          location: `/api/v1/users/${encodeURIComponent(permission.userId)}/permissions/${encodeURIComponent(permission.permissionId)}`,
+        });
+        return;
+      }
+
+      if (request.method === 'GET' && permissionsRoute) {
+        const permissions = permissionService.listPermissions(permissionsRoute.userId, {
+          subjectId: url.searchParams.get('subjectId'),
+          resourceType: url.searchParams.get('resourceType'),
+          resourceId: url.searchParams.get('resourceId'),
+          action: url.searchParams.get('action'),
+          status: url.searchParams.get('status'),
+        });
+        sendJson(response, 200, {
+          data: permissions,
+          meta: { count: permissions.length },
+        });
+        return;
+      }
+
+      const permissionRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/permissions\/([^/]+)$/,
+        ['userId', 'permissionId'],
+      );
+      if (request.method === 'GET' && permissionRoute) {
+        sendJson(response, 200, {
+          data: permissionService.getPermission(
+            permissionRoute.userId,
+            permissionRoute.permissionId,
+          ),
+        });
+        return;
+      }
+
+      if (request.method === 'PATCH' && permissionRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: permissionService.updatePermission(
+            permissionRoute.userId,
+            permissionRoute.permissionId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      if (request.method === 'DELETE' && permissionRoute) {
+        sendJson(response, 200, {
+          data: permissionService.deletePermission(
+            permissionRoute.userId,
+            permissionRoute.permissionId,
+          ),
+        });
+        return;
+      }
+
+      const permissionChecksRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/permission-checks$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && permissionChecksRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: permissionChecker.checkPermission(permissionChecksRoute.userId, input),
         });
         return;
       }

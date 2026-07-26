@@ -26,6 +26,18 @@ export function createSqliteDatabase({ databasePath, migrationsPath }) {
 
   return {
     connection,
+    runInTransaction(operation) {
+      connection.exec('BEGIN IMMEDIATE;');
+
+      try {
+        const result = operation();
+        connection.exec('COMMIT;');
+        return result;
+      } catch (error) {
+        connection.exec('ROLLBACK;');
+        throw error;
+      }
+    },
     ping() {
       const row = connection.prepare('SELECT 1 AS healthy').get();
       return row?.healthy === 1;

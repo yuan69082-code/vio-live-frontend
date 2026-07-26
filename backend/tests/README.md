@@ -18,4 +18,4 @@
 pnpm test
 ```
 
-当前已覆盖服务启动与健康检查、用户/主体/事件闭环、Provider 创建查询与状态更新、Model 创建与能力查询、Router 规则选择、数据重启后读取、跨用户隔离，以及事件和 Provider 密钥字段拦截。所有测试只访问本地测试服务与临时 SQLite，不调用真实模型或外部 API。
+当前已覆盖服务启动、User/Subject/Event、Provider/Model/Router、Permission CRUD、五档三态判断、`allow_once` 消费、软删除、权限事件联动、重启持久化、跨用户/主体隔离和密钥字段拦截。所有测试只访问本地测试服务与临时 SQLite，不调用真实模型、权限、设备或外部 API。

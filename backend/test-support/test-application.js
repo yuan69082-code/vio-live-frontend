@@ -72,3 +72,14 @@ export async function patchJson(baseUrl, path, payload) {
     body: await response.json(),
   };
 }
+
+export async function deleteJson(baseUrl, path) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'DELETE',
+  });
+
+  return {
+    response,
+    body: await response.json(),
+  };
+}
