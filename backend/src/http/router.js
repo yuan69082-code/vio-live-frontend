@@ -33,7 +33,14 @@ function errorPayload(error, requestId) {
   };
 }
 
-export function createRouter({ config, database, userService, subjectService, logger = console }) {
+export function createRouter({
+  config,
+  database,
+  userService,
+  subjectService,
+  eventService,
+  logger = console,
+}) {
   return async function route(request, response) {
     const requestId = createId();
     response.setHeader('x-request-id', requestId);
@@ -101,6 +108,50 @@ export function createRouter({ config, database, userService, subjectService, lo
       if (request.method === 'GET' && subjectRoute) {
         sendJson(response, 200, {
           data: subjectService.getSubject(subjectRoute.userId, subjectRoute.subjectId),
+        });
+        return;
+      }
+
+      const eventsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/events$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && eventsRoute) {
+        const input = await readJsonBody(request);
+        const event = eventService.createEvent(eventsRoute.userId, input);
+        sendJson(response, 201, { data: event }, {
+          location: `/api/v1/users/${encodeURIComponent(event.userId)}/events/${encodeURIComponent(event.eventId)}`,
+        });
+        return;
+      }
+
+      if (request.method === 'GET' && eventsRoute) {
+        const events = eventService.listEvents(eventsRoute.userId, {
+          subjectId: url.searchParams.get('subjectId'),
+          eventType: url.searchParams.get('eventType'),
+          status: url.searchParams.get('status'),
+          from: url.searchParams.get('from'),
+          to: url.searchParams.get('to'),
+          limit: url.searchParams.get('limit'),
+        });
+        sendJson(response, 200, {
+          data: events,
+          meta: {
+            count: events.length,
+          },
+        });
+        return;
+      }
+
+      const eventRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/events\/([^/]+)$/,
+        ['userId', 'eventId'],
+      );
+      if (request.method === 'GET' && eventRoute) {
+        sendJson(response, 200, {
+          data: eventService.getEvent(eventRoute.userId, eventRoute.eventId),
         });
         return;
       }

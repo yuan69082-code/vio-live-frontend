@@ -2,10 +2,10 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 1｜基础服务、账号与数据库闭环”。后端已经可以独立启动，并完成以下最小闭环：
+当前阶段为“平台后端 2｜事件总线基础系统”。后端已经可以独立启动，并完成账号、主体和软件事件的首个持久化闭环：
 
 ```text
-创建用户 → 创建所属 AI 主体 → 写入开发数据库 → 按归属查询 → 返回 JSON 结果
+创建用户 → 创建所属 AI 主体 → 记录软件事件 → 按用户/主体/时间查询 → 返回 JSON 结果
 ```
 
 已实现：
@@ -15,11 +15,13 @@
 - 开发期 SQLite 数据库与顺序迁移
 - User 创建和查询
 - Subject 创建、所属用户绑定和查询
+- Event 创建、单项查询及按用户、主体、时间、类型和状态筛选
+- 五类基础软件事件和事件数据秘密字段拦截
 - 基础服务信息与健康检查
 - 版本化 JSON 基础路由和统一错误结果
 - 启动、持久化、冲突和跨用户隔离测试
 
-本阶段没有实现真实登录、正式数据库、连续性引擎、事件总线、权限、模型路由、MCP、Tool、设备或 AI 私域。
+本阶段没有实现真实登录、正式数据库、事件消费器、连续性引擎、权限业务、模型路由、MCP、Tool、设备或 AI 私域。
 
 ## 运行要求
 
@@ -70,6 +72,9 @@ pnpm test
 | `GET` | `/api/v1/users/:userId` | 查询用户 |
 | `POST` | `/api/v1/users/:userId/subjects` | 为指定用户创建 AI 主体 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId` | 按用户和主体双重归属查询主体 |
+| `POST` | `/api/v1/users/:userId/events` | 为用户或其主体记录软件事件 |
+| `GET` | `/api/v1/users/:userId/events` | 按主体、时间、类型、状态和数量筛选事件 |
+| `GET` | `/api/v1/users/:userId/events/:eventId` | 按用户归属查询单个事件 |
 
 当前路由只服务于本阶段闭环，不代表完整公开 API 已完成。真实认证加入前，不能将该服务直接公开部署。
 
@@ -88,6 +93,7 @@ backend/
 │  ├─ integrations/database/ # SQLite、迁移和仓储适配
 │  ├─ modules/users/         # User 业务规则
 │  ├─ modules/subjects/      # Subject 业务规则
+│  ├─ modules/events/        # Event 类型、记录和查询规则
 │  ├─ app.js                 # 依赖装配和服务生命周期
 │  ├─ config.js              # 配置加载
 │  └─ server.js              # 后端启动入口
@@ -99,8 +105,10 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构只有 `schema_migrations`、`users` 和 `subjects`。
+- 当前物理结构包括 `schema_migrations`、`users`、`subjects` 和 `events`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
+- 主体事件使用 `(user_id, subject_id)` 组合外键，数据库层同时保证用户和主体归属。
+- 事件按发生时间保存为 UTC ISO-8601，并为用户、主体、类型和状态查询建立索引。
 - `basicSettings` 在开发 SQLite 中保存为 JSON 文本，业务层只接收普通 JSON 对象。
 - SQL 和 `node:sqlite` 只存在于 `integrations/database` 与 `migrations`；业务服务只依赖仓储行为。
 - 已执行迁移不得修改，后续结构通过新迁移演进。
@@ -108,6 +116,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。本阶段没有创建 continuity-engine 代码、接口调用或状态模型实现，也没有引入模型、MCP、Skill、插件、Tool 和设备能力。
+平台后端与 continuity-engine 保持平行。本阶段只提供未来可读取的事件记录和查询边界，没有创建事件消费器、continuity-engine 代码、模型调用、MCP、Skill、插件、Tool 或设备能力。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

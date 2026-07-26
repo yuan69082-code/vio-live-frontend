@@ -2,8 +2,8 @@
 
 ## 状态
 
-- 文档状态：初始契约规划
-- 实现状态：已建立健康检查和 User/Subject 最小 `/api/v1` 路由；完整平台 API 未建立
+- 文档状态：基础契约已开始实现
+- 实现状态：已建立健康检查、User/Subject 最小路由和 Event 记录/查询路由；完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -56,16 +56,25 @@
 
 ## 软件事件契约
 
-事件初始需要区分：
+当前实现使用以下事件名：
 
-- 外观变化
-- 权限变化
-- 能力变化
-- 生活模块变化
-- 设备变化
-- 数据变化
+- `appearance_changed`
+- `subject_updated`
+- `permission_changed`
+- `life_record_created`
+- `device_changed`
 
-事件应包含可理解的摘要、来源、时间、主体和可见范围。具体事件名称、字段和版本在实现前单独确认。
+事件创建体包含 `eventType`、`source`、`occurredAt`、`data`、`summary` 和可选 `subjectId`。服务生成 `eventId` 与 `recordedAt`，并将初始 `status` 设为 `pending`。事件数据不得包含明显的密钥、密码、验证码、Token、Secret 或完整证件号字段。
+
+当前事件接口：
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/events` | 在指定用户范围创建事件 |
+| `GET` | `/api/v1/users/:userId/events` | 查询该用户事件，可按 `subjectId`、`eventType`、`status`、`from`、`to` 和 `limit` 筛选 |
+| `GET` | `/api/v1/users/:userId/events/:eventId` | 查询该用户范围内的单个事件 |
+
+这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和数据变化仍是规划范围，尚未成为当前接口接受的事件名。
 
 ## 每轮模型契约
 
