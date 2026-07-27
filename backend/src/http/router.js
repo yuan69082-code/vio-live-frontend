@@ -1,6 +1,7 @@
 import { ApplicationError, NotFoundError, ValidationError } from '../core/errors.js';
 import { createId } from '../core/ids.js';
 import { readJsonBody, sendJson } from './json.js';
+import { requireDevelopmentUserId } from './request-context.js';
 
 function decodePathPart(value, field) {
   try {
@@ -38,6 +39,7 @@ export function createRouter({
   database,
   userService,
   subjectService,
+  dashboardService,
   eventService,
   apiProviderService,
   modelService,
@@ -101,6 +103,12 @@ export function createRouter({
         return;
       }
 
+      if (request.method === 'GET' && url.pathname === '/api/v1/users/current') {
+        const userId = requireDevelopmentUserId(request);
+        sendJson(response, 200, { data: userService.getUser(userId) });
+        return;
+      }
+
       const userRoute = routeMatch(url.pathname, /^\/api\/v1\/users\/([^/]+)$/, ['userId']);
       if (request.method === 'GET' && userRoute) {
         sendJson(response, 200, { data: userService.getUser(userRoute.userId) });
@@ -121,6 +129,15 @@ export function createRouter({
         return;
       }
 
+      if (request.method === 'GET' && subjectsRoute) {
+        const subjects = subjectService.listSubjects(subjectsRoute.userId);
+        sendJson(response, 200, {
+          data: subjects,
+          meta: { count: subjects.length },
+        });
+        return;
+      }
+
       const subjectRoute = routeMatch(
         url.pathname,
         /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)$/,
@@ -129,6 +146,33 @@ export function createRouter({
       if (request.method === 'GET' && subjectRoute) {
         sendJson(response, 200, {
           data: subjectService.getSubject(subjectRoute.userId, subjectRoute.subjectId),
+        });
+        return;
+      }
+
+      if (request.method === 'PATCH' && subjectRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: subjectService.updateSubject(
+            subjectRoute.userId,
+            subjectRoute.subjectId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const dashboardRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/dashboard$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'GET' && dashboardRoute) {
+        sendJson(response, 200, {
+          data: dashboardService.getDashboard(
+            dashboardRoute.userId,
+            dashboardRoute.subjectId,
+          ),
         });
         return;
       }

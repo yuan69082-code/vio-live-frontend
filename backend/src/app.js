@@ -13,6 +13,7 @@ import { createSqliteUserRepository } from './integrations/database/sqlite-user-
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAuditLogService } from './modules/audit-logs/audit-log-service.js';
 import { createConfirmationService } from './modules/confirmations/confirmation-service.js';
+import { createDashboardService } from './modules/dashboard/dashboard-service.js';
 import { createEventService } from './modules/events/event-service.js';
 import { createModelRouterService } from './modules/model-router/model-router-service.js';
 import { createModelService } from './modules/models/model-service.js';
@@ -34,12 +35,18 @@ export function createApplication({ config, logger = console }) {
   const auditLogRepository = createSqliteAuditLogRepository(database.connection);
   const confirmationRepository = createSqliteConfirmationRepository(database.connection);
   const userService = createUserService({ userRepository });
-  const subjectService = createSubjectService({ subjectRepository, userRepository });
   const eventService = createEventService({
     eventRepository,
     subjectRepository,
     userRepository,
   });
+  const subjectService = createSubjectService({
+    subjectRepository,
+    userRepository,
+    eventService,
+    runInTransaction: database.runInTransaction,
+  });
+  const dashboardService = createDashboardService({ userService, subjectService });
   const auditLogService = createAuditLogService({
     auditLogRepository,
     userRepository,
@@ -93,6 +100,7 @@ export function createApplication({ config, logger = console }) {
     database,
     userService,
     subjectService,
+    dashboardService,
     eventService,
     apiProviderService,
     modelService,

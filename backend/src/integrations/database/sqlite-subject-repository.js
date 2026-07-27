@@ -47,6 +47,25 @@ export function createSqliteSubjectRepository(connection) {
     FROM subjects
     WHERE owner_user_id = ? AND subject_id = ?
   `);
+  const findManyByOwnerStatement = connection.prepare(`
+    SELECT
+      subject_id,
+      owner_user_id,
+      name,
+      avatar_ref,
+      basic_settings_json,
+      status,
+      created_at,
+      updated_at
+    FROM subjects
+    WHERE owner_user_id = ?
+    ORDER BY created_at ASC, subject_id ASC
+  `);
+  const updateStatement = connection.prepare(`
+    UPDATE subjects
+    SET name = ?, avatar_ref = ?, basic_settings_json = ?, updated_at = ?
+    WHERE owner_user_id = ? AND subject_id = ?
+  `);
 
   return {
     insert(subject) {
@@ -73,6 +92,25 @@ export function createSqliteSubjectRepository(connection) {
     },
     findById(ownerUserId, subjectId) {
       return mapSubject(findByIdStatement.get(ownerUserId, subjectId));
+    },
+    findManyByOwner(ownerUserId) {
+      return findManyByOwnerStatement.all(ownerUserId).map(mapSubject);
+    },
+    update(subject) {
+      const result = updateStatement.run(
+        subject.name,
+        subject.avatarRef,
+        JSON.stringify(subject.basicSettings),
+        subject.updatedAt,
+        subject.ownerUserId,
+        subject.subjectId,
+      );
+
+      if (result.changes === 0) {
+        return null;
+      }
+
+      return mapSubject(findByIdStatement.get(subject.ownerUserId, subject.subjectId));
     },
   };
 }

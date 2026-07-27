@@ -1,4 +1,6 @@
-import { NotFoundError } from '../../core/errors.js';
+import { isDeepStrictEqual } from 'node:util';
+
+import { NotFoundError, ValidationError } from '../../core/errors.js';
 import { createId } from '../../core/ids.js';
 import {
   optionalString,
@@ -9,6 +11,8 @@ import {
 export function createSubjectService({
   subjectRepository,
   userRepository,
+  eventService,
+  runInTransaction,
   clock = () => new Date(),
   idFactory = createId,
 }) {
@@ -47,6 +51,84 @@ export function createSubjectService({
       }
 
       return subject;
+    },
+    listSubjects(ownerUserId) {
+      const normalizedUserId = requireString(ownerUserId, 'userId', { maxLength: 128 });
+
+      if (!userRepository.findById(normalizedUserId)) {
+        throw new NotFoundError('Owner user was not found.');
+      }
+
+      return subjectRepository.findManyByOwner(normalizedUserId);
+    },
+    updateSubject(ownerUserId, subjectId, value) {
+      const normalizedUserId = requireString(ownerUserId, 'userId', { maxLength: 128 });
+      const normalizedSubjectId = requireString(subjectId, 'subjectId', { maxLength: 128 });
+      const input = requirePlainObject(value, 'body');
+      const allowedFields = ['name', 'avatarRef', 'basicSettings'];
+      const unexpectedFields = Object.keys(input).filter(
+        (field) => !allowedFields.includes(field),
+      );
+
+      if (unexpectedFields.length > 0) {
+        throw new ValidationError('Subject update contains unsupported fields.', {
+          unexpectedFields,
+        });
+      }
+
+      if (!allowedFields.some((field) => Object.hasOwn(input, field))) {
+        throw new ValidationError('Subject update must include at least one supported field.', {
+          allowedFields,
+        });
+      }
+
+      return runInTransaction(() => {
+        const current = subjectRepository.findById(normalizedUserId, normalizedSubjectId);
+
+        if (!current) {
+          throw new NotFoundError('Subject was not found for this user.');
+        }
+
+        const next = {
+          ...current,
+          name: Object.hasOwn(input, 'name')
+            ? requireString(input.name, 'name', { maxLength: 80 })
+            : current.name,
+          avatarRef: Object.hasOwn(input, 'avatarRef')
+            ? optionalString(input.avatarRef, 'avatarRef', { maxLength: 2_048 })
+            : current.avatarRef,
+          basicSettings: Object.hasOwn(input, 'basicSettings')
+            ? requirePlainObject(input.basicSettings, 'basicSettings')
+            : current.basicSettings,
+        };
+        const changedFields = allowedFields.filter(
+          (field) => !isDeepStrictEqual(current[field], next[field]),
+        );
+
+        if (changedFields.length === 0) {
+          return current;
+        }
+
+        next.updatedAt = clock().toISOString();
+        const updated = subjectRepository.update(next);
+
+        if (!updated) {
+          throw new NotFoundError('Subject was not found for this user.');
+        }
+
+        eventService.createEvent(normalizedUserId, {
+          subjectId: normalizedSubjectId,
+          eventType: 'subject_updated',
+          source: {
+            type: 'subject-service',
+            reference: normalizedSubjectId,
+          },
+          data: { changedFields },
+          summary: 'AI subject basic information was updated.',
+        });
+
+        return updated;
+      });
     },
   };
 }

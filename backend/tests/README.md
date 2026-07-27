@@ -18,4 +18,4 @@
 pnpm test
 ```
 
-当前已覆盖服务启动、User/Subject/Event、Provider/Model/Router、Permission CRUD、五档三态判断、Security 四级风险、三种确认要求、确认隔离与防重放、AuditLog、`allow_once` 确认前预览与最终消费、软删除、权限事件联动、重启持久化、跨用户/主体隔离和密钥字段拦截。所有测试只访问本地测试服务与临时 SQLite，不调用真实模型、支付、设备或外部 API。
+当前已覆盖服务启动、统一响应 envelope、User 当前开发上下文、Subject 创建/列表/查询/更新、Dashboard、Subject 更新与 Event 事务回滚、Event、Provider/Model/Router、Permission CRUD、五档三态判断、Security 四级风险、三种确认要求、确认隔离与防重放、AuditLog、`allow_once` 确认前预览与最终消费、软删除、重启持久化、跨用户/主体隔离和密钥字段拦截。所有测试只访问本地测试服务与临时 SQLite，不调用真实模型、支付、设备或外部 API。

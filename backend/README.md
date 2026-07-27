@@ -2,10 +2,11 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 5｜安全系统基础”。后端已经可以独立启动，并完成权限、安全预检、风险确认和审计闭环：
+当前阶段为“平台后端 6｜基础 API 层与前后端连接”。后端已经可以独立启动，并建立前端可复用的统一 JSON 契约：
 
 ```text
-请求 → Permission 精确判断 → 风险识别 → 确认要求 → 返回执行资格（不执行）→ 写入最小审计
+React 启动 → Vite 同源代理 → 后端健康检查
+API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一响应
 ```
 
 已实现：
@@ -14,7 +15,10 @@
 - 环境变量配置管理
 - 开发期 SQLite 数据库与顺序迁移
 - User 创建和查询
-- Subject 创建、所属用户绑定和查询
+- 开发期当前用户解析；显式标明不是认证或登录会话
+- Subject 创建、列表、所属用户绑定、查询和基础信息更新
+- Subject 实际更新与 `subject_updated` Event 同事务提交
+- Dashboard 对现有 User/Subject 与基础可用状态的安全聚合
 - Event 创建、单项查询及按用户、主体、时间、类型和状态筛选
 - 五类基础软件事件和事件数据秘密字段拦截
 - APIProvider 创建、列表/单项查询和启停状态更新
@@ -33,10 +37,11 @@
 - Permission/APIProvider 变更审计及用户范围内的审计只读查询
 - 安全预检不提前消费 `allow_once`，确认满足后才完成单次消费
 - 基础服务信息与健康检查
-- 版本化 JSON 基础路由和统一错误结果
-- 启动、持久化、冲突和跨用户隔离测试
+- 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
+- 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
+- 启动、API 契约、事务回滚、持久化、冲突和跨用户隔离测试
 
-本阶段没有实现真实登录、正式数据库、真实 API Key、模型调用、供应商 SDK、事件消费器、连续性引擎、MCP/Skill/Tool 实际调用、真实支付、真实设备、手机权限或 AI 私域业务。安全检查只返回资格，所有响应明确标记 `executionStatus: not_executed`。
+本阶段没有实现真实登录、正式数据库、真实 API Key、模型调用、供应商 SDK、事件消费器、连续性引擎、MCP/Skill/Tool 实际调用、真实支付、真实设备、手机权限或 AI 私域业务。前端页面继续使用原有 mock；当前只建立独立 API 层和真实健康连接，不把模拟页面声明为已接入真实数据。
 
 ## 运行要求
 
@@ -67,6 +72,23 @@ pnpm dev
 pnpm test
 ```
 
+## 前后端本地联调
+
+先在 `backend/` 启动后端，再在仓库根目录启动前端：
+
+```bash
+cd backend
+pnpm dev
+```
+
+```bash
+pnpm dev
+```
+
+Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`。如需调整开发代理目标，可设置无秘密的 `VITE_BACKEND_PROXY_TARGET`。后端不开放通配 CORS。
+
+前端启动入口会执行一次非阻塞 `/health` 请求；后端不可用时，现有 mock 页面仍可打开。完整接口契约见 [`docs/API.md`](docs/API.md)。
+
 ## 配置
 
 | 环境变量 | 默认值 | 作用 |
@@ -85,8 +107,12 @@ pnpm test
 | `GET` | `/health` | 检查服务与开发数据库 |
 | `POST` | `/api/v1/users` | 创建基础用户 |
 | `GET` | `/api/v1/users/:userId` | 查询用户 |
+| `GET` | `/api/v1/users/current` | 使用 `x-vio-user-id` 读取开发期当前用户；不是认证 |
 | `POST` | `/api/v1/users/:userId/subjects` | 为指定用户创建 AI 主体 |
+| `GET` | `/api/v1/users/:userId/subjects` | 查询该用户的主体列表 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId` | 按用户和主体双重归属查询主体 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId` | 更新名字、头像引用或基础设定并记录事件 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/dashboard` | 聚合用户、主体和基础状态 |
 | `POST` | `/api/v1/users/:userId/events` | 为用户或其主体记录软件事件 |
 | `GET` | `/api/v1/users/:userId/events` | 按主体、时间、类型、状态和数量筛选事件 |
 | `GET` | `/api/v1/users/:userId/events/:eventId` | 按用户归属查询单个事件 |
@@ -111,7 +137,7 @@ pnpm test
 | `GET` | `/api/v1/users/:userId/confirmations/:confirmationId` | 查询本用户的具体操作确认 |
 | `PATCH` | `/api/v1/users/:userId/confirmations/:confirmationId` | 批准或拒绝待确认操作；不执行资源 |
 
-当前路由只服务于本阶段闭环，不代表完整公开 API 已完成。真实认证加入前，不能将该服务直接公开部署。
+成功与失败响应均统一包含 `success`、`data`、`error` 和 UTC `timestamp`；列表可额外返回 `meta`。当前路由只服务于本阶段闭环，不代表完整公开 API 已完成。真实认证加入前，不能将该服务直接公开部署。
 
 ## 目录结构
 
@@ -128,6 +154,7 @@ backend/
 │  ├─ integrations/database/ # SQLite、迁移和仓储适配
 │  ├─ modules/users/         # User 业务规则
 │  ├─ modules/subjects/      # Subject 业务规则
+│  ├─ modules/dashboard/     # 现有 User/Subject 基础聚合
 │  ├─ modules/events/        # Event 类型、记录和查询规则
 │  ├─ modules/api-providers/ # Provider 配置与安全边界
 │  ├─ modules/models/        # Model 目录与能力标签
@@ -150,6 +177,7 @@ backend/
 
 - 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions`、`security_confirmations` 和 `audit_logs`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
+- Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
 - 主体事件使用 `(user_id, subject_id)` 组合外键，数据库层同时保证用户和主体归属。
 - 事件按发生时间保存为 UTC ISO-8601，并为用户、主体、类型和状态查询建立索引。
 - Provider 归属于用户，Model 同时保存用户和 Provider 归属，能力标签使用独立关系表。
@@ -169,6 +197,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。本阶段 Security 只编排 Permission、风险、确认和审计并返回执行资格，不执行受控资源，不连接支付、手机权限、MCP、Skill、Tool、设备或 AI 私域，也不改变 continuity-engine 或模型调用边界。
+平台后端与 continuity-engine 保持平行。本阶段 Dashboard 对尚未接入的连续性状态明确返回 `not_available`；不会从 mock 或 `basicSettings` 猜测主体状态。Security 仍只返回执行资格，不连接支付、手机权限、MCP、Skill、Tool、设备或 AI 私域，也不改变 continuity-engine 或模型调用边界。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

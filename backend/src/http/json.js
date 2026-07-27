@@ -6,8 +6,27 @@ import {
 
 const maxBodyBytes = 1_048_576;
 
+export function createApiEnvelope(statusCode, payload, timestamp = new Date().toISOString()) {
+  const success = statusCode >= 200 && statusCode < 300;
+  const envelope = {
+    success,
+    data: success && Object.hasOwn(payload, 'data') ? payload.data : null,
+    error: success ? null : (payload.error ?? {
+      code: 'internal_error',
+      message: 'Internal server error.',
+    }),
+    timestamp,
+  };
+
+  if (Object.hasOwn(payload, 'meta')) {
+    envelope.meta = payload.meta;
+  }
+
+  return envelope;
+}
+
 export function sendJson(response, statusCode, payload, extraHeaders = {}) {
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify(createApiEnvelope(statusCode, payload));
   response.writeHead(statusCode, {
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(body),

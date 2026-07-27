@@ -2,8 +2,8 @@
 
 ## 状态
 
-- 文档状态：基础契约已开始实现
-- 实现状态：已建立健康检查、User/Subject、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础；完整平台 API 未建立
+- 文档状态：基础契约持续实现
+- 实现状态：已建立统一响应、健康检查、User/Subject/Dashboard、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -53,6 +53,38 @@
 - 与会话、消息、事件、设备或生活模块的关系
 
 秘密密钥和不必要的敏感原文不作为普通接口返回值。
+
+## 统一 HTTP 响应
+
+所有 JSON 响应至少包含：
+
+- `success`：HTTP 2xx 时为 `true`，其他结果为 `false`
+- `data`：成功数据；失败时固定为 `null`
+- `error`：失败时包含 `code`、`message`、`requestId` 和可选 `details`；成功时固定为 `null`
+- `timestamp`：服务端生成的 UTC ISO-8601 响应时间
+
+列表接口可以额外返回 `meta.count`。HTTP 状态码仍表达 200、201、400、404、409、413、415、500 等结果；创建响应保留 `Location`，全部响应保留 `x-request-id`、`no-store` 和 `nosniff`。统一 envelope 不替代 HTTP 状态语义。
+
+开发前端使用同源 `/api` 与 `/health` 代理，不要求后端开放通配 CORS。`VITE_BACKEND_PROXY_TARGET` 只配置本地代理目标，不承载密钥。
+
+## User、Subject 与 Dashboard 契约
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users` | 创建基础用户；当前不是注册或登录验证 |
+| `GET` | `/api/v1/users/:userId` | 按稳定 ID 查询用户 |
+| `GET` | `/api/v1/users/current` | 使用 `x-vio-user-id` 查询开发期当前用户；不是认证 |
+| `POST` | `/api/v1/users/:userId/subjects` | 创建属于该用户的 AI 主体 |
+| `GET` | `/api/v1/users/:userId/subjects` | 查询该用户主体列表，返回 `meta.count` |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId` | 按用户/主体双重归属查询单项 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId` | 更新名字、头像引用或基础设定 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/dashboard` | 聚合用户、主体和基础活动状态 |
+
+Subject PATCH 只接受 `name`、`avatarRef`、`basicSettings`，至少提供一个字段；`basicSettings` 使用整对象替换。只有实际变化才与最小 `subject_updated` Event 同事务提交，无变化请求不更新时间或重复发事件。
+
+Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示用户和主体均为 `active`；连续性固定返回 `not_available`，不从 mock、设定或模型配置猜测未实现状态，也不返回设备、待办、提醒或模型结果。
+
+`x-vio-user-id` 与路径中的 `userId` 都只是当前开发请求范围，不是可信身份。服务不会自动选择数据库首位用户；真实认证前不得公开这些路由。
 
 ## 软件事件契约
 

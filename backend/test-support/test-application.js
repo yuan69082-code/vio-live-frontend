@@ -35,8 +35,8 @@ export async function startTestApplication(databasePath) {
   };
 }
 
-export async function getJson(baseUrl, path) {
-  const response = await fetch(`${baseUrl}${path}`);
+export async function getJson(baseUrl, path, { headers = {} } = {}) {
+  const response = await fetch(`${baseUrl}${path}`, { headers });
   return {
     response,
     body: await response.json(),
