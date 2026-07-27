@@ -89,6 +89,8 @@ function presentProvider(provider) {
 export function createApiProviderService({
   apiProviderRepository,
   userRepository,
+  auditLogService,
+  runInTransaction,
   clock = () => new Date(),
   idFactory = createId,
 }) {
@@ -100,6 +102,19 @@ export function createApiProviderService({
     }
 
     return normalizedUserId;
+  }
+
+  function recordChange(provider, action) {
+    auditLogService.recordAuditLog({
+      userId: provider.ownerUserId,
+      operationType: 'api_configuration_change',
+      resourceType: 'api_provider',
+      resourceId: provider.providerId,
+      action,
+      riskLevel: 'high',
+      result: 'succeeded',
+      reasonCode: `api_provider_${action}`,
+    });
   }
 
   return {
@@ -130,7 +145,11 @@ export function createApiProviderService({
         updatedAt: now,
       };
 
-      return presentProvider(apiProviderRepository.insert(provider));
+      return runInTransaction(() => {
+        const created = apiProviderRepository.insert(provider);
+        recordChange(created, 'created');
+        return presentProvider(created);
+      });
     },
     getProvider(userId, providerId) {
       const ownerUserId = requireUser(userId);
@@ -151,18 +170,21 @@ export function createApiProviderService({
       const normalizedProviderId = requireString(providerId, 'providerId', { maxLength: 128 });
       const input = requireOnlyFields(value, ['status']);
       const status = requireAllowedValue(input.status, 'status', API_PROVIDER_STATUSES);
-      const provider = apiProviderRepository.updateStatus(
-        ownerUserId,
-        normalizedProviderId,
-        status,
-        clock().toISOString(),
-      );
+      return runInTransaction(() => {
+        const provider = apiProviderRepository.updateStatus(
+          ownerUserId,
+          normalizedProviderId,
+          status,
+          clock().toISOString(),
+        );
 
-      if (!provider) {
-        throw new NotFoundError('API provider was not found for this user.');
-      }
+        if (!provider) {
+          throw new NotFoundError('API provider was not found for this user.');
+        }
 
-      return presentProvider(provider);
+        recordChange(provider, 'status_updated');
+        return presentProvider(provider);
+      });
     },
   };
 }

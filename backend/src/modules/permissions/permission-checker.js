@@ -1,5 +1,9 @@
 import { NotFoundError, ValidationError } from '../../core/errors.js';
-import { requirePlainObject, requireString } from '../../core/validation.js';
+import {
+  requireOpaqueResourceId,
+  requirePlainObject,
+  requireString,
+} from '../../core/validation.js';
 import {
   PERMISSION_ACTIONS,
   PERMISSION_RESOURCE_TYPES,
@@ -27,6 +31,7 @@ function decision(permission, value, canAsk, reason) {
     permissionId: permission?.permissionId ?? null,
     permissionLevel: permission?.permissionLevel ?? null,
     permissionStatus: permission?.status ?? null,
+    permissionUpdatedAt: permission?.updatedAt ?? null,
   };
 }
 
@@ -37,7 +42,7 @@ export function createPermissionChecker({
   subjectRepository,
 }) {
   return {
-    checkPermission(userId, value) {
+    checkPermission(userId, value, { consumeAllowOnce = true } = {}) {
       const normalizedUserId = requireString(userId, 'userId', { maxLength: 128 });
 
       if (!userRepository.findById(normalizedUserId)) {
@@ -64,7 +69,7 @@ export function createPermissionChecker({
           'resourceType',
           PERMISSION_RESOURCE_TYPES,
         ),
-        resourceId: requireString(input.resourceId, 'resourceId', { maxLength: 256 }),
+        resourceId: requireOpaqueResourceId(input.resourceId),
         action: requirePermissionValue(input.action, 'action', PERMISSION_ACTIONS),
       };
       const permission = permissionRepository.findActiveRule(scope);
@@ -87,6 +92,10 @@ export function createPermissionChecker({
 
       if (permission.permissionLevel === 'forbidden_ask') {
         return decision(permission, 'deny', false, 'forbidden_ask');
+      }
+
+      if (!consumeAllowOnce) {
+        return decision(permission, 'allow', false, 'allow_once_available');
       }
 
       const consumed = permissionService.consumeOnceForCheck(

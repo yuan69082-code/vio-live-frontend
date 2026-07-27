@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约已开始实现
-- 实现状态：已建立健康检查、User/Subject、Event、Provider/Model 和 Permission 基础；完整平台 API 未建立
+- 实现状态：已建立健康检查、User/Subject、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础；完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -118,6 +118,25 @@ Provider 响应只暴露 API Key 的 `not_configured` 状态，不接受或返�
 | `POST` | `/api/v1/users/:userId/permission-checks` | 输入主体、资源与操作，返回 `allow`、`ask` 或 `deny` |
 
 Checker 只进行完全匹配和平台判断，不执行资源动作。`allow_once` 在首次成功判断后转为 `consumed`；权限变更与 `permission_changed` 事件同事务提交。`canAsk` 只描述是否允许后续申请，不等于已经创建授权申请流程。
+
+当前 Security、Confirmation 和 AuditLog 接口：
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/security/sensitive-data-categories` | 返回五类分类元数据，不返回敏感正文 |
+| `POST` | `/api/v1/users/:userId/security-checks` | 按 Permission、风险和确认返回 `allow`、`confirm` 或 `deny` |
+| `GET` | `/api/v1/users/:userId/confirmations/:confirmationId` | 查询用户范围内的具体操作确认 |
+| `PATCH` | `/api/v1/users/:userId/confirmations/:confirmationId` | 批准或拒绝待确认记录，不执行资源 |
+| `GET` | `/api/v1/users/:userId/audit-logs` | 按主体、操作、资源、风险、结果和数量筛选审计 |
+| `GET` | `/api/v1/users/:userId/audit-logs/:auditLogId` | 查询用户范围内的单条审计 |
+
+安全检查的 `operationType` 当前只允许：`general_access`、`permission_change`、`api_configuration_change`、`privacy_access_request`、`payment_operation`、`device_control`、`sensitive_data_access`、`data_deletion`。
+
+确认决定请求体固定为 `{ "decision": "approve" }` 或 `{ "decision": "reject" }`。审计列表查询参数固定为 `subjectId`、`operationType`、`resourceType`、`result`、`riskLevel`、`limit`。
+
+安全检查只接受 `subjectId`、`resourceType`、平台不透明 `resourceId`、`action`、`operationType`、`sensitiveDataCategories` 和可选 `confirmationId`，会拒绝额外字段和任意 payload。资源 ID 校验会启发式拦截常见凭据形态，但不等同于完整 DLP；正式接入资源时必须使用可信服务端资源注册表，不能把敏感值塞入 ID。中风险 `user_defined` 在正式服务端偏好完成前安全默认需要确认。响应包含 Permission 结果、风险原因、确认状态和审计 ID；`preflightPassed` 仅表示预检通过，`executionAllowed` 固定为 `false`，`executionStatus` 固定为 `not_executed`，不会产生支付、设备、私域或外部调用。
+
+AuditLog 没有客户端写入、更新或删除接口；Confirmation 批准结果绑定 Permission 快照、完整作用域和安全策略指纹，五分钟后过期，并在安全检查中单次消费。错范围、过期和重放尝试返回拒绝并生成最小审计。
 
 - 未登录、主体不匹配或权限不足时不能返回受保护数据。
 - 外部能力不可用时，应明确失败，不伪造成功结果。

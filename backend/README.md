@@ -2,10 +2,10 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 4｜权限系统基础”。后端已经可以独立启动，并完成权限规则、三态判断和事件联动闭环：
+当前阶段为“平台后端 5｜安全系统基础”。后端已经可以独立启动，并完成权限、安全预检、风险确认和审计闭环：
 
 ```text
-创建用户/主体 → 创建权限规则 → 按资源与操作判断 → 返回允许/询问/拒绝 → 记录权限变化事件
+请求 → Permission 精确判断 → 风险识别 → 确认要求 → 返回执行资格（不执行）→ 写入最小审计
 ```
 
 已实现：
@@ -25,11 +25,18 @@
 - 七类权限资源、五档权限等级和八种基础操作
 - 默认拒绝的 Permission Checker 三态判断
 - `allow_once` 首次判断后原子消费，权限写入与 `permission_changed` 事件同事务提交
+- Security 统一检查入口和 `low`、`medium`、`high`、`critical` 四级风险判断
+- API Key、身份、支付、私密记录和 AI Private Domain 五类敏感数据分类元数据
+- `not_required`、`every_time`、`user_defined` 三种确认要求
+- 绑定完整作用域、Permission 快照与策略指纹，五分钟过期且批准后单次消费的 Confirmation
+- 只追加、最小脱敏、与 Event 分离的 AuditLog
+- Permission/APIProvider 变更审计及用户范围内的审计只读查询
+- 安全预检不提前消费 `allow_once`，确认满足后才完成单次消费
 - 基础服务信息与健康检查
 - 版本化 JSON 基础路由和统一错误结果
 - 启动、持久化、冲突和跨用户隔离测试
 
-本阶段没有实现真实登录、正式数据库、真实 API Key、模型调用、供应商 SDK、事件消费器、连续性引擎、MCP/Skill/Tool 实际调用、真实设备、手机权限或 AI 私域业务。
+本阶段没有实现真实登录、正式数据库、真实 API Key、模型调用、供应商 SDK、事件消费器、连续性引擎、MCP/Skill/Tool 实际调用、真实支付、真实设备、手机权限或 AI 私域业务。安全检查只返回资格，所有响应明确标记 `executionStatus: not_executed`。
 
 ## 运行要求
 
@@ -97,6 +104,12 @@ pnpm test
 | `PATCH` | `/api/v1/users/:userId/permissions/:permissionId` | 更新权限等级或活动状态并记录事件 |
 | `DELETE` | `/api/v1/users/:userId/permissions/:permissionId` | 将规则标记为已删除并记录事件 |
 | `POST` | `/api/v1/users/:userId/permission-checks` | 按主体、资源和操作返回 `allow`、`ask` 或 `deny` |
+| `GET` | `/api/v1/security/sensitive-data-categories` | 查询五类敏感数据分类元数据，不返回敏感正文 |
+| `POST` | `/api/v1/users/:userId/security-checks` | 按 Permission、风险和确认要求返回安全资格，不执行资源 |
+| `GET` | `/api/v1/users/:userId/audit-logs` | 按主体、操作、资源、风险和结果查询审计记录 |
+| `GET` | `/api/v1/users/:userId/audit-logs/:auditLogId` | 按用户归属查询单条审计记录 |
+| `GET` | `/api/v1/users/:userId/confirmations/:confirmationId` | 查询本用户的具体操作确认 |
+| `PATCH` | `/api/v1/users/:userId/confirmations/:confirmationId` | 批准或拒绝待确认操作；不执行资源 |
 
 当前路由只服务于本阶段闭环，不代表完整公开 API 已完成。真实认证加入前，不能将该服务直接公开部署。
 
@@ -120,6 +133,10 @@ backend/
 │  ├─ modules/models/        # Model 目录与能力标签
 │  ├─ modules/model-router/  # 本地规则匹配，不调用模型
 │  ├─ modules/permissions/   # 权限规则、五档语义与三态判断
+│  ├─ modules/security/      # 安全编排、风险识别和执行前资格
+│  ├─ modules/sensitive-data/ # 敏感分类元数据，不保存正文
+│  ├─ modules/confirmations/ # 具体操作确认与防重放
+│  ├─ modules/audit-logs/    # 最小、只追加安全审计
 │  ├─ app.js                 # 依赖装配和服务生命周期
 │  ├─ config.js              # 配置加载
 │  └─ server.js              # 后端启动入口
@@ -131,7 +148,7 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`events`、`api_providers`、`models`、`model_capabilities` 和 `permissions`。
+- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions`、`security_confirmations` 和 `audit_logs`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - 主体事件使用 `(user_id, subject_id)` 组合外键，数据库层同时保证用户和主体归属。
 - 事件按发生时间保存为 UTC ISO-8601，并为用户、主体、类型和状态查询建立索引。
@@ -141,6 +158,10 @@ backend/
 - Permission 同时保存用户、主体、资源类型、资源 ID、操作、权限等级和状态；复合外键阻止跨用户主体规则。
 - 当前同一用户/主体/资源/操作只允许一个未终结规则；`allow_once` 使用后标记为 `consumed`，删除标记为 `deleted`。
 - Permission 变更与对应 Event 使用同一 SQLite 事务，任一写入失败时整体回滚。
+- Confirmation 同时绑定用户、主体、资源、动作、风险、Permission 快照和策略指纹；五分钟后过期，批准结果只能被匹配请求消费一次。
+- AuditLog 没有任意 payload、正文或详情 JSON 字段，也不提供客户端创建、更新或删除路由；资源引用必须使用平台不透明 ID，当前凭据形态拦截只是启发式规则，不是完整 DLP。
+- Event 与 AuditLog 分离：前者记录软件变化，后者记录安全治理事实。
+- 内部嵌套写入加入同一最外层 SQLite 事务，保证安全确认、单次权限消费和审计结果一致。
 - `basicSettings` 在开发 SQLite 中保存为 JSON 文本，业务层只接收普通 JSON 对象。
 - SQL 和 `node:sqlite` 只存在于 `integrations/database` 与 `migrations`；业务服务只依赖仓储行为。
 - 已执行迁移不得修改，后续结构通过新迁移演进。
@@ -148,6 +169,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。本阶段 Permission 只管理平台内规则和判断结果，不执行受控资源，不连接手机权限、MCP、Skill、Tool 或设备，也不改变 continuity-engine 或模型调用边界。
+平台后端与 continuity-engine 保持平行。本阶段 Security 只编排 Permission、风险、确认和审计并返回执行资格，不执行受控资源，不连接支付、手机权限、MCP、Skill、Tool、设备或 AI 私域，也不改变 continuity-engine 或模型调用边界。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

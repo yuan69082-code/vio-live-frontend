@@ -4,7 +4,7 @@
 
 本目录依据《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》整理，用于描述平台后端的职责、数据边界、接口原则、安全约束和开发顺序。
 
-本目录记录稳定规划。仓库已完成首个可运行平台后端、开发数据库、User/Subject、Event、Provider/Model 本地规则路由和 Permission 判断基础；这不代表真实认证、正式数据库、事件消费、真实模型连接、MCP、设备适配或外部执行能力已经完成。
+本目录记录稳定规划。仓库已完成首个可运行平台后端、开发数据库、User/Subject、Event、Provider/Model 本地规则路由、Permission 判断以及 Security/Confirmation/AuditLog 基础；这不代表真实认证、正式数据库、事件消费、真实模型连接、支付、MCP、设备适配或外部执行能力已经完成。
 
 ## 系统边界
 
@@ -23,11 +23,13 @@ Vio Live 由五层协作组成：
 - 本项目当前为 React + Vite + TypeScript 前端项目。
 - 当前前端页面使用模拟数据，未连接平台后端、数据库或 API。
 - 已建立独立 `backend/` 工程、README、后端 ADR、开发日志和阶段实施路线。
-- 后端可以独立启动，并提供健康检查、User/Subject、Event、Provider/Model 和 Permission 基础接口。
-- 已完成核心逻辑数据模型，并使用开发期 SQLite 实现 `users`、`subjects`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions` 和迁移记录。
+- 后端可以独立启动，并提供健康检查、User/Subject、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础接口。
+- 已完成核心逻辑数据模型，并使用开发期 SQLite 实现 `users`、`subjects`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions`、`security_confirmations`、`audit_logs` 和迁移记录。
 - Event 当前支持用户/可选主体归属、五种基础事件类型，以及按用户、主体、发生时间、类型和状态筛选；尚无事件消费者。
 - Model Router 当前只按任务能力从启用 Provider 中返回本地模型描述，不调用真实模型；API Key 字段只预留为空。
 - Permission 当前支持七类资源、五档权限、精确操作判断和权限变化事件；不执行任何真实资源操作。
+- Security 当前按 Permission、四级风险和三种确认要求返回执行资格，明确标记未执行；确认绑定完整作用域并单次消费。
+- SensitiveData 只定义五类分类元数据；AuditLog 与 Event 分离且只保存最小脱敏字段。
 - 当前未接入真实认证或正式数据库，基础路由不得直接公开部署。
 - 总规划记录的部分连续性底层框架不等于平台后端已经完成。
 - 正式数据库、真实模型、MCP、设备、外部执行和公开运行能力仍处于规划或待接入状态。

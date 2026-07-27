@@ -1,8 +1,10 @@
 import { ConflictError, NotFoundError, ValidationError } from '../../core/errors.js';
 import { createId } from '../../core/ids.js';
 import {
+  optionalOpaqueResourceId,
   optionalString,
   requirePlainObject,
+  requireOpaqueResourceId,
   requireString,
 } from '../../core/validation.js';
 import {
@@ -40,6 +42,7 @@ export function createPermissionService({
   userRepository,
   subjectRepository,
   eventService,
+  auditLogService,
   runInTransaction,
   clock = () => new Date(),
   idFactory = createId,
@@ -87,6 +90,17 @@ export function createPermissionService({
         } : {}),
       },
     });
+    auditLogService.recordAuditLog({
+      userId: permission.userId,
+      subjectId: permission.subjectId,
+      operationType: 'permission_change',
+      resourceType: 'permission',
+      resourceId: permission.permissionId,
+      action: changeType,
+      riskLevel: 'high',
+      result: 'succeeded',
+      reasonCode: `permission_${changeType}`,
+    });
   }
 
   return {
@@ -111,7 +125,7 @@ export function createPermissionService({
           'resourceType',
           PERMISSION_RESOURCE_TYPES,
         ),
-        resourceId: requireString(input.resourceId, 'resourceId', { maxLength: 256 }),
+        resourceId: requireOpaqueResourceId(input.resourceId),
         action: requirePermissionValue(input.action, 'action', PERMISSION_ACTIONS),
         permissionLevel: requirePermissionValue(
           input.permissionLevel,
@@ -169,7 +183,7 @@ export function createPermissionService({
           'resourceType',
           PERMISSION_RESOURCE_TYPES,
         ),
-        resourceId: optionalString(filters.resourceId, 'resourceId', { maxLength: 256 }),
+        resourceId: optionalOpaqueResourceId(filters.resourceId),
         action: optionalPermissionValue(filters.action, 'action', PERMISSION_ACTIONS),
         status: optionalPermissionValue(filters.status, 'status', PERMISSION_STATUSES),
       });

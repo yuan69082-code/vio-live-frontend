@@ -44,6 +44,10 @@ export function createRouter({
   modelRouterService,
   permissionService,
   permissionChecker,
+  securityService,
+  sensitiveDataService,
+  auditLogService,
+  confirmationService,
   logger = console,
 }) {
   return async function route(request, response) {
@@ -72,6 +76,18 @@ export function createRouter({
             version: config.serviceVersion,
             database: database.ping() ? 'ok' : 'unavailable',
           },
+        });
+        return;
+      }
+
+      if (
+        request.method === 'GET'
+        && url.pathname === '/api/v1/security/sensitive-data-categories'
+      ) {
+        const classifications = sensitiveDataService.listClassifications();
+        sendJson(response, 200, {
+          data: classifications,
+          meta: { count: classifications.length },
         });
         return;
       }
@@ -354,6 +370,82 @@ export function createRouter({
         const input = await readJsonBody(request);
         sendJson(response, 200, {
           data: permissionChecker.checkPermission(permissionChecksRoute.userId, input),
+        });
+        return;
+      }
+
+      const securityChecksRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/security-checks$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && securityChecksRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: securityService.checkSecurity(securityChecksRoute.userId, input),
+        });
+        return;
+      }
+
+      const auditLogsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/audit-logs$/,
+        ['userId'],
+      );
+      if (request.method === 'GET' && auditLogsRoute) {
+        const auditLogs = auditLogService.listAuditLogs(auditLogsRoute.userId, {
+          subjectId: url.searchParams.get('subjectId'),
+          operationType: url.searchParams.get('operationType'),
+          resourceType: url.searchParams.get('resourceType'),
+          result: url.searchParams.get('result'),
+          riskLevel: url.searchParams.get('riskLevel'),
+          limit: url.searchParams.get('limit'),
+        });
+        sendJson(response, 200, {
+          data: auditLogs,
+          meta: { count: auditLogs.length },
+        });
+        return;
+      }
+
+      const auditLogRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/audit-logs\/([^/]+)$/,
+        ['userId', 'auditLogId'],
+      );
+      if (request.method === 'GET' && auditLogRoute) {
+        sendJson(response, 200, {
+          data: auditLogService.getAuditLog(
+            auditLogRoute.userId,
+            auditLogRoute.auditLogId,
+          ),
+        });
+        return;
+      }
+
+      const confirmationRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/confirmations\/([^/]+)$/,
+        ['userId', 'confirmationId'],
+      );
+      if (request.method === 'GET' && confirmationRoute) {
+        sendJson(response, 200, {
+          data: confirmationService.getConfirmation(
+            confirmationRoute.userId,
+            confirmationRoute.confirmationId,
+          ),
+        });
+        return;
+      }
+
+      if (request.method === 'PATCH' && confirmationRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: confirmationService.decideConfirmation(
+            confirmationRoute.userId,
+            confirmationRoute.confirmationId,
+            input,
+          ),
         });
         return;
       }

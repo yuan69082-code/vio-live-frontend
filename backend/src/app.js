@@ -1,7 +1,9 @@
 import { createServer } from 'node:http';
 
 import { createRouter } from './http/router.js';
+import { createSqliteAuditLogRepository } from './integrations/database/sqlite-audit-log-repository.js';
 import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
+import { createSqliteConfirmationRepository } from './integrations/database/sqlite-confirmation-repository.js';
 import { createSqliteEventRepository } from './integrations/database/sqlite-event-repository.js';
 import { createSqliteDatabase } from './integrations/database/sqlite-database.js';
 import { createSqliteModelRepository } from './integrations/database/sqlite-model-repository.js';
@@ -9,11 +11,15 @@ import { createSqlitePermissionRepository } from './integrations/database/sqlite
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
 import { createSqliteUserRepository } from './integrations/database/sqlite-user-repository.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
+import { createAuditLogService } from './modules/audit-logs/audit-log-service.js';
+import { createConfirmationService } from './modules/confirmations/confirmation-service.js';
 import { createEventService } from './modules/events/event-service.js';
 import { createModelRouterService } from './modules/model-router/model-router-service.js';
 import { createModelService } from './modules/models/model-service.js';
 import { createPermissionChecker } from './modules/permissions/permission-checker.js';
 import { createPermissionService } from './modules/permissions/permission-service.js';
+import { createSecurityService } from './modules/security/security-service.js';
+import { createSensitiveDataService } from './modules/sensitive-data/sensitive-data-service.js';
 import { createSubjectService } from './modules/subjects/subject-service.js';
 import { createUserService } from './modules/users/user-service.js';
 
@@ -25,6 +31,8 @@ export function createApplication({ config, logger = console }) {
   const apiProviderRepository = createSqliteApiProviderRepository(database.connection);
   const modelRepository = createSqliteModelRepository(database.connection);
   const permissionRepository = createSqlitePermissionRepository(database.connection);
+  const auditLogRepository = createSqliteAuditLogRepository(database.connection);
+  const confirmationRepository = createSqliteConfirmationRepository(database.connection);
   const userService = createUserService({ userRepository });
   const subjectService = createSubjectService({ subjectRepository, userRepository });
   const eventService = createEventService({
@@ -32,9 +40,23 @@ export function createApplication({ config, logger = console }) {
     subjectRepository,
     userRepository,
   });
+  const auditLogService = createAuditLogService({
+    auditLogRepository,
+    userRepository,
+    subjectRepository,
+  });
+  const confirmationService = createConfirmationService({
+    confirmationRepository,
+    auditLogService,
+    userRepository,
+    subjectRepository,
+    runInTransaction: database.runInTransaction,
+  });
   const apiProviderService = createApiProviderService({
     apiProviderRepository,
     userRepository,
+    auditLogService,
+    runInTransaction: database.runInTransaction,
   });
   const modelService = createModelService({
     modelRepository,
@@ -50,6 +72,7 @@ export function createApplication({ config, logger = console }) {
     userRepository,
     subjectRepository,
     eventService,
+    auditLogService,
     runInTransaction: database.runInTransaction,
   });
   const permissionChecker = createPermissionChecker({
@@ -58,6 +81,13 @@ export function createApplication({ config, logger = console }) {
     userRepository,
     subjectRepository,
   });
+  const securityService = createSecurityService({
+    permissionChecker,
+    confirmationService,
+    auditLogService,
+    runInTransaction: database.runInTransaction,
+  });
+  const sensitiveDataService = createSensitiveDataService();
   const router = createRouter({
     config,
     database,
@@ -69,6 +99,10 @@ export function createApplication({ config, logger = console }) {
     modelRouterService,
     permissionService,
     permissionChecker,
+    securityService,
+    sensitiveDataService,
+    auditLogService,
+    confirmationService,
     logger,
   });
   const server = createServer((request, response) => {

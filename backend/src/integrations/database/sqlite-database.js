@@ -10,6 +10,7 @@ export function createSqliteDatabase({ databasePath, migrationsPath }) {
   }
 
   const connection = new DatabaseSync(databasePath);
+  let transactionDepth = 0;
   try {
     connection.exec('PRAGMA foreign_keys = ON;');
     connection.exec('PRAGMA busy_timeout = 5000;');
@@ -27,7 +28,12 @@ export function createSqliteDatabase({ databasePath, migrationsPath }) {
   return {
     connection,
     runInTransaction(operation) {
+      if (transactionDepth > 0) {
+        return operation();
+      }
+
       connection.exec('BEGIN IMMEDIATE;');
+      transactionDepth += 1;
 
       try {
         const result = operation();
@@ -36,6 +42,8 @@ export function createSqliteDatabase({ databasePath, migrationsPath }) {
       } catch (error) {
         connection.exec('ROLLBACK;');
         throw error;
+      } finally {
+        transactionDepth -= 1;
       }
     },
     ping() {
