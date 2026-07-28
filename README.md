@@ -1,8 +1,8 @@
 # Vio Live
 
-Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。前端页面仍保留并使用原有 mock 数据；平台后端已完成 User、Subject、AI Assistant Global Settings、Conversation、Message、MessageVersion、ConversationSummary、SubjectState、只读 Context、Event、模型目录与规则路由、Permission、Security、AuditLog，以及基础 API 连接层。
+Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。前端页面仍保留并使用原有 mock 数据；平台后端已完成 User、Subject、AI Assistant Global Settings、Conversation、Message、MessageVersion、ConversationSummary、SubjectState、只读 Context、Event、Provider/Model 目录、默认/备用模型路由规则、Permission、Security、AuditLog，以及基础 API 连接层。
 
-后端现可保存助手名称、头像、人格、表达方式、关系定义、长期要求和禁止事项，并将这些长期全局设定与动态 SubjectState 分离；同时可保存主体范围的线性文本会话、不可覆盖版本、带来源摘要和 `state_update`，读取其他窗口最新摘要形成只读上下文投影。所有摘要和状态由开发调用方提交，不调用模型或连续性引擎。前端入口仍只通过 Vite 同源代理非阻塞检查 `/health`，页面尚未迁移到这些真实 API。
+后端现可按用户保存 Provider 的 Base URL/接口格式，以及 Model 的能力、费用说明和测试状态；六类任务可配置默认与备用模型，Router 只返回本地选择结果。它不连接模型、不保存真实 API Key，也不读取或改变 Context、SubjectState、Assistant Global Settings。前端入口仍只通过 Vite 同源代理非阻塞检查 `/health`，页面尚未迁移到这些真实 API。
 
 ## 前后端本地运行
 
@@ -47,5 +47,5 @@ pnpm test
 - 主体消息和重生成内容由开发调用方显式提交，只形成数据与事件记录，不代表 AI 已生成回复。
 - 摘要和 `state_update` 也由开发调用方显式提交；Context 只读投影不生成提示词或消耗 Token。
 - AI 助手全局设定只保存用户明确配置的长期身份与行为偏好，不能覆盖平台安全规则，也不会自动形成或修改 SubjectState。
-- 没有 Memory、真实 API Key、模型调用、MCP、Tool、设备、支付、AI 私域或 continuity-engine 接入。
+- 没有 Memory、真实 API Key、模型连通性测试或模型调用，也没有 MCP、Tool、设备、支付、AI 私域或 continuity-engine 接入。
 - 未认证后端不能直接公开部署。

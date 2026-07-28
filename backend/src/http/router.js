@@ -51,6 +51,7 @@ export function createRouter({
   apiProviderService,
   modelService,
   modelRouterService,
+  modelRoutingRuleService,
   permissionService,
   permissionChecker,
   securityService,
@@ -672,6 +673,61 @@ export function createRouter({
       if (request.method === 'GET' && modelRoute) {
         sendJson(response, 200, {
           data: modelService.getModel(modelRoute.userId, modelRoute.modelId),
+        });
+        return;
+      }
+
+      const modelRoutingRulesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/model-routing-rules$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && modelRoutingRulesRoute) {
+        const input = await readJsonBody(request);
+        const rule = modelRoutingRuleService.createRule(
+          modelRoutingRulesRoute.userId,
+          input,
+        );
+        sendJson(response, 201, { data: rule }, {
+          location: `/api/v1/users/${encodeURIComponent(rule.userId)}/model-routing-rules/${encodeURIComponent(rule.taskType)}`,
+        });
+        return;
+      }
+
+      if (request.method === 'GET' && modelRoutingRulesRoute) {
+        const rules = modelRoutingRuleService.listRules(
+          modelRoutingRulesRoute.userId,
+        );
+        sendJson(response, 200, {
+          data: rules,
+          meta: { count: rules.length },
+        });
+        return;
+      }
+
+      const modelRoutingRuleRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/model-routing-rules\/([^/]+)$/,
+        ['userId', 'taskType'],
+      );
+      if (request.method === 'GET' && modelRoutingRuleRoute) {
+        sendJson(response, 200, {
+          data: modelRoutingRuleService.getRule(
+            modelRoutingRuleRoute.userId,
+            modelRoutingRuleRoute.taskType,
+          ),
+        });
+        return;
+      }
+
+      if (request.method === 'PATCH' && modelRoutingRuleRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: modelRoutingRuleService.updateRule(
+            modelRoutingRuleRoute.userId,
+            modelRoutingRuleRoute.taskType,
+            input,
+          ),
         });
         return;
       }

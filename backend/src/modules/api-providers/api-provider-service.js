@@ -1,7 +1,11 @@
 import { NotFoundError, ValidationError } from '../../core/errors.js';
 import { createId } from '../../core/ids.js';
 import { requirePlainObject, requireString } from '../../core/validation.js';
-import { API_PROVIDER_STATUSES, API_PROVIDER_TYPES } from './api-provider-types.js';
+import {
+  API_INTERFACE_FORMATS,
+  API_PROVIDER_STATUSES,
+  API_PROVIDER_TYPES,
+} from './api-provider-types.js';
 
 const secretFieldPattern = /^(api[_-]?key|key|token|secret|secret[_-]?ref|credential|credentials)$/i;
 
@@ -70,7 +74,16 @@ function normalizeBaseUrl(value) {
   return url.toString();
 }
 
-function presentProvider(provider) {
+function defaultInterfaceFormat(providerType) {
+  return {
+    openai: 'openai_compatible',
+    claude: 'anthropic_messages',
+    glm: 'glm_compatible',
+    custom: 'custom_http',
+  }[providerType];
+}
+
+function presentProvider(provider, credentialStore) {
   if (!provider) {
     return null;
   }
@@ -79,9 +92,10 @@ function presentProvider(provider) {
   return {
     ...publicProvider,
     credentials: {
-      apiKey: {
-        status: apiKeySecretRef ? 'configured' : 'not_configured',
-      },
+      apiKey: credentialStore.describeApiKey({
+        providerId: provider.providerId,
+        secretRef: apiKeySecretRef,
+      }),
     },
   };
 }
@@ -90,6 +104,7 @@ export function createApiProviderService({
   apiProviderRepository,
   userRepository,
   auditLogService,
+  credentialStore,
   runInTransaction,
   clock = () => new Date(),
   idFactory = createId,
@@ -124,23 +139,33 @@ export function createApiProviderService({
         'displayName',
         'providerType',
         'baseUrl',
+        'interfaceFormat',
         'status',
       ]);
       const now = clock().toISOString();
+      const providerType = requireAllowedValue(
+        input.providerType,
+        'providerType',
+        API_PROVIDER_TYPES,
+      );
       const provider = {
         providerId: idFactory(),
         ownerUserId,
         displayName: requireString(input.displayName, 'displayName', { maxLength: 120 }),
-        providerType: requireAllowedValue(
-          input.providerType,
-          'providerType',
-          API_PROVIDER_TYPES,
-        ),
+        providerType,
         baseUrl: normalizeBaseUrl(input.baseUrl),
+        interfaceFormat: input.interfaceFormat === undefined
+          ? defaultInterfaceFormat(providerType)
+          : requireAllowedValue(
+              input.interfaceFormat,
+              'interfaceFormat',
+              API_INTERFACE_FORMATS,
+            ),
         status: input.status === undefined
           ? 'enabled'
           : requireAllowedValue(input.status, 'status', API_PROVIDER_STATUSES),
         apiKeySecretRef: null,
+        testStatus: 'not_tested',
         createdAt: now,
         updatedAt: now,
       };
@@ -148,7 +173,7 @@ export function createApiProviderService({
       return runInTransaction(() => {
         const created = apiProviderRepository.insert(provider);
         recordChange(created, 'created');
-        return presentProvider(created);
+        return presentProvider(created, credentialStore);
       });
     },
     getProvider(userId, providerId) {
@@ -160,10 +185,12 @@ export function createApiProviderService({
         throw new NotFoundError('API provider was not found for this user.');
       }
 
-      return presentProvider(provider);
+      return presentProvider(provider, credentialStore);
     },
     listProviders(userId) {
-      return apiProviderRepository.findManyByUser(requireUser(userId)).map(presentProvider);
+      return apiProviderRepository
+        .findManyByUser(requireUser(userId))
+        .map((provider) => presentProvider(provider, credentialStore));
     },
     updateProviderStatus(userId, providerId, value) {
       const ownerUserId = requireUser(userId);
@@ -183,7 +210,7 @@ export function createApiProviderService({
         }
 
         recordChange(provider, 'status_updated');
-        return presentProvider(provider);
+        return presentProvider(provider, credentialStore);
       });
     },
   };

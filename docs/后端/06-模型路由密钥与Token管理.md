@@ -2,9 +2,9 @@
 
 ## 状态
 
-- 文档状态：模型/API 管理基础已实现，真实连接仍在规划
+- 文档状态：平台后端 6 的模型/API 路由配置基础已实现，真实连接仍在规划
 - 真实模型连接：未完成
-- 本地配置与路由：已完成 Provider/Model 持久化、能力查询和启用 Provider 规则匹配
+- 本地配置与路由：已完成 Provider/Model 持久化、六类任务默认/备用规则和确定性本地选择
 - Thinking Provider、预算、Wake 和 Resource 仅有规划所述框架状态，尚未形成平台闭环
 - 当前限制：不指定具体模型 SDK、计费实现或密钥服务产品
 
@@ -45,14 +45,17 @@
 - 费用说明
 - 备用模型
 
-本文件不确定具体字段类型、接口路径或供应商专属参数。
+本阶段已确定下面“当前基础实现”的开发期字段与接口；供应商专属参数、真实调用和生产密钥方案仍不在本文件中固化。
 
 ### 当前基础实现
 
 - Provider 支持 `openai`、`claude`、`glm`、`custom` 四种配置类型，只表示本地目录分类，不代表已接入对应服务。
-- Provider 保存显示名称、类型、Base URL、`enabled`/`disabled` 状态和创建/更新时间。
-- Model 归属于 Provider，保存模型名称、模型类型和 `chat`、`vision`、`image`、`video`、`embedding` 能力标签。
+- Provider 保存显示名称、类型、Base URL、接口格式、`enabled`/`disabled` 状态、测试状态和创建/更新时间。接口格式支持 `openai_compatible`、`anthropic_messages`、`glm_compatible`、`custom_http`。
+- Model 归属于 Provider，保存模型名称、模型类型、费用说明、测试状态和 `chat`、`long_text`、`vision`、`image`、`video`、`audio`、`search`、`embedding` 能力标签。
+- 可路由任务严格为 `chat`、`long_text`、`image`、`video`、`audio`、`search`；`vision` 与 `embedding` 当前只作为目录查询能力。
+- Model Routing Rule 按用户与任务唯一保存默认模型、可选备用模型和 `enabled`/`disabled` 状态。默认和备用必须属于同一用户、支持该任务且不能相同。
 - Base URL 只保存配置，不用于当前网络请求；包含用户名、密码、片段或凭据查询参数时会被拒绝。
+- Provider/Model 测试状态当前固定初始化为 `not_tested`，不接受客户端伪造；费用说明只是配置文本，不执行计费。
 
 ## 路由原则
 
@@ -62,7 +65,9 @@
 - 更换模型不改变 `subject_id`、主体状态、长期设定或记忆归属。
 - 建议模型和实际调用分开，调用仍受权限与费用限制。
 
-当前 Router 遵循最小规则：按任务类型匹配同名能力标签，只考虑 `enabled` Provider，并按稳定创建顺序返回首个模型描述。它不检查真实可用性、不调用模型，也不实现费用、优先级、备用路由或故障切换。
+当前 Router 遵循以下确定性规则：启用的显式规则优先选择 Provider 已启用的默认模型；默认 Provider 停用时，选择同规则中 Provider 已启用的备用模型；显式规则的模型均不可用时明确返回失败，不绕过用户规则。规则不存在或已停用时，才按稳定创建顺序返回首个能力匹配且 Provider 启用的模型。这里的备用选择只基于配置状态，不包含网络探测、请求重试或运行期故障切换。
+
+Router 响应固定标记模型和外部 API 未调用。模型选择不读取或改写 Context、SubjectState、Assistant Global Settings，不装配提示词、不生成回复，也不连接 MCP、Tool 或 continuity-engine。
 
 ## 密钥管理
 
@@ -72,7 +77,7 @@
 - 外部服务撤销后，相关密钥和调用能力必须失效。
 - 具体加密、轮换和密钥库方案等待安全 ADR 决定。
 
-当前 `api_key_secret_ref` 只是必须为 `NULL` 的数据库占位。Provider 接口拒绝 Key、Token、Secret、凭据或凭据引用输入，响应只返回 `not_configured`，因此本阶段不能配置或使用任何真实 API Key。
+当前 `api_key_secret_ref` 只是必须为 `NULL` 的数据库占位。后端提供安全存储端口，但当前实现只返回 `storage=secure_store_required` 与 `writeSupported=false`，没有保存方法。Provider 接口拒绝 Key、Token、Secret、凭据或凭据引用输入，响应只返回 `not_configured`，因此本阶段不能配置或使用任何真实 API Key。
 
 ## Token 与资源原则
 
@@ -98,4 +103,4 @@
 - 模型切换不影响主体连续状态。
 - 打开应用和普通浏览不会自动消耗模型 Token。
 
-当前阶段只满足配置目录和规则路由基础，不满足“至少一个真实模型可被安全调用”的最终验收方向。
+当前阶段满足配置目录、显式默认/备用规则与无调用选择基础，不满足“至少一个真实模型可被安全调用”的最终验收方向。

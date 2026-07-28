@@ -61,7 +61,12 @@ export function createModelService({
     createModel(userId, providerId, value) {
       const ownerUserId = requireUser(userId);
       const normalizedProviderId = requireProvider(ownerUserId, providerId);
-      const input = requireOnlyFields(value, ['modelName', 'modelType', 'capabilities']);
+      const input = requireOnlyFields(value, [
+        'modelName',
+        'modelType',
+        'capabilities',
+        'costDescription',
+      ]);
       const model = {
         modelId: idFactory(),
         ownerUserId,
@@ -69,6 +74,13 @@ export function createModelService({
         modelName: requireString(input.modelName, 'modelName', { maxLength: 160 }),
         modelType: requireString(input.modelType, 'modelType', { maxLength: 80 }),
         capabilities: requireCapabilities(input.capabilities),
+        costDescription: input.costDescription === undefined
+          ? ''
+          : requireString(input.costDescription, 'costDescription', {
+              minLength: 0,
+              maxLength: 2_000,
+            }),
+        testStatus: 'not_tested',
         createdAt: clock().toISOString(),
       };
 

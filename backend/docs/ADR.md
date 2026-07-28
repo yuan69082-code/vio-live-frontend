@@ -106,7 +106,7 @@
 ## BE-ADR-013｜模型目录、规则路由与真实调用适配分离
 
 - 日期：2026-07-26
-- 状态：已采用
+- 状态：已采用；目录顺序路由由 BE-ADR-026 扩展为显式默认/备用规则并保留兼容回退
 - 决策：APIProvider 与 Model 作为用户范围内的本地配置目录持久化；Model Router 只按任务能力读取启用 Provider 下的模型，并按 Provider 创建时间、Provider ID、Model 创建时间和 Model ID 的稳定顺序返回首个匹配项。Router 不包含供应商 SDK、网络请求或模型响应逻辑。
 - 原因：本阶段需要先验证服务配置、能力标签和调度边界，同时不能因“选择模型”而产生真实费用、Token 消耗或外部数据传输。
 - 影响：停用 Provider 后，其模型仍保留在配置查询中，但不会被 Router 选择。优先级、备用模型、费用、健康状态和实际调用需要后续独立决策。
@@ -206,6 +206,14 @@
 - 决策：AI Assistant Global Settings 是 Subject 的一对一、可由用户明确更新的长期配置。`subjects.name` 和 `subjects.avatar_ref` 继续作为助手身份的唯一事实来源，避免复制身份字段；新表 `assistant_global_settings` 保存人格描述、表达方式、关系定义、长期要求和禁止事项。服务层把两处数据投影成单一全局设定对象，并在同一事务更新身份字段、扩展设定和最小 `subject_updated` Event。Context 读取该投影作为 `subjectGlobalSettings`，不再把通用 `basicSettings` 冒充完整长期设定。
 - 原因：名称和头像已被 Subject、Dashboard 与现有 API 使用，复制到新表会产生双写漂移；而把长期设定继续塞入无类型的 `basicSettings`，又无法形成稳定接口和与 SubjectState 的清晰边界。独立一对一扩展表兼容既有身份数据，同时为表达、关系和长期规则提供明确结构。
 - 影响：创建 Subject 时必须原子创建默认空白全局设定，迁移为既有主体回填空白结构但不从旧 JSON 猜测人格。全局设定允许原地更新且无变化不写库；SubjectState 仍为带来源的不可变动态状态历史，任何设定更新都不能创建、覆盖或切换状态版本。长期要求和禁止事项只能约束助手偏好，不能削弱系统最低安全规则。当前不生成设定、不调用模型、外部 API 或 continuity-engine，也不修改前端页面。
+
+## BE-ADR-026｜显式默认/备用规则与模型执行分离
+
+- 日期：2026-07-28
+- 状态：已采用，仅限开发期本地模型路由配置
+- 决策：APIProvider 保存用户范围的服务类型、Base URL、接口格式、启停状态和只读测试状态；Model 保存 Provider 归属、模型名称/类型、能力标签、费用说明和只读测试状态。`model_routing_rules` 按用户与 `chat`、`long_text`、`image`、`video`、`audio`、`search` 六类任务唯一保存默认模型、可选备用模型及规则状态，并用复合外键阻止跨用户引用。Router 优先读取启用规则：默认 Provider 启用时选默认模型，否则只在已明确配置且 Provider 启用时选备用模型；显式规则不可用时明确失败。规则不存在或停用时保留稳定目录匹配作为兼容回退。所有选择结果都明确标记模型和外部 API 未调用。
+- 原因：默认和备用选择是用户配置事实，不能依赖目录插入顺序隐式表达；但当前又禁止接入真实供应商，因此“选择配置”不能被误认为“调用模型”或“测试成功”。把目录、规则、选择和未来执行适配分开，可以验证调度与隔离，同时避免网络、费用、Token 或数据外传。
+- 影响：`vision` 与 `embedding` 保留为目录能力标签，但不属于本阶段六类可路由任务。Provider/Model `test_status` 目前只能为 `not_tested`，不得由客户端伪造；真实探测、故障重试、动态健康检查、费用计算和模型调用必须由后续受信适配器与独立 ADR 实现。API Key 仍由拒绝写入的安全存储端口占位，数据库引用保持 `NULL`。Router 不读取或改写 Context、SubjectState、Assistant Global Settings，也不接入 MCP、Tool 或 continuity-engine。
 
 ## 待形成的 ADR
 

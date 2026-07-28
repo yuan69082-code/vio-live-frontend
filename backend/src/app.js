@@ -10,12 +10,14 @@ import { createSqliteConversationSummaryRepository } from './integrations/databa
 import { createSqliteEventRepository } from './integrations/database/sqlite-event-repository.js';
 import { createSqliteMessageRepository } from './integrations/database/sqlite-message-repository.js';
 import { createSqliteMessageVersionRepository } from './integrations/database/sqlite-message-version-repository.js';
+import { createSqliteModelRoutingRuleRepository } from './integrations/database/sqlite-model-routing-rule-repository.js';
 import { createSqliteDatabase } from './integrations/database/sqlite-database.js';
 import { createSqliteModelRepository } from './integrations/database/sqlite-model-repository.js';
 import { createSqlitePermissionRepository } from './integrations/database/sqlite-permission-repository.js';
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
 import { createSqliteUserRepository } from './integrations/database/sqlite-user-repository.js';
+import { createUnconfiguredApiCredentialStore } from './integrations/secrets/unconfigured-api-credential-store.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAssistantGlobalSettingsService } from './modules/assistant-global-settings/assistant-global-settings-service.js';
 import { createAuditLogService } from './modules/audit-logs/audit-log-service.js';
@@ -26,6 +28,7 @@ import { createConversationSummaryService } from './modules/conversation-summari
 import { createDashboardService } from './modules/dashboard/dashboard-service.js';
 import { createEventService } from './modules/events/event-service.js';
 import { createModelRouterService } from './modules/model-router/model-router-service.js';
+import { createModelRoutingRuleService } from './modules/model-routing-rules/model-routing-rule-service.js';
 import { createModelService } from './modules/models/model-service.js';
 import { createMessageService } from './modules/messages/message-service.js';
 import { createMessageVersionService } from './modules/message-versions/message-version-service.js';
@@ -53,9 +56,13 @@ export function createApplication({ config, logger = console }) {
   const eventRepository = createSqliteEventRepository(database.connection);
   const apiProviderRepository = createSqliteApiProviderRepository(database.connection);
   const modelRepository = createSqliteModelRepository(database.connection);
+  const modelRoutingRuleRepository = createSqliteModelRoutingRuleRepository(
+    database.connection,
+  );
   const permissionRepository = createSqlitePermissionRepository(database.connection);
   const auditLogRepository = createSqliteAuditLogRepository(database.connection);
   const confirmationRepository = createSqliteConfirmationRepository(database.connection);
+  const credentialStore = createUnconfiguredApiCredentialStore();
   const userService = createUserService({ userRepository });
   const eventService = createEventService({
     eventRepository,
@@ -142,6 +149,7 @@ export function createApplication({ config, logger = console }) {
     apiProviderRepository,
     userRepository,
     auditLogService,
+    credentialStore,
     runInTransaction: database.runInTransaction,
   });
   const modelService = createModelService({
@@ -150,6 +158,12 @@ export function createApplication({ config, logger = console }) {
     userRepository,
   });
   const modelRouterService = createModelRouterService({
+    modelRepository,
+    modelRoutingRuleRepository,
+    userRepository,
+  });
+  const modelRoutingRuleService = createModelRoutingRuleService({
+    modelRoutingRuleRepository,
     modelRepository,
     userRepository,
   });
@@ -191,6 +205,7 @@ export function createApplication({ config, logger = console }) {
     apiProviderService,
     modelService,
     modelRouterService,
+    modelRoutingRuleService,
     permissionService,
     permissionChecker,
     securityService,

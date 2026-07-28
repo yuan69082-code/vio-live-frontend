@@ -9,7 +9,9 @@ function mapProvider(row) {
     displayName: row.display_name,
     providerType: row.provider_type,
     baseUrl: row.base_url,
+    interfaceFormat: row.interface_format,
     status: row.status,
+    testStatus: row.test_status,
     apiKeySecretRef: row.api_key_secret_ref,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -24,7 +26,9 @@ export function createSqliteApiProviderRepository(connection) {
       display_name,
       provider_type,
       base_url,
+      interface_format,
       status,
+      test_status,
       api_key_secret_ref,
       created_at,
       updated_at
@@ -37,11 +41,13 @@ export function createSqliteApiProviderRepository(connection) {
       display_name,
       provider_type,
       base_url,
+      interface_format,
       status,
+      test_status,
       api_key_secret_ref,
       created_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const findByIdStatement = connection.prepare(`
     ${selection}
@@ -66,7 +72,9 @@ export function createSqliteApiProviderRepository(connection) {
         provider.displayName,
         provider.providerType,
         provider.baseUrl,
+        provider.interfaceFormat,
         provider.status,
+        provider.testStatus,
         provider.apiKeySecretRef,
         provider.createdAt,
         provider.updatedAt,

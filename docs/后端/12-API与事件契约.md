@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、健康检查、User/Subject/Assistant Global Settings/Dashboard、Conversation/Message/MessageVersion、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、健康检查、User/Subject/Assistant Global Settings/Dashboard、Conversation/Message/MessageVersion、Event、Provider/Model、默认/备用模型路由规则、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -165,11 +165,16 @@ Context 支持限制近期消息和跨窗口摘要数量，按系统安全位置
 | `GET` | `/api/v1/users/:userId/api-providers/:providerId` | 查询单个 Provider |
 | `PATCH` | `/api/v1/users/:userId/api-providers/:providerId/status` | 更新 `enabled`/`disabled` 状态 |
 | `POST` | `/api/v1/users/:userId/api-providers/:providerId/models` | 在 Provider 下创建 Model |
-| `GET` | `/api/v1/users/:userId/models?capability=...` | 按五类能力标签查询模型 |
+| `GET` | `/api/v1/users/:userId/models?capability=...` | 按八类能力标签查询模型 |
 | `GET` | `/api/v1/users/:userId/models/:modelId` | 查询单个 Model |
-| `POST` | `/api/v1/users/:userId/model-router/select` | 根据 `taskType` 返回启用 Provider 下的规则匹配模型 |
+| `POST` | `/api/v1/users/:userId/model-routing-rules` | 创建任务默认/备用模型规则 |
+| `GET` | `/api/v1/users/:userId/model-routing-rules` | 查询用户的路由规则 |
+| `GET` / `PATCH` | `/api/v1/users/:userId/model-routing-rules/:taskType` | 查询或局部更新指定任务规则 |
+| `POST` | `/api/v1/users/:userId/model-router/select` | 根据 `taskType` 返回本地规则选择结果，不调用模型 |
 
-Provider 响应只暴露 API Key 的 `not_configured` 状态，不接受或返回真实 Key、Token、Secret 或凭据引用。Router 响应只包含任务类型、选择规则和模型描述，不包含模型回复，也不产生外部请求。
+Provider 保存 Base URL、接口格式、启停与测试状态；Model 保存名称、类型、八类能力标签、费用说明与测试状态。六类可路由任务为 `chat`、`long_text`、`image`、`video`、`audio`、`search`；`vision` 与 `embedding` 只作为目录能力。每个用户/任务只有一条规则，默认与备用 Model 必须属于该用户并支持任务。Router 优先默认模型，默认 Provider 停用时使用已配置且 Provider 启用的备用模型；规则不存在或停用时使用稳定目录回退，显式启用规则不可用时返回失败。
+
+Provider 响应只暴露 API Key 的 `not_configured`、`secure_store_required`、`writeSupported=false` 状态，不接受或返回真实 Key、Token、Secret 或凭据引用。Provider/Model 测试状态当前固定为 `not_tested`，没有真实连接测试接口。Router 响应包含任务类型、选择规则、来源、Model 描述及 `modelCall`/`externalApiCall=not_performed`，不包含模型回复，也不产生外部请求。Router 与 Context、SubjectState、Assistant Global Settings 保持数据与执行边界。
 
 Context 数据顺序已形成基础接口；以下模型调用、格式转换与实际返回仍为后续真实接入契约：
 

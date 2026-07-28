@@ -2,13 +2,14 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 5｜AI 助手全局设定”。后端已经可以独立启动，并在既有主体身份与上下文基础上建立长期全局设定闭环：
+当前阶段为“平台后端 6｜模型与 API 路由”。后端已经可以独立启动，并在既有本地模型目录基础上建立显式默认/备用路由配置闭环：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
 API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一响应
 对话事实 → 可追溯摘要 → 跨窗口读取 → 当前主体状态 → 只读上下文投影
 主体身份 → 长期全局设定 → 跨窗口读取/更新 → Context 只读投影
+Provider 配置 → Model 能力目录 → 默认/备用规则 → 本地选择结果
 ```
 
 已实现：
@@ -35,10 +36,12 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 - 上下文接口明确返回模型、外部 API 与 continuity-engine 均未调用
 - Event 创建、单项查询及按用户、主体、时间、类型和状态筛选
 - 九类基础软件事件和事件数据秘密字段拦截
-- APIProvider 创建、列表/单项查询和启停状态更新
-- Model 创建、单项查询及按 `chat`、`vision`、`image`、`video`、`embedding` 能力查询
-- 仅针对启用 Provider 的确定性 Model Router 规则匹配
-- API Key 安全占位结构、接口密钥输入拒绝和 Base URL 凭据检查
+- APIProvider 创建、列表/单项查询和启停状态更新，保存 Base URL、接口格式及只读测试状态
+- Model 创建、单项查询、费用说明和按 `chat`、`long_text`、`vision`、`image`、`video`、`audio`、`search`、`embedding` 能力查询
+- 聊天、长文本、图片、视频、语音、搜索六类任务的默认/备用模型规则创建、查询和更新
+- Model Router 优先读取启用规则；默认 Provider 停用时选择已配置备用模型，无规则时使用稳定目录匹配
+- Provider/Model 测试状态当前固定为 `not_tested`，不伪造真实连通性结果
+- API Key 安全存储端口占位、接口密钥输入拒绝和 Base URL 凭据检查；当前端口明确不支持写入
 - Permission 创建、单项/条件查询、更新和可追溯删除
 - 七类权限资源、五档权限等级和八种基础操作
 - 默认拒绝的 Permission Checker 三态判断
@@ -53,9 +56,9 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- `pnpm test` 当前 23/23 通过，覆盖启动、API 契约、全局设定、摘要来源、跨窗口读取、状态版本、上下文装配、不可变约束、事务回滚、持久化和跨用户/主体/对话隔离
+- `pnpm test` 当前 24/24 通过，覆盖启动、API 契约、模型路由、009 升级迁移、全局设定、摘要来源、上下文装配、事务回滚、持久化和隔离
 
-助手全局设定由用户或开发调用方显式配置；主体消息、“重生成”版本、摘要和 `state_update` 也都由开发调用方显式提交。后端只验证、保存、读取和装配结构化投影，不生成设定或摘要、不推演状态，也不调用 AI、Model Router、供应商 API 或 continuity-engine。本阶段没有实现分支、消息删除、窗口重置、Memory 持久化、MCP/Skill/Tool 实际调用，也没有实现真实登录、正式数据库、真实 API Key、真实支付、真实设备、手机权限或 AI 私域业务。前端页面与 mock 未修改，现有页面没有迁移到这些真实接口。
+模型路由只返回本地配置结果，绝不调用模型或供应商 API。它不读取或改写 Context、SubjectState、Assistant Global Settings，也不会装配提示词、生成内容或产生 Token。助手设定、主体消息、摘要和 `state_update` 仍由开发调用方显式提交。本阶段没有实现真实模型测试、密钥写入、模型调用、平台后端 7、MCP/Skill/Tool、设备、Memory 或 continuity-engine。前端 `src`、页面与 mock 未修改。
 
 ## 运行要求
 
@@ -158,6 +161,10 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `POST` | `/api/v1/users/:userId/api-providers/:providerId/models` | 为 Provider 注册模型 |
 | `GET` | `/api/v1/users/:userId/models?capability=chat` | 按能力查询模型目录 |
 | `GET` | `/api/v1/users/:userId/models/:modelId` | 按用户归属查询模型 |
+| `POST` | `/api/v1/users/:userId/model-routing-rules` | 创建任务默认/备用模型规则 |
+| `GET` | `/api/v1/users/:userId/model-routing-rules` | 查询用户的模型路由规则 |
+| `GET` | `/api/v1/users/:userId/model-routing-rules/:taskType` | 查询指定任务规则 |
+| `PATCH` | `/api/v1/users/:userId/model-routing-rules/:taskType` | 更新规则模型或启停状态 |
 | `POST` | `/api/v1/users/:userId/model-router/select` | 按任务类型返回规则匹配模型，不执行调用 |
 | `POST` | `/api/v1/users/:userId/permissions` | 创建主体范围的权限规则并记录事件 |
 | `GET` | `/api/v1/users/:userId/permissions` | 按主体、资源、操作或状态查询规则 |
@@ -187,6 +194,7 @@ backend/
 │  ├─ core/                  # 错误、ID 和校验
 │  ├─ http/                  # JSON 传输与基础路由
 │  ├─ integrations/database/ # SQLite、迁移和仓储适配
+│  ├─ integrations/secrets/  # 未配置的安全密钥存储端口占位
 │  ├─ modules/users/         # User 业务规则
 │  ├─ modules/subjects/      # Subject 业务规则
 │  ├─ modules/assistant-global-settings/ # AI 助手长期全局设定
@@ -200,6 +208,7 @@ backend/
 │  ├─ modules/events/        # Event 类型、记录和查询规则
 │  ├─ modules/api-providers/ # Provider 配置与安全边界
 │  ├─ modules/models/        # Model 目录与能力标签
+│  ├─ modules/model-routing-rules/ # 默认/备用模型路由规则
 │  ├─ modules/model-router/  # 本地规则匹配，不调用模型
 │  ├─ modules/permissions/   # 权限规则、五档语义与三态判断
 │  ├─ modules/security/      # 安全编排、风险识别和执行前资格
@@ -217,7 +226,7 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions`、`security_confirmations` 和 `audit_logs`。
+- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_confirmations` 和 `audit_logs`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
 - `assistant_global_settings` 与 Subject 一对一绑定；名称和头像仍以 `subjects` 为唯一身份来源，人格、表达、关系、长期要求与禁止事项保存在独立设定表。新建 Subject 与默认设定原子提交，设定更新与最小 `subject_updated` Event 原子提交。
@@ -232,9 +241,10 @@ backend/
 - SubjectState 通过不可变版本和独立 `subject_state_heads` 当前指针保存；`state_update` 来源必须是同主体 MessageVersion、Event 或 ConversationSummary，未解决 Event 也使用复合外键约束。
 - 主体事件使用 `(user_id, subject_id)` 组合外键，数据库层同时保证用户和主体归属。
 - 事件按发生时间保存为 UTC ISO-8601，并为用户、主体、类型和状态查询建立索引。
-- Provider 归属于用户，Model 同时保存用户和 Provider 归属，能力标签使用独立关系表。
-- `api_key_secret_ref` 当前受数据库约束只能为 `NULL`；接口不接受 API Key，只返回“未配置”状态。
-- Router 只读取本地模型目录，从启用 Provider 中按稳定创建顺序返回首个能力匹配项。
+- Provider 归属于用户并保存 Base URL、接口格式、启停状态和测试状态；Model 同时保存用户和 Provider 归属、费用说明与测试状态，能力标签使用独立关系表。
+- `api_key_secret_ref` 当前受数据库约束只能为 `NULL`；安全存储端口返回 `writeSupported=false`，接口不接受 API Key，只返回“未配置”状态。
+- `model_routing_rules` 按用户和六类任务唯一保存默认模型、可选备用模型与启停状态；复合外键阻止跨用户模型引用，模型必须具备对应任务能力。
+- Router 优先使用启用规则的默认模型；默认 Provider 停用时选择已配置且 Provider 启用的备用模型。规则停用或不存在时才按稳定目录顺序回退，所有结果都标记模型与外部 API 未调用。
 - Permission 同时保存用户、主体、资源类型、资源 ID、操作、权限等级和状态；复合外键阻止跨用户主体规则。
 - 当前同一用户/主体/资源/操作只允许一个未终结规则；`allow_once` 使用后标记为 `consumed`，删除标记为 `deleted`。
 - Permission 变更与对应 Event 使用同一 SQLite 事务，任一写入失败时整体回滚。

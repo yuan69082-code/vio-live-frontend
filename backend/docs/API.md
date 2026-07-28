@@ -2,13 +2,13 @@
 
 ## 状态与边界
 
-- 当前阶段：平台后端 5｜AI 助手全局设定
-- 后端版本：`0.9.0`
+- 当前阶段：平台后端 6｜模型与 API 路由
+- 后端版本：`0.10.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
 
-前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。前端页面和 mock 本阶段没有修改，也没有接入 Global Settings、Conversation、Summary、SubjectState 或 Context API；当前真实页面连接仍只包含独立 API 客户端和应用启动健康握手。
+前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。前端 `src`、页面和 mock 本阶段没有修改，也没有接入模型配置 API；当前真实页面连接仍只包含独立 API 客户端和应用启动健康握手。
 
 ## 统一返回结构
 
@@ -414,6 +414,124 @@ Conversation/Message 服务自动生成的四类新增 Event 只保存用户/主
 - `ready` 只表示当前用户和主体均为 `active`。
 - `continuityStatus=not_available` 明确表示独立 continuity-engine 尚未接入；本阶段新增的 SubjectState 基础存储不会把 Dashboard 状态冒充为引擎可用。
 - 本接口不会返回工作台 mock、设备状态、待办、提醒或模型结果，也不会调用外部服务。
+
+## APIProvider API
+
+### 创建 Provider
+
+`POST /api/v1/users/:userId/api-providers`
+
+```json
+{
+  "displayName": "开发模型服务",
+  "providerType": "custom",
+  "baseUrl": "https://models.example/v1",
+  "interfaceFormat": "custom_http",
+  "status": "enabled"
+}
+```
+
+- `providerType`：`openai`、`claude`、`glm`、`custom`，只表示本地配置分类。
+- `interfaceFormat`：`openai_compatible`、`anthropic_messages`、`glm_compatible`、`custom_http`；省略时按 Provider 类型取得默认值。
+- `status`：`enabled` 或 `disabled`，默认 `enabled`。
+- `baseUrl` 只保存配置，必须为 HTTP(S)，不得包含用户名、密码、URL 片段或 Key/Token/Secret 类查询参数。
+- `testStatus` 由服务初始化为 `not_tested`，本阶段没有真实连通性测试或客户端写入入口。
+
+响应中的凭据状态固定为：
+
+```json
+{
+  "credentials": {
+    "apiKey": {
+      "status": "not_configured",
+      "storage": "secure_store_required",
+      "writeSupported": false
+    }
+  }
+}
+```
+
+请求体中的 API Key、Token、Secret、凭据或安全引用字段都会被拒绝；响应不会出现 `apiKeySecretRef` 或密钥原文。
+
+### 查询与启停 Provider
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/api-providers` | 查询用户范围 Provider 列表 |
+| `GET` | `/api/v1/users/:userId/api-providers/:providerId` | 查询单个 Provider |
+| `PATCH` | `/api/v1/users/:userId/api-providers/:providerId/status` | 使用 `{ "status": "enabled" }` 或 `disabled` 更新启停状态 |
+
+## Model API
+
+### 创建 Model
+
+`POST /api/v1/users/:userId/api-providers/:providerId/models`
+
+```json
+{
+  "modelName": "vio-multimodal",
+  "modelType": "multimodal",
+  "capabilities": ["chat", "long_text", "image", "video", "audio", "search"],
+  "costDescription": "仅为人工配置说明；当前不产生费用。"
+}
+```
+
+- 能力标签支持 `chat`、`long_text`、`vision`、`image`、`video`、`audio`、`search`、`embedding`，去重后按固定顺序返回。
+- `costDescription` 是说明文本，不是价格计算、账单或预算控制。
+- Model 响应内嵌所属 Provider 的 Base URL、接口格式、启停和测试状态。
+- Model `testStatus` 固定初始化为 `not_tested`；当前没有客户端修改或真实探测接口。
+
+查询接口：
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/models?capability=chat` | 按单一能力标签查询目录；Provider 停用不会隐藏配置 |
+| `GET` | `/api/v1/users/:userId/models/:modelId` | 按用户归属查询单个 Model |
+
+## Model Routing Rule 与 Router API
+
+任务类型严格限定为 `chat`、`long_text`、`image`、`video`、`audio`、`search`。`vision` 和 `embedding` 仍可作为目录能力查询标签，但当前不属于可配置路由任务。
+
+### 创建、查询与更新规则
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/model-routing-rules` | 创建该用户某任务的唯一规则 |
+| `GET` | `/api/v1/users/:userId/model-routing-rules` | 查询规则列表 |
+| `GET` | `/api/v1/users/:userId/model-routing-rules/:taskType` | 查询指定任务规则 |
+| `PATCH` | `/api/v1/users/:userId/model-routing-rules/:taskType` | 局部更新默认模型、备用模型或启停状态 |
+
+创建请求：
+
+```json
+{
+  "taskType": "chat",
+  "defaultModelId": "model-default",
+  "fallbackModelId": "model-fallback",
+  "status": "enabled"
+}
+```
+
+更新请求可包含 `defaultModelId`、`fallbackModelId`、`status` 中至少一项；传入 `fallbackModelId: null` 可清除备用模型。默认和备用模型必须属于同一用户、具备对应任务能力且不能相同。每个用户的每类任务只能有一条规则，重复创建返回 `409`。
+
+### 选择模型
+
+`POST /api/v1/users/:userId/model-router/select`
+
+```json
+{
+  "taskType": "chat"
+}
+```
+
+选择规则：
+
+1. 启用规则存在且默认模型的 Provider 启用时，返回默认模型并标记 `selectionSource=default`。
+2. 默认 Provider 停用、备用模型存在且其 Provider 启用时，返回备用模型并标记 `selectionSource=fallback`。
+3. 显式启用规则的两个模型均不可用时返回 `404`，不静默绕过规则。
+4. 规则不存在或已停用时，按 Provider/Model 稳定创建顺序返回首个启用 Provider 下的能力匹配项，并标记 `selectionSource=catalog_fallback`。
+
+Router 的 `execution` 始终返回 `modelCall=not_performed` 与 `externalApiCall=not_performed`。测试状态只是保留元数据，不被当成真实服务可用性证明。本模块不读取 Context，不装配提示词，不读取或修改 SubjectState、Assistant Global Settings，也不触发模型、MCP、Tool 或 continuity-engine。
 
 ## 前端连接
 
