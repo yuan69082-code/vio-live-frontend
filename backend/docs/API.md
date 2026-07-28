@@ -2,8 +2,8 @@
 
 ## 状态与边界
 
-- 当前阶段：AI 私域数据层
-- 后端版本：`0.14.0`
+- 当前阶段：平台后端 11｜生活管理模块
+- 后端版本：`0.15.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
@@ -286,12 +286,15 @@ MessageVersion 返回：
 
 ### 对话软件事件
 
-Event 当前共十五类：
+Event 当前共十八类：
 
 - `appearance_changed`
 - `subject_updated`
 - `permission_changed`
 - `life_record_created`
+- `life_event_created`
+- `budget_changed`
+- `health_record_updated`
 - `device_changed`
 - `conversation_created`
 - `message_created`
@@ -304,7 +307,7 @@ Event 当前共十五类：
 - `private_memory_updated`
 - `private_state_changed`
 
-Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归属及必要引用。Permission 创建、变化和撤销分别生成生命周期事件；需要确认时 Security 生成 `confirmation_required`。AI 私域事件只保存 Space/Content/Version 标识、内容类型、版本和变化类型，不复制私域正文。自动事件不保存 Conversation `title`、Message `content`、安全策略正文或敏感操作数据，也不会触发模型、上下文装配、真实执行或连续性处理。Event 当前仍没有消费者。
+Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归属及必要引用。Permission 创建、变化和撤销分别生成生命周期事件；需要确认时 Security 生成 `confirmation_required`。AI 私域事件只保存 Space/Content/Version 标识、内容类型、版本和变化类型。生活事件只保存模块、记录 ID 和变化类型，不复制金额、身体数值、亲密内容、备注或记忆正文。自动事件不会触发模型、上下文装配、真实执行或连续性处理；Event 当前仍没有消费者。
 
 ## ConversationSummary API
 
@@ -1005,6 +1008,72 @@ Device 注册启用
 - `operation_requested`：发生权限/安全准备请求，不代表执行。
 
 所有 Device Event 都明确包含 `connectionStatus=not_connected` 和 `executionStatus=not_executed`，不复制名称、控制参数、设备数据或秘密。
+
+## 生活管理 API
+
+所有生活接口都携带 `userId + subjectId`，使用 `resourceType=life_data`。调用前需分别为 `finance`、`calendar`、`body`、`local-memory` 创建相应的 `read`、`write` 或 `manage` Permission。服务固定以 `sensitive_data_access + private_record` 进入 Security Policy，因此风险至少为 `high`，每次操作都需要具体 Confirmation。
+
+首个请求返回 `operationStatus=confirmation_required` 和 `confirmationId`；批准后在完全相同请求中补充 `confirmationId` 才会执行本地数据库操作。策略拒绝时返回 `operationStatus=denied` 且 `result=null`。安全响应的 `executionStatus` 保持 `not_executed`，表示没有支付、银行、设备、模型或其他外部副作用，不表示本地获批的数据写入没有完成。
+
+### 管账与预算
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/records` | 新增 `income` 或 `expense` 记录 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/records/query` | 按 `entryType`、`category`、`from`、`to`、`limit` 查询 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/statistics/categories` | 按收支类型、分类和币种分组统计 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/summaries/monthly` | 按 `YYYY-MM` 返回收入、支出、净额和预算 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/budgets` | 按月份与分类新增或更新预算 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/budgets/query` | 按可选月份查询预算 |
+
+财务记录请求字段为 `entryType`、`category`、`amount`、可选 `currency`、`occurredAt`、`note`。`amount` 接受正数或至多两位小数字符串；数据库使用最小货币单位整数，响应固定为两位小数字符串。`currency` 默认为 `CNY`。预算提醒结构为：
+
+```json
+{
+  "month": "2026-07",
+  "category": "food",
+  "amount": "1000.00",
+  "reminderRule": {
+    "enabled": true,
+    "thresholdPercent": 80
+  }
+}
+```
+
+月度汇总按 UTC `occurredAt` 的月份计算，只汇总显式记录；响应固定标记 `bankSync=not_connected`、`paymentExecution=not_supported`。
+
+### 月历
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/calendar/entries` | 新增月历记录 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/calendar/entries/query` | 按类型和时间范围查询 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/life/calendar/entries/:calendarEntryId` | 局部更新记录与提醒 |
+
+`entryType` 支持 `anniversary`、`menstrual_period`、`intimate_record`、`ordinary_event`。记录包含 `title`、`startsAt`、可选 `endsAt`、`note` 和 `reminderRule`。启用提醒时必须提供 ISO-8601 `remindAt`；当前只保存规则，不运行定时任务或发送通知。
+
+### 身体管理
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/records` | 保存体重、胸围、腰围、臀围及可选建议字段 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/records/query` | 按时间查询身体记录 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/trends` | 返回升序记录和各指标首尾差值 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/goals` | 新增或更新当前目标 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/goals/read` | 读取当前目标 |
+
+身体记录至少提供 `weightKg`、`bustCm`、`waistCm`、`hipCm` 之一；目标至少提供一个对应目标值。`aiSuggestion` 只保存调用方显式文本，响应标记 `suggestionSource=explicit_api_input`、`modelCall=not_performed`、`medicalUse=not_for_diagnosis`、`wearableSync=not_connected`。趋势只计算数值差，不生成建议或诊断。
+
+### 本地记忆
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/memories` | 保存标题、正文和两个用户控制标记 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/memories/query` | 按 `participatesInContext`、`exportMarked` 查询 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/life/memories/:memoryId` | 更新参与上下文与导出标记，不覆盖正文 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/memories/context-projections` | 投影明确参与上下文的记忆 |
+
+本地记忆属于 User Space，`storageScope=user_local_memory`，不与 AI Private Space 混存。Context 投影只读取 `participatesInContext=true` 的记录，并明确模型、外部 API 与穿戴同步均未执行；它不会自动并入通用 Conversation Context。`exportMarked` 只表示未来导出选择，不生成文件、不传输数据。
 
 ## 前端连接
 

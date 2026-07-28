@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前阶段为“AI 私域”。后端已经可以独立启动，并在既有 Permission、Security Policy、Confirmation、AuditLog 与 Event 基础上建立 AI Private Space 数据闭环：
+当前阶段为“平台后端 11｜生活管理模块”。后端已经可以独立启动，并在既有 Permission、Security Policy、Confirmation、AuditLog 与 Event 基础上建立生活数据闭环：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -16,6 +16,7 @@ Device Registry → Capability 描述 → 未配置 Adapter 投影
 设备操作准备 → Permission → Security/Confirmation → device_changed Event → 未执行操作日志
 用户安全偏好/精确策略 → Permission → Policy → Confirmation → 未执行准备与审计
 AI Private Space → Permission → Security Policy → Confirmation → 受控本地读写/投影
+生活数据 → life_data Permission → Security Policy → Confirmation → 本地保存/统计/投影
 ```
 
 已实现：
@@ -41,10 +42,16 @@ AI Private Space → Permission → Security Policy → Confirmation → 受控�
 - 按安全规则占位、完整助手全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、记忆占位和本轮用户消息顺序装配上下文
 - 上下文接口明确返回模型、外部 API 与 continuity-engine 均未调用
 - Event 创建、单项查询及按用户、主体、时间、类型和状态筛选
-- 十五类基础软件事件和事件数据秘密字段拦截
+- 十八类基础软件事件和事件数据秘密字段拦截
 - AI Private Space 按用户与助手一对一保存，和 User Space 使用独立表；五类私域内容按不可变版本追加
 - 私域读取、写入、状态管理、Context 投影和导出准备统一经过 `private_domain` Permission 与 Security Policy
 - 私域 Context 只提供独立、受控的数据投影；导出接口只返回版本清单预留，不生成文件或传输正文
+- 管账记录支持收入/支出、分类筛选、分类统计和 UTC 月度汇总；金额按最小货币单位保存
+- 预算按主体、月份和分类唯一保存，支持阈值提醒规则，不连接支付或银行
+- 月历支持纪念日、生理期、亲密记录、普通事件、提醒与局部更新
+- 身体管理支持体重/三围记录、目标和确定性趋势差值；AI 建议仅保存调用方显式文本
+- 本地记忆支持保存、筛选、参与上下文开关、导出标记和独立受控 Context 投影
+- 生活数据使用 `life_data` Permission → Security Policy → Confirmation，Event 不复制敏感正文或数值
 - APIProvider 创建、列表/单项查询和启停状态更新，保存 Base URL、接口格式及只读测试状态
 - Model 创建、单项查询、费用说明和按 `chat`、`long_text`、`vision`、`image`、`video`、`audio`、`search`、`embedding` 能力查询
 - 聊天、长文本、图片、视频、语音、搜索六类任务的默认/备用模型规则创建、查询和更新
@@ -52,7 +59,7 @@ AI Private Space → Permission → Security Policy → Confirmation → 受控�
 - Provider/Model 测试状态当前固定为 `not_tested`，不伪造真实连通性结果
 - API Key 安全存储端口占位、接口密钥输入拒绝和 Base URL 凭据检查；当前端口明确不支持写入
 - Permission 创建、单项/条件查询、更新和可追溯删除
-- 七类权限资源、五档权限等级和八种基础操作
+- 八类权限资源、五档权限等级和八种基础操作
 - 默认拒绝的 Permission Checker 三态判断
 - `allow_once` 首次判断后原子消费；权限创建、变化和撤销分别与 `permission_created`、`permission_changed`、`permission_revoked` 事件同事务提交
 - Security 统一检查入口和 `low`、`medium`、`high`、`critical` 四级风险判断
@@ -82,9 +89,9 @@ AI Private Space → Permission → Security Policy → Confirmation → 受控�
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- `pnpm test` 当前 37/37 通过，覆盖启动、API 契约、模型路由、能力注册、设备注册/适配契约、权限/策略/安全执行准备、AI 私域版本与隔离、全局设定、摘要来源、上下文装配、迁移升级、事务回滚和持久化
+- `pnpm test` 当前 40/40 通过，覆盖启动、API 契约、生活数据、模型路由、能力/设备注册、权限/策略/安全执行准备、AI 私域版本与隔离、全局设定、摘要来源、上下文装配、迁移升级、事务回滚和持久化
 
-本阶段只新增本地安全策略、用户偏好、确认与审计结构，不增加资源执行能力。Device `enabled` 仍只表示注册项允许进入安全准备，不表示设备已连接、在线或受控；操作准备不接受真实控制参数。Tool/MCP/Skill/Plugin 和设备的原有未执行边界保持不变。本阶段没有设备 SDK、手机权限、厂商凭据、真实状态读取、设备控制、第三方请求、真实模型或 continuity-engine。前端 `src`、页面与 mock 未修改。
+本阶段只新增生活管理本地数据、确定性统计和受控投影，不增加资金、设备或模型执行能力。预算不会发起支付，身体趋势不构成诊断，本地记忆不会自动进入通用 Context。没有银行同步、支付接口、健康设备、第三方请求、真实模型或 continuity-engine；前端 `src`、页面与 mock 未修改。
 
 ## 运行要求
 
@@ -186,6 +193,24 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents/:contentId/versions/query` | 经安全链查询不可变版本历史 |
 | `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/context-projections` | 生成独立私域 Context 数据投影，不调用模型或连续性引擎 |
 | `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/export-manifests` | 返回导出结构与版本清单预留，不生成文件或传输正文 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/records` | 经生活数据安全链新增收入或支出记录 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/records/query` | 按类型、分类和时间查询管账记录 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/statistics/categories` | 返回按收支、分类和币种分组的确定性统计 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/summaries/monthly` | 返回指定 UTC 月份的收支与预算汇总 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/budgets` | 按月份和分类新增或更新预算及提醒规则 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/finance/budgets/query` | 查询主体范围预算 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/calendar/entries` | 新增纪念日、生理期、亲密记录或普通事件 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/calendar/entries/query` | 按类型和时间查询月历记录 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/life/calendar/entries/:calendarEntryId` | 更新月历记录与提醒 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/records` | 保存体重/三围及显式 AI 建议字段 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/records/query` | 查询身体指标历史 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/trends` | 返回指标时间序列与确定性首尾差值 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/goals` | 新增或更新主体身体目标 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/body/goals/read` | 读取当前身体目标 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/memories` | 保存用户本地记忆及上下文/导出标记 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/memories/query` | 按上下文与导出标记查询本地记忆 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/life/memories/:memoryId` | 更新本地记忆上下文与导出标记 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/memories/context-projections` | 读取已明确参与上下文的本地记忆，不调用模型 |
 | `POST` | `/api/v1/users/:userId/events` | 为用户或其主体记录软件事件 |
 | `GET` | `/api/v1/users/:userId/events` | 按主体、时间、类型、状态和数量筛选事件 |
 | `GET` | `/api/v1/users/:userId/events/:eventId` | 按用户归属查询单个事件 |
@@ -261,6 +286,7 @@ backend/
 │  ├─ modules/subjects/      # Subject 业务规则
 │  ├─ modules/assistant-global-settings/ # AI 助手长期全局设定
 │  ├─ modules/assistant-private-spaces/ # AI 私域、内容版本与受控投影
+│  ├─ modules/life-management/ # 管账、月历、身体管理与本地记忆
 │  ├─ modules/dashboard/     # 现有 User/Subject 基础聚合
 │  ├─ modules/conversations/ # 用户/主体范围的对话容器
 │  ├─ modules/messages/      # 顺序消息与当前版本投影
@@ -294,13 +320,14 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`assistant_private_spaces`、`assistant_private_content_versions`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_policies`、`user_security_preferences`、`security_policy_session_grants`、`security_confirmations`、`audit_logs`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry`、`tool_usage_records`、`device_registry`、`device_capabilities` 和 `device_operation_logs`。
+- 当前物理结构由 `001`—`014` 顺序迁移维护；生活模块新增 `life_financial_records`、`life_budgets`、`life_calendar_entries`、`life_body_records`、`life_body_goals` 与 `local_memories`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
 - `assistant_global_settings` 与 Subject 一对一绑定；名称和头像仍以 `subjects` 为唯一身份来源，人格、表达、关系、长期要求与禁止事项保存在独立设定表。新建 Subject 与默认设定原子提交，设定更新与最小 `subject_updated` Event 原子提交。
 - 全局设定是可由用户明确修改的长期配置；SubjectState 是带来源、不可变追加的动态状态历史。更新任何全局设定都不会新增、切换或覆盖 SubjectState。
 - `assistant_private_spaces` 与普通 User Space 表分离，每个用户/助手组合唯一；内容版本使用复合外键绑定相同用户、助手、Space 和 Content 父链。
 - 私域内容更新只追加新版本，数据库触发器禁止直接修改或删除历史；通用 Context 不读取私域，独立投影必须通过 `private_domain` Permission 和高风险确认。
+- 生活数据按 `user_id + subject_id` 复合归属保存；四个固定 `life_data` 资源范围分别保护财务、月历、身体和本地记忆。金额以整数分保存，身体 AI 建议仅为显式输入，本地记忆投影只读取用户标记参与 Context 的记录。
 - Conversation、Message 和 MessageVersion 都保存 `user_id`、`subject_id`、`conversation_id` 复合归属；消息和版本不能跨用户、主体或对话引用。
 - Message 使用对话内唯一且递增的 `sequence_number` 稳定排序，并以复合外键 `current_version_id` 投影当前正文与版本号。
 - MessageVersion 正文由数据库触发器阻止覆盖；同一消息的版本号唯一，`parent_version_id` 只能引用同一用户、主体、对话和消息的版本。
@@ -335,6 +362,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`；AI Private Space 则在独立存储范围中保存调用方显式提交的五类高敏感私域版本。通用 Context Service 不自动读取私域，只有独立私域投影接口通过 Permission → Security Policy 后返回受控内容。所有私域执行标记都明确未调用模型、外部 API 或连续性引擎，也不实现意识、自主行为或开放判断。Capability Service 与 Device Service 仍只投影本地注册、能力、权限和安全准备事实。分支、删除、窗口重置和私域披露流程仍未实现。
+平台后端与 continuity-engine 保持平行。AI Assistant Global Settings、SubjectState、AI Private Space 与 User Space 生活数据保持独立语义和存储边界。通用 Context 不自动读取私域或本地记忆；后两者只有独立安全投影。生活模块只保存用户显式输入并执行本地统计，AI 建议字段不调用模型。Capability 与 Device 仍只投影本地注册、权限和安全准备事实。分支、删除、窗口重置、私域披露、支付/银行、健康设备、自动提醒和真实导出仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

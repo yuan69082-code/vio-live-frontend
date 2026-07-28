@@ -31,6 +31,7 @@ export const SECURITY_RESOURCE_TYPES = Object.freeze([
   'device',
   'api',
   'private_domain',
+  'life_data',
   'identity',
   'payment',
 ]);

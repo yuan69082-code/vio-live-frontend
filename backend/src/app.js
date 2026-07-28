@@ -12,6 +12,7 @@ import { createSqliteConversationRepository } from './integrations/database/sqli
 import { createSqliteConversationSummaryRepository } from './integrations/database/sqlite-conversation-summary-repository.js';
 import { createSqliteDeviceRepository } from './integrations/database/sqlite-device-repository.js';
 import { createSqliteEventRepository } from './integrations/database/sqlite-event-repository.js';
+import { createSqliteLifeManagementRepository } from './integrations/database/sqlite-life-management-repository.js';
 import { createSqliteMessageRepository } from './integrations/database/sqlite-message-repository.js';
 import { createSqliteMessageVersionRepository } from './integrations/database/sqlite-message-version-repository.js';
 import { createSqliteModelRoutingRuleRepository } from './integrations/database/sqlite-model-routing-rule-repository.js';
@@ -36,6 +37,7 @@ import { createConversationSummaryService } from './modules/conversation-summari
 import { createDashboardService } from './modules/dashboard/dashboard-service.js';
 import { createDeviceService } from './modules/devices/device-service.js';
 import { createEventService } from './modules/events/event-service.js';
+import { createLifeManagementService } from './modules/life-management/life-management-service.js';
 import { createModelRouterService } from './modules/model-router/model-router-service.js';
 import { createModelRoutingRuleService } from './modules/model-routing-rules/model-routing-rule-service.js';
 import { createModelService } from './modules/models/model-service.js';
@@ -68,6 +70,7 @@ export function createApplication({ config, logger = console }) {
   const messageVersionRepository = createSqliteMessageVersionRepository(database.connection);
   const subjectStateRepository = createSqliteSubjectStateRepository(database.connection);
   const eventRepository = createSqliteEventRepository(database.connection);
+  const lifeManagementRepository = createSqliteLifeManagementRepository(database.connection);
   const apiProviderRepository = createSqliteApiProviderRepository(database.connection);
   const modelRepository = createSqliteModelRepository(database.connection);
   const modelRoutingRuleRepository = createSqliteModelRoutingRuleRepository(
@@ -223,6 +226,14 @@ export function createApplication({ config, logger = console }) {
     eventService,
     runInTransaction: database.runInTransaction,
   });
+  const lifeManagementService = createLifeManagementService({
+    lifeManagementRepository,
+    userRepository,
+    subjectRepository,
+    securityService,
+    eventService,
+    runInTransaction: database.runInTransaction,
+  });
   const sensitiveDataService = createSensitiveDataService();
   const capabilityRegistryService = createCapabilityRegistryService({
     capabilityRegistryRepository,
@@ -260,6 +271,7 @@ export function createApplication({ config, logger = console }) {
     subjectService,
     assistantGlobalSettingsService,
     assistantPrivateSpaceService,
+    lifeManagementService,
     conversationService,
     conversationSummaryService,
     subjectStateService,

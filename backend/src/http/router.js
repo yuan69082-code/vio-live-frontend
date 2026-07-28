@@ -34,6 +34,11 @@ function errorPayload(error, requestId) {
   };
 }
 
+function sendSecuredResult(response, result, { created = false } = {}) {
+  const statusCode = created && result.operationStatus === 'completed' ? 201 : 200;
+  sendJson(response, statusCode, { data: result });
+}
+
 export function createRouter({
   config,
   database,
@@ -41,6 +46,7 @@ export function createRouter({
   subjectService,
   assistantGlobalSettingsService,
   assistantPrivateSpaceService,
+  lifeManagementService,
   conversationService,
   conversationSummaryService,
   subjectStateService,
@@ -599,6 +605,278 @@ export function createRouter({
             input,
           ),
         });
+        return;
+      }
+
+      const lifeFinanceRecordsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/finance\/records$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeFinanceRecordsRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.createFinancialRecord(
+          lifeFinanceRecordsRoute.userId,
+          lifeFinanceRecordsRoute.subjectId,
+          input,
+        ), { created: true });
+        return;
+      }
+
+      const lifeFinanceRecordsQueryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/finance\/records\/query$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeFinanceRecordsQueryRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.listFinancialRecords(
+          lifeFinanceRecordsQueryRoute.userId,
+          lifeFinanceRecordsQueryRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeFinanceCategoryStatisticsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/finance\/statistics\/categories$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeFinanceCategoryStatisticsRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.getFinancialCategoryStatistics(
+          lifeFinanceCategoryStatisticsRoute.userId,
+          lifeFinanceCategoryStatisticsRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeFinanceMonthlySummaryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/finance\/summaries\/monthly$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeFinanceMonthlySummaryRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.getFinancialMonthlySummary(
+          lifeFinanceMonthlySummaryRoute.userId,
+          lifeFinanceMonthlySummaryRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeFinanceBudgetsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/finance\/budgets$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeFinanceBudgetsRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.upsertBudget(
+          lifeFinanceBudgetsRoute.userId,
+          lifeFinanceBudgetsRoute.subjectId,
+          input,
+        ), { created: true });
+        return;
+      }
+
+      const lifeFinanceBudgetsQueryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/finance\/budgets\/query$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeFinanceBudgetsQueryRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.listBudgets(
+          lifeFinanceBudgetsQueryRoute.userId,
+          lifeFinanceBudgetsQueryRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeCalendarEntriesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/calendar\/entries$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeCalendarEntriesRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.createCalendarEntry(
+          lifeCalendarEntriesRoute.userId,
+          lifeCalendarEntriesRoute.subjectId,
+          input,
+        ), { created: true });
+        return;
+      }
+
+      const lifeCalendarEntriesQueryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/calendar\/entries\/query$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeCalendarEntriesQueryRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.listCalendarEntries(
+          lifeCalendarEntriesQueryRoute.userId,
+          lifeCalendarEntriesQueryRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeCalendarEntryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/calendar\/entries\/([^/]+)$/,
+        ['userId', 'subjectId', 'calendarEntryId'],
+      );
+      if (request.method === 'PATCH' && lifeCalendarEntryRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.updateCalendarEntry(
+          lifeCalendarEntryRoute.userId,
+          lifeCalendarEntryRoute.subjectId,
+          lifeCalendarEntryRoute.calendarEntryId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeBodyRecordsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/body\/records$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeBodyRecordsRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.createBodyRecord(
+          lifeBodyRecordsRoute.userId,
+          lifeBodyRecordsRoute.subjectId,
+          input,
+        ), { created: true });
+        return;
+      }
+
+      const lifeBodyRecordsQueryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/body\/records\/query$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeBodyRecordsQueryRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.listBodyRecords(
+          lifeBodyRecordsQueryRoute.userId,
+          lifeBodyRecordsQueryRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeBodyTrendsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/body\/trends$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeBodyTrendsRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.getBodyTrend(
+          lifeBodyTrendsRoute.userId,
+          lifeBodyTrendsRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeBodyGoalsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/body\/goals$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeBodyGoalsRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.upsertBodyGoal(
+          lifeBodyGoalsRoute.userId,
+          lifeBodyGoalsRoute.subjectId,
+          input,
+        ), { created: true });
+        return;
+      }
+
+      const lifeBodyGoalReadRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/body\/goals\/read$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeBodyGoalReadRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.getBodyGoal(
+          lifeBodyGoalReadRoute.userId,
+          lifeBodyGoalReadRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeMemoriesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/memories$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeMemoriesRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.createLocalMemory(
+          lifeMemoriesRoute.userId,
+          lifeMemoriesRoute.subjectId,
+          input,
+        ), { created: true });
+        return;
+      }
+
+      const lifeMemoriesQueryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/memories\/query$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeMemoriesQueryRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.listLocalMemories(
+          lifeMemoriesQueryRoute.userId,
+          lifeMemoriesQueryRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeMemoryContextRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/memories\/context-projections$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && lifeMemoryContextRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.createLocalMemoryContextProjection(
+          lifeMemoryContextRoute.userId,
+          lifeMemoryContextRoute.subjectId,
+          input,
+        ));
+        return;
+      }
+
+      const lifeMemoryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/life\/memories\/([^/]+)$/,
+        ['userId', 'subjectId', 'memoryId'],
+      );
+      if (request.method === 'PATCH' && lifeMemoryRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, lifeManagementService.updateLocalMemoryFlags(
+          lifeMemoryRoute.userId,
+          lifeMemoryRoute.subjectId,
+          lifeMemoryRoute.memoryId,
+          input,
+        ));
         return;
       }
 

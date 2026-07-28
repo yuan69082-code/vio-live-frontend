@@ -12,6 +12,7 @@
 - Device Registry、Capability、Adapter 契约、授权、安全确认、事件和未执行操作日志
 - Security Policy、用户安全偏好、生命周期事件、短时会话授权和迁移外键完整性
 - AI Private Space 五类内容、不可变版本、复合隔离、安全门、Context 投影和导出结构预留
+- 生活管理管账/预算/月历/身体/本地记忆、安全链、事件脱敏与隔离
 - continuity-engine、模型和外部能力边界
 - 导出、删除、备份和恢复范围
 - 错误结果不泄露密钥或其他用户数据
@@ -24,7 +25,9 @@
 pnpm test
 ```
 
-当前测试结果为 37/37 通过，已覆盖服务启动、统一响应 envelope、User 当前开发上下文、Subject、Assistant Global Settings、AI Private Space、Dashboard、Conversation/Message/Version、Context、Event、Provider/Model/路由、009/012/013 迁移链、能力/设备注册、Permission、Security Policy、Confirmation、AuditLog、事务回滚、重启持久化、跨用户/主体/Space 隔离和秘密字段拦截。
+当前测试结果为 40/40 通过，已覆盖服务启动、统一响应 envelope、账号/主体、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+
+Life Management 测试覆盖收入/支出、整数金额精度、预算提醒、分类统计、UTC 月度汇总、四类月历与提醒、身体指标/目标/趋势、显式建议字段、本地记忆上下文/导出标记和 Context 投影。迁移测试从 `013` 结构保留 Permission、Security Policy、Confirmation、AuditLog 和 SessionGrant 关系升级到 `014`。同时验证 `life_data` 安全链、策略拒绝、重启持久化、跨用户/主体隔离、三类 Event 脱敏和外键完整性；不连接支付、银行、穿戴设备、模型或外部服务。
 
 AI Private Space 测试覆盖五类内容、首版与更新版本、`baseVersionId`、数据库不可变触发器、Space 状态、高风险确认、Permission/Policy 拒绝、独立 Context 投影、无正文 Export Manifest、三类私域 Event 脱敏、重启持久化、复合归属隔离和外键完整性。测试输入均为显式样例，不运行模型、continuity-engine、机器人或外部设备。
 

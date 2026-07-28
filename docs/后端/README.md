@@ -4,7 +4,7 @@
 
 本目录依据《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》整理，用于描述平台后端的职责、数据边界、接口原则、安全约束和开发顺序。
 
-本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、User/Subject/Dashboard、AI Assistant Global Settings、Conversation/Message/MessageVersion、可追溯 ConversationSummary、SubjectState / `state_update`、跨窗口摘要和只读 Context 装配基础 API，以及 Event、Provider/Model、六类任务默认/备用路由、Permission 判断、用户 Security Policy/安全偏好、Security/Confirmation/AuditLog、Tool/MCP/Skill/Plugin Registry、主体 Capability 视图、Device Registry/Capability、Tool/设备未执行准备记录和 AI Private Space 数据基础；前端已建立独立 API 客户端和真实健康握手。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实摘要生成、模型连接/测试、API Key、通用 Memory、continuity-engine、支付、私域披露决策、真实 MCP、插件安装、Skill/Tool 执行、真实设备连接或其他外部能力已经完成。
+本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、User/Subject/Dashboard、AI Assistant Global Settings、对话/摘要/状态/Context、Event、模型路由、Permission/Security、扩展与设备注册、AI Private Space，以及管账、月历、身体管理和本地记忆数据基础；前端已建立独立 API 客户端和真实健康握手。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实摘要/AI 建议生成、模型连接/测试、API Key、continuity-engine、支付/银行、私域披露决策、真实 MCP/Tool、真实设备或穿戴健康数据已经完成。
 
 ## 系统边界
 
@@ -31,9 +31,10 @@ Vio Live 由五层协作组成：
 - AI Assistant Global Settings 一对一绑定 Subject，支持长期身份与偏好读取/更新；它不会创建、覆盖或切换动态 SubjectState。
 - Context 接口只读装配主体设定、当前状态、未解决事件、近期消息和跨窗口摘要；系统规则正文与 Memory 仍为明确占位，不调用模型或 continuity-engine。
 - AI Private Space 使用专用表和不可变内容版本，支持五类显式输入、受控 Context 投影和导出清单预留；通用 Context 不自动读取私域。
-- Event 当前支持用户/可选主体归属、十五种事件类型，以及按用户、主体、发生时间、类型和状态筛选；对话、安全和私域事件不复制正文或敏感操作数据，尚无事件消费者。
+- 生活管理使用独立 User Space 表保存财务、预算、四类月历、身体指标/目标和本地记忆；所有敏感访问经过 `life_data` Permission 与 Security Policy。
+- Event 当前支持用户/可选主体归属、十八种事件类型，以及按用户、主体、发生时间、类型和状态筛选；对话、安全、私域和生活事件不复制正文或敏感操作数据，尚无事件消费者。
 - Model Router 当前支持聊天、长文本、图片、视频、语音、搜索六类默认/备用规则和目录回退，只返回本地模型描述；测试状态固定未测试，API Key 安全存储端口不支持写入，不调用真实模型。
-- Permission 当前支持七类资源、五档权限、精确操作判断和创建/变化/撤销生命周期事件；不执行任何真实资源操作。
+- Permission 当前支持八类资源、五档权限、精确操作判断和创建/变化/撤销生命周期事件；不执行任何真实外部资源操作。
 - Security Policy 支持五种规则、用户默认风险/高风险/自动确认/禁止偏好和 30 分钟精确会话授权；策略只能收紧 Permission，高/极高风险保持逐次确认。
 - Security 当前按 Permission → Policy → Confirmation 返回执行资格，明确标记未执行；确认绑定完整作用域、权限/策略版本和开发期安全会话并单次消费。
 - SensitiveData 只定义五类分类元数据；AuditLog 与 Event 分离且只保存最小脱敏字段。
@@ -41,7 +42,7 @@ Vio Live 由五层协作组成：
 - Device 当前按用户保存七类设备和四类能力元数据，主体授权复用 Permission；统一 Adapter 只有小米、美的、Apple、Android 和通用类型的未配置描述。设备始终标记未连接、状态未观测，操作准备与日志始终标记未执行，不包含厂商客户端或真实控制参数。
 - 当前未接入真实认证或正式数据库，基础路由不得直接公开部署。
 - 总规划记录的部分连续性底层框架不等于平台后端已经完成。
-- 分支、消息删除、窗口重置、真实摘要生成、通用 Memory、语义检索、Token 预算、私域披露/删除/文件导出、真实意识或自主行为、正式数据库、真实模型、continuity-engine、真实 MCP、插件安装、Skill/Tool 执行、真实设备/机器人连接控制、厂商 API、外部执行和公开运行能力仍处于规划或待接入状态。
+- 分支、消息删除、窗口重置、真实摘要生成、语义检索、Token 预算、私域披露/删除/文件导出、生活记录删除/真实导出、自动提醒、支付/银行、健康设备、真实意识或自主行为、正式数据库、真实模型、continuity-engine、真实 MCP、插件安装、Skill/Tool 执行、真实设备/机器人连接控制、厂商 API、外部执行和公开运行能力仍处于规划或待接入状态。
 - GitHub 只保存代码和文档，不保存运行数据、用户数据或密钥。
 
 ## 文档目录

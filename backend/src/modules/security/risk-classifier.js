@@ -34,6 +34,10 @@ function resourceRisk(resourceType, action) {
     return 'high';
   }
 
+  if (resourceType === 'life_data') {
+    return 'high';
+  }
+
   if (resourceType === 'device' && action === 'control') {
     return 'critical';
   }

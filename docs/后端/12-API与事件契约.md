@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、User/Subject/Assistant Global Settings/AI Private Space、Conversation/Message/Version/Context、Event、Provider/Model 路由、扩展/设备 Registry、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、User/Subject/Assistant Global Settings/AI Private Space、Conversation/Message/Version/Context、Event、Provider/Model 路由、扩展/设备 Registry、生活管理、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -118,6 +118,9 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 - `subject_updated`
 - `permission_changed`
 - `life_record_created`
+- `life_event_created`
+- `budget_changed`
+- `health_record_updated`
 - `device_changed`
 - `conversation_created`
 - `message_created`
@@ -140,7 +143,13 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 | `GET` | `/api/v1/users/:userId/events` | 查询该用户事件，可按 `subjectId`、`eventType`、`status`、`from`、`to` 和 `limit` 筛选 |
 | `GET` | `/api/v1/users/:userId/events/:eventId` | 查询该用户范围内的单个事件 |
 
-对话与 AI 私域写入会在同一事务创建对应最小 Event，事件只包含 ID、类型、状态和版本关系，不包含会话标题、消息或私域正文。这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和通用数据变化仍是规划范围，尚未成为当前接口接受的事件名。
+对话、AI 私域和生活管理写入会在同一事务创建对应最小 Event。生活事件不包含金额、分类、身体数值、月历类型/标题、亲密内容、备注、记忆或建议正文。这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和通用数据变化仍是规划范围，尚未成为当前接口接受的事件名。
+
+## 生活管理契约
+
+生活路由统一位于 `/api/v1/users/:userId/subjects/:subjectId/life/*`，覆盖财务记录/预算/分类统计/月度汇总、四类月历、身体记录/目标/趋势，以及本地记忆/标记/Context 投影。完整路径和字段见后端 [`API.md`](../../backend/docs/API.md)。
+
+所有接口使用 `life_data` Permission，通过 `finance`、`calendar`、`body`、`local-memory` 四个主体范围资源 ID执行 Permission → Security Policy → Confirmation。当前统计为本地确定性计算，提醒仅保存规则，本地记忆只有显式标记后进入独立投影。接口不执行支付、银行同步、穿戴设备读取、医疗诊断、模型调用或真实文件导出。
 
 Device 服务也会在同一事务写入 `device_changed`。其 `changeType` 当前只包括 `connection_registered`、`registry_status_changed`、`authorization_changed` 与 `operation_requested`；这些是平台元数据和请求事实，不是设备在线、实际状态变化或执行成功证明。
 

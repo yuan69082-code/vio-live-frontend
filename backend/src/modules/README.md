@@ -11,7 +11,7 @@
 7. 模型与扩展能力管理
 8. 设备、AI 私域、生活模块和数据治理
 
-模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现 User、Subject、Assistant Global Settings、Assistant Private Space、Dashboard、Conversation、Message、MessageVersion、ConversationSummary、SubjectState、Context、Event、APIProvider、Model、Model Routing Rule、Model Router、Tool/MCP/Skill/Plugin Registry、Capability、Tool Usage、Device Registry、Device Capability、Device Operation、Permission、Security Policy、Security、SensitiveData 分类、Confirmation 与 AuditLog。Dashboard 只聚合已有 User/Subject 状态，不猜测连续性或设备数据；Security 只返回安全资格并标记未执行；Permission Checker 不执行资源操作，Router 也不调用真实模型。
+模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现账号/主体、设定/私域、对话/Context、事件、模型/扩展/设备、生活管理、Permission/Security/Confirmation/AuditLog。Dashboard 只聚合已有事实；Security 只返回安全资格并标记外部执行未发生；Permission Checker 不执行资源操作，Router 也不调用真实模型。
 
 AI 私域模块只保存调用方显式提交的五类 JSON 记录，Space 与内容版本使用专用表；每次更新追加不可变版本。空 Space 创建用于生成精确 Permission 的资源 ID，其后读取、写入、管理、Context 投影和导出准备都必须经过 Permission → Security Policy → Confirmation。该模块不实现意识、自主行为、内容开放判断、模型生成、机器人或外部连接。
 
@@ -24,3 +24,5 @@ AI 私域模块只保存调用方显式提交的五类 JSON 记录，Space 与�
 扩展能力模块保持以下边界：Registry 只保存用户范围元数据；Capability 按主体预览 Permission，不消费 `allow_once`；Tool Usage 只执行 Security/Confirmation 前置判断并记录 `not_executed`。MCP 未连接，Plugin 未安装，Skill/Tool 没有执行器，任何模块都不接收真实执行输入或调用第三方服务。
 
 设备模块保持以下边界：Device Registry 只保存用户范围的设备类型、品牌、名称、启停和能力声明；主体授权复用 `resource_type=device` 的 Permission。操作准备固定经过 Permission、Security 和 Confirmation，并记录 `device_changed`、AuditLog 和 `not_executed` 操作日志。注册或启用不表示设备已连接，设备状态固定未观测；统一 Adapter 端口和小米、美的、Apple、Android 描述均为 `not_implemented`，不接收控制参数、不加载 SDK、不调用厂商 API。
+
+生活管理模块保持以下边界：财务、预算、月历、身体与本地记忆属于 User Space，并按用户/主体复合隔离；全部使用 `life_data` Permission 与 Security Policy。金额、统计和趋势仅作本地确定性计算；AI 建议只保存显式输入；提醒只保存规则；本地记忆只有用户标记后进入独立 Context 投影。模块不支付、不连接银行/穿戴设备、不调用模型、不输出诊断，也不自动并入通用 Context。
