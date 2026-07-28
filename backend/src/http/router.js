@@ -43,6 +43,8 @@ export function createRouter({
   config,
   database,
   userService,
+  userSpaceService,
+  dataIsolationService,
   subjectService,
   assistantGlobalSettingsService,
   assistantPrivateSpaceService,
@@ -114,6 +116,15 @@ export function createRouter({
         return;
       }
 
+      if (request.method === 'GET' && url.pathname === '/api/v1/data-access-boundaries') {
+        const boundaries = dataIsolationService.listBoundaries();
+        sendJson(response, 200, {
+          data: boundaries,
+          meta: { count: boundaries.length },
+        });
+        return;
+      }
+
       if (request.method === 'POST' && url.pathname === '/api/v1/users') {
         const input = await readJsonBody(request);
         const user = userService.createUser(input);
@@ -132,6 +143,67 @@ export function createRouter({
       const userRoute = routeMatch(url.pathname, /^\/api\/v1\/users\/([^/]+)$/, ['userId']);
       if (request.method === 'GET' && userRoute) {
         sendJson(response, 200, { data: userService.getUser(userRoute.userId) });
+        return;
+      }
+
+      const userSpaceRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/user-space$/,
+        ['userId'],
+      );
+      if (request.method === 'GET' && userSpaceRoute) {
+        sendJson(response, 200, {
+          data: userSpaceService.getUserSpace(userSpaceRoute.userId),
+        });
+        return;
+      }
+
+      const userSpaceAssistantsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/user-space\/assistants$/,
+        ['userId'],
+      );
+      if (request.method === 'GET' && userSpaceAssistantsRoute) {
+        const assistants = userSpaceService.listAssistants(userSpaceAssistantsRoute.userId);
+        sendJson(response, 200, {
+          data: assistants,
+          meta: { count: assistants.length },
+        });
+        return;
+      }
+
+      const currentAssistantRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/user-space\/current-assistant$/,
+        ['userId'],
+      );
+      if (request.method === 'GET' && currentAssistantRoute) {
+        sendJson(response, 200, {
+          data: userSpaceService.getCurrentAssistant(currentAssistantRoute.userId),
+        });
+        return;
+      }
+      if (request.method === 'PATCH' && currentAssistantRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: userSpaceService.switchCurrentAssistant(
+            currentAssistantRoute.userId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const dataAccessChecksRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/data-access-checks$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && dataAccessChecksRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: dataIsolationService.checkAccess(dataAccessChecksRoute.userId, input),
+        });
         return;
       }
 

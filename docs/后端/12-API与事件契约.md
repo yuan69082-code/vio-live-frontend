@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、User/Subject/Assistant Global Settings/AI Private Space、Conversation/Message/Version/Context、Event、Provider/Model 路由、扩展/设备 Registry、生活管理、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、User/User Space/当前助手/数据隔离检查、Subject/Assistant Global Settings/AI Private Space、Conversation/Message/Version/Context、Event、Provider/Model 路由、扩展/设备 Registry、生活管理、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -74,6 +74,11 @@
 | `POST` | `/api/v1/users` | 创建基础用户；当前不是注册或登录验证 |
 | `GET` | `/api/v1/users/:userId` | 按稳定 ID 查询用户 |
 | `GET` | `/api/v1/users/current` | 使用 `x-vio-user-id` 查询开发期当前用户；不是认证 |
+| `GET` | `/api/v1/users/:userId/user-space` | 查询用户空间、开发期身份状态和当前助手 ID |
+| `GET` | `/api/v1/users/:userId/user-space/assistants` | 查询本用户助手列表及当前标记 |
+| `GET` / `PATCH` | `/api/v1/users/:userId/user-space/current-assistant` | 查询或切换本用户的当前活动助手 |
+| `GET` | `/api/v1/data-access-boundaries` | 查询五类数据的固定归属和权限规则元数据 |
+| `POST` | `/api/v1/users/:userId/data-access-checks` | 先验证资源复合归属，再执行需要的 Permission/Security 预检 |
 | `POST` | `/api/v1/users/:userId/subjects` | 创建属于该用户的 AI 主体 |
 | `GET` | `/api/v1/users/:userId/subjects` | 查询该用户主体列表，返回 `meta.count` |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId` | 按用户/主体双重归属查询单项 |
@@ -91,6 +96,10 @@ Global Settings 是用户明确配置、允许更新的长期静态层；Subject
 Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示用户和主体均为 `active`；连续性固定返回 `not_available`，不从 mock、设定或模型配置猜测未实现状态，也不返回设备、待办、提醒或模型结果。
 
 `x-vio-user-id` 与路径中的 `userId` 都只是当前开发请求范围，不是可信身份。服务不会自动选择数据库首位用户；真实认证前不得公开这些路由。
+
+User 创建时与一对一 User Space 原子提交；首个 Subject 在空间没有当前助手时成为当前助手。当前助手是导航/请求选择，不属于 SubjectState，切换不得修改 Global Settings、Private Space、SubjectState、Conversation、Event 或生活数据。
+
+数据访问检查只接受预定义资源类型、资源 ID、可选助手 ID、动作和确认元数据。用户/普通 AI/Event 资源先使用固定复合查询验证所有权；AI Private Space、Device 与生活资源在所有权命中后继续进入精确 Permission → Security Policy → Confirmation。错配用户、助手或资源组合统一按 `404` 处理；通过检查也只返回 `ready`，执行状态固定 `not_executed`。完整类型与字段见后端 [`API.md`](../../backend/docs/API.md)。
 
 ## Conversation、Message 与 Version 契约
 

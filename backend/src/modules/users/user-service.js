@@ -2,7 +2,13 @@ import { ConflictError, NotFoundError } from '../../core/errors.js';
 import { createId } from '../../core/ids.js';
 import { normalizeEmail, optionalString, requireString } from '../../core/validation.js';
 
-export function createUserService({ userRepository, clock = () => new Date(), idFactory = createId }) {
+export function createUserService({
+  userRepository,
+  userSpaceRepository,
+  runInTransaction,
+  clock = () => new Date(),
+  idFactory = createId,
+}) {
   return {
     createUser(input) {
       const email = normalizeEmail(input?.email);
@@ -22,7 +28,19 @@ export function createUserService({ userRepository, clock = () => new Date(), id
         updatedAt: now,
       };
 
-      return userRepository.insert(user);
+      return runInTransaction(() => {
+        const created = userRepository.insert(user);
+        userSpaceRepository.insert({
+          spaceId: idFactory(),
+          userId: created.userId,
+          identityMode: 'development_unverified',
+          status: 'active',
+          currentAssistantId: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        return created;
+      });
     },
     getUser(userId) {
       const normalizedId = requireString(userId, 'userId', { maxLength: 128 });

@@ -3,6 +3,7 @@
 后端测试将至少覆盖：
 
 - 用户与主体隔离
+- User Space、当前助手持久化和五类数据复合归属过滤
 - 会话、消息、当前版本与线性版本历史；分支、删除和重置留待后续阶段
 - 软件事件结构与敏感字段脱敏
 - 权限五档、会话失效、撤销和高风险确认
@@ -25,7 +26,9 @@
 pnpm test
 ```
 
-当前测试结果为 40/40 通过，已覆盖服务启动、统一响应 envelope、账号/主体、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+当前测试结果为 43/43 通过，已覆盖服务启动、统一响应 envelope、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+
+Account/Data Isolation 测试覆盖迁移 `015` 对既有用户的空间与当前助手回填、外键完整性、User/Space 原子创建、首个助手选择、助手列表、切换与重启持久化。测试同时验证多助手 Global Settings 与 SubjectState 保持独立，用户/AI/设备/生活/Event 资源只通过固定复合范围命中，错配组合按未找到处理；AI 私域、设备和生活资源在所有权命中后仍经过 Permission 与 Security Policy，全部结果保持 `not_executed`。
 
 Life Management 测试覆盖收入/支出、整数金额精度、预算提醒、分类统计、UTC 月度汇总、四类月历与提醒、身体指标/目标/趋势、显式建议字段、本地记忆上下文/导出标记和 Context 投影。迁移测试从 `013` 结构保留 Permission、Security Policy、Confirmation、AuditLog 和 SessionGrant 关系升级到 `014`。同时验证 `life_data` 安全链、策略拒绝、重启持久化、跨用户/主体隔离、三类 Event 脱敏和外键完整性；不连接支付、银行、穿戴设备、模型或外部服务。
 

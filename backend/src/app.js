@@ -10,6 +10,7 @@ import { createSqliteCapabilityRegistryRepository } from './integrations/databas
 import { createSqliteConfirmationRepository } from './integrations/database/sqlite-confirmation-repository.js';
 import { createSqliteConversationRepository } from './integrations/database/sqlite-conversation-repository.js';
 import { createSqliteConversationSummaryRepository } from './integrations/database/sqlite-conversation-summary-repository.js';
+import { createSqliteDataIsolationRepository } from './integrations/database/sqlite-data-isolation-repository.js';
 import { createSqliteDeviceRepository } from './integrations/database/sqlite-device-repository.js';
 import { createSqliteEventRepository } from './integrations/database/sqlite-event-repository.js';
 import { createSqliteLifeManagementRepository } from './integrations/database/sqlite-life-management-repository.js';
@@ -23,6 +24,7 @@ import { createSqliteSecurityPolicyRepository } from './integrations/database/sq
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
 import { createSqliteUserRepository } from './integrations/database/sqlite-user-repository.js';
+import { createSqliteUserSpaceRepository } from './integrations/database/sqlite-user-space-repository.js';
 import { createUnconfiguredApiCredentialStore } from './integrations/secrets/unconfigured-api-credential-store.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAssistantGlobalSettingsService } from './modules/assistant-global-settings/assistant-global-settings-service.js';
@@ -34,6 +36,7 @@ import { createConfirmationService } from './modules/confirmations/confirmation-
 import { createContextService } from './modules/contexts/context-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
 import { createConversationSummaryService } from './modules/conversation-summaries/conversation-summary-service.js';
+import { createDataIsolationService } from './modules/data-isolation/data-isolation-service.js';
 import { createDashboardService } from './modules/dashboard/dashboard-service.js';
 import { createDeviceService } from './modules/devices/device-service.js';
 import { createEventService } from './modules/events/event-service.js';
@@ -52,10 +55,12 @@ import { createSubjectService } from './modules/subjects/subject-service.js';
 import { createSubjectStateService } from './modules/subject-states/subject-state-service.js';
 import { createToolUsageService } from './modules/tool-usage/tool-usage-service.js';
 import { createUserService } from './modules/users/user-service.js';
+import { createUserSpaceService } from './modules/user-spaces/user-space-service.js';
 
 export function createApplication({ config, logger = console }) {
   const database = createSqliteDatabase(config);
   const userRepository = createSqliteUserRepository(database.connection);
+  const userSpaceRepository = createSqliteUserSpaceRepository(database.connection);
   const subjectRepository = createSqliteSubjectRepository(database.connection);
   const assistantGlobalSettingsRepository =
     createSqliteAssistantGlobalSettingsRepository(database.connection);
@@ -84,9 +89,14 @@ export function createApplication({ config, logger = console }) {
   );
   const deviceRepository = createSqliteDeviceRepository(database.connection);
   const confirmationRepository = createSqliteConfirmationRepository(database.connection);
+  const dataIsolationRepository = createSqliteDataIsolationRepository(database.connection);
   const credentialStore = createUnconfiguredApiCredentialStore();
   const deviceAdapterRegistry = createUnconfiguredDeviceAdapterRegistry();
-  const userService = createUserService({ userRepository });
+  const userService = createUserService({
+    userRepository,
+    userSpaceRepository,
+    runInTransaction: database.runInTransaction,
+  });
   const eventService = createEventService({
     eventRepository,
     subjectRepository,
@@ -95,6 +105,7 @@ export function createApplication({ config, logger = console }) {
   const subjectService = createSubjectService({
     subjectRepository,
     assistantGlobalSettingsRepository,
+    userSpaceRepository,
     userRepository,
     eventService,
     runInTransaction: database.runInTransaction,
@@ -218,6 +229,18 @@ export function createApplication({ config, logger = console }) {
     eventService,
     runInTransaction: database.runInTransaction,
   });
+  const userSpaceService = createUserSpaceService({
+    userSpaceRepository,
+    userRepository,
+    subjectRepository,
+  });
+  const dataIsolationService = createDataIsolationService({
+    dataIsolationRepository,
+    userSpaceRepository,
+    userRepository,
+    subjectRepository,
+    securityService,
+  });
   const assistantPrivateSpaceService = createAssistantPrivateSpaceService({
     assistantPrivateSpaceRepository,
     userRepository,
@@ -268,6 +291,8 @@ export function createApplication({ config, logger = console }) {
     config,
     database,
     userService,
+    userSpaceService,
+    dataIsolationService,
     subjectService,
     assistantGlobalSettingsService,
     assistantPrivateSpaceService,

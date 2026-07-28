@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 11｜生活管理模块”。后端已经可以独立启动，并在既有 Permission、Security Policy、Confirmation、AuditLog 与 Event 基础上建立生活数据闭环：
+当前阶段为“平台后端 12｜账号、数据库与数据隔离”。后端已经可以独立启动，并在既有用户/主体复合归属基础上建立 User Space、当前助手和统一数据访问边界：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -17,6 +17,8 @@ Device Registry → Capability 描述 → 未配置 Adapter 投影
 用户安全偏好/精确策略 → Permission → Policy → Confirmation → 未执行准备与审计
 AI Private Space → Permission → Security Policy → Confirmation → 受控本地读写/投影
 生活数据 → life_data Permission → Security Policy → Confirmation → 本地保存/统计/投影
+用户创建 → User Space 根归属 → 助手列表/当前助手 → 独立数据边界
+资源访问检查 → 数据库复合归属过滤 → Permission → Security Policy → Confirmation
 ```
 
 已实现：
@@ -26,6 +28,10 @@ AI Private Space → Permission → Security Policy → Confirmation → 受控�
 - 开发期 SQLite 数据库与顺序迁移
 - User 创建和查询
 - 开发期当前用户解析；显式标明不是认证或登录会话
+- User 创建时原子建立一对一 User Space；既有用户通过迁移补齐空间与稳定当前助手
+- User Space 支持读取用户身份占位、助手列表、当前助手和持久化切换；首个新建助手自动成为当前助手
+- 数据隔离层按明确资源类型验证 `user_id`、`assistant_id` 与资源 ID，统一返回用户、AI、设备、生活和事件五类归属
+- AI Private Space、Device 和生活资源在归属验证后继续进入 Permission → Security Policy → Confirmation；检查结果不执行资源操作
 - Subject 创建、列表、所属用户绑定、查询和基础信息更新
 - Subject 实际更新与 `subject_updated` Event 同事务提交
 - AI Assistant Global Settings 读取与局部更新，支持名称、头像、人格描述、表达方式、关系定义、长期要求和禁止事项
@@ -89,9 +95,9 @@ AI Private Space → Permission → Security Policy → Confirmation → 受控�
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- `pnpm test` 当前 40/40 通过，覆盖启动、API 契约、生活数据、模型路由、能力/设备注册、权限/策略/安全执行准备、AI 私域版本与隔离、全局设定、摘要来源、上下文装配、迁移升级、事务回滚和持久化
+- `pnpm test` 当前 43/43 通过，覆盖启动、API 契约、User Space、当前助手、五类数据边界、生活数据、模型路由、能力/设备注册、权限/策略/安全执行准备、AI 私域版本与隔离、全局设定、摘要来源、上下文装配、迁移升级、事务回滚和持久化
 
-本阶段只新增生活管理本地数据、确定性统计和受控投影，不增加资金、设备或模型执行能力。预算不会发起支付，身体趋势不构成诊断，本地记忆不会自动进入通用 Context。没有银行同步、支付接口、健康设备、第三方请求、真实模型或 continuity-engine；前端 `src`、页面与 mock 未修改。
+本阶段只新增开发期 User Space、当前助手选择和统一归属/安全预检，不接入真实登录或第三方账号，也不改变现有模块的数据语义。`development_unverified` 只说明当前身份入口尚未认证；URL 与 `x-vio-user-id` 仍不是凭证。没有语音、外部请求、真实模型或 continuity-engine；前端 `src`、页面与 mock 未修改。
 
 ## 运行要求
 
@@ -158,6 +164,11 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `POST` | `/api/v1/users` | 创建基础用户 |
 | `GET` | `/api/v1/users/:userId` | 查询用户 |
 | `GET` | `/api/v1/users/current` | 使用 `x-vio-user-id` 读取开发期当前用户；不是认证 |
+| `GET` | `/api/v1/users/:userId/user-space` | 读取一对一 User Space、开发期身份状态和当前助手 ID |
+| `GET` | `/api/v1/users/:userId/user-space/assistants` | 查询用户空间内的助手列表和当前标记 |
+| `GET` / `PATCH` | `/api/v1/users/:userId/user-space/current-assistant` | 读取或切换当前助手；只能选择本用户的活动助手 |
+| `GET` | `/api/v1/data-access-boundaries` | 查询用户、AI、设备、生活和事件资源的隔离规则元数据 |
+| `POST` | `/api/v1/users/:userId/data-access-checks` | 先验证资源复合归属，再按规则进入 Permission 与 Security Policy；不执行资源 |
 | `POST` | `/api/v1/users/:userId/subjects` | 为指定用户创建 AI 主体 |
 | `GET` | `/api/v1/users/:userId/subjects` | 查询该用户的主体列表 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId` | 按用户和主体双重归属查询主体 |
@@ -283,6 +294,8 @@ backend/
 │  ├─ integrations/database/ # SQLite、迁移和仓储适配
 │  ├─ integrations/secrets/  # 未配置的安全密钥存储端口占位
 │  ├─ modules/users/         # User 业务规则
+│  ├─ modules/user-spaces/   # User Space、助手列表与当前助手
+│  ├─ modules/data-isolation/ # 资源归属和访问边界编排
 │  ├─ modules/subjects/      # Subject 业务规则
 │  ├─ modules/assistant-global-settings/ # AI 助手长期全局设定
 │  ├─ modules/assistant-private-spaces/ # AI 私域、内容版本与受控投影
@@ -320,7 +333,11 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构由 `001`—`014` 顺序迁移维护；生活模块新增 `life_financial_records`、`life_budgets`、`life_calendar_entries`、`life_body_records`、`life_body_goals` 与 `local_memories`。
+- 当前物理结构由 `001`—`015` 顺序迁移维护；`user_spaces` 为每个用户保存一对一空间根、开发期身份模式和可空当前助手指针。
+- User 创建与 User Space 建立在同一事务提交；首个 Subject 创建会在当前指针为空时原子选为当前助手。迁移为既有用户回填一个空间，并按最早活动 Subject 稳定选择当前助手。
+- 当前助手只是用户空间内的导航选择，不改变 Subject、Assistant Global Settings、Assistant Private Space、SubjectState、对话、事件或生活数据的既有归属。
+- 数据隔离仓储只使用预定义资源查询，并按资源要求组合 `user_id`、`assistant_id` 与资源 ID；不存在或错配组合统一按未找到处理，不通过先查全局 ID 再做应用层过滤。
+- User/普通 AI 元数据与 Event 使用所有权校验；AI Private Space、Device 和生活数据在所有权校验后继续使用现有精确 Permission 与 Security Policy。隔离检查只返回 `ready`、`confirmation_required` 或 `denied`，所有执行状态固定为 `not_executed`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
 - `assistant_global_settings` 与 Subject 一对一绑定；名称和头像仍以 `subjects` 为唯一身份来源，人格、表达、关系、长期要求与禁止事项保存在独立设定表。新建 Subject 与默认设定原子提交，设定更新与最小 `subject_updated` Event 原子提交。
@@ -362,6 +379,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。AI Assistant Global Settings、SubjectState、AI Private Space 与 User Space 生活数据保持独立语义和存储边界。通用 Context 不自动读取私域或本地记忆；后两者只有独立安全投影。生活模块只保存用户显式输入并执行本地统计，AI 建议字段不调用模型。Capability 与 Device 仍只投影本地注册、权限和安全准备事实。分支、删除、窗口重置、私域披露、支付/银行、健康设备、自动提醒和真实导出仍未实现。
+平台后端与 continuity-engine 保持平行。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、SubjectState、AI Private Space 与 User Space 生活数据保持独立语义和存储边界；切换当前助手不会复制或重写这些记录。通用 Context 不自动读取私域或本地记忆；后两者只有独立安全投影。生活模块只保存用户显式输入并执行本地统计，AI 建议字段不调用模型。Capability 与 Device 仍只投影本地注册、权限和安全准备事实。真实登录、第三方账号、分支、删除、窗口重置、私域披露、支付/银行、健康设备、自动提醒、语音和真实导出仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

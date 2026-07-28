@@ -11,6 +11,7 @@ import {
 export function createSubjectService({
   subjectRepository,
   assistantGlobalSettingsRepository,
+  userSpaceRepository,
   userRepository,
   eventService,
   runInTransaction,
@@ -53,6 +54,14 @@ export function createSubjectService({
           createdAt: now,
           updatedAt: now,
         });
+        const userSpace = userSpaceRepository.setCurrentAssistantIfUnset(
+          created.ownerUserId,
+          created.subjectId,
+          now,
+        );
+        if (!userSpace) {
+          throw new NotFoundError('User Space was not found for the owner user.');
+        }
 
         return created;
       });

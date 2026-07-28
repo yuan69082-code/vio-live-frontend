@@ -2,8 +2,8 @@
 
 ## 状态与边界
 
-- 当前阶段：平台后端 11｜生活管理模块
-- 后端版本：`0.15.0`
+- 当前阶段：平台后端 12｜账号、数据库与数据隔离
+- 后端版本：`0.16.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
@@ -69,6 +69,8 @@
 - Tool 的 `inputDefinition` / `outputDefinition` 只接受 JSON Schema 风格的普通对象，用于描述未来输入输出，不接受实际 Tool 输入、命令、处理器地址或执行结果。
 - MCP `serviceUrl` 只保存注册元数据，必须为 HTTP(S)，不得包含用户名、密码、URL 片段或 Key/Token/Secret 类查询参数；保存不会发起连接。
 - Device Registry 不接受外部设备 ID、位置、凭据、厂商 Token 或真实状态；设备操作准备只接受能力代码、可选 Confirmation ID 与可选开发期 `securitySessionId`，不接受温度、开关、摄像头命令或任意控制参数。
+- User Space 的 `identity.mode=development_unverified` 和 `authenticationStatus=not_connected` 是明确的开发期占位，不是登录结果；当前助手切换只改变空间指针。
+- 数据访问检查只接受资源类型、资源 ID、可选助手 ID、动作及安全确认元数据，不接受资源正文、查询 SQL、表名或任意过滤表达式。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
 ## 服务接口
@@ -114,6 +116,45 @@
 | `x-vio-user-id` | 是 | 前端开发上下文中的用户 ID |
 
 该请求头只是可替换的开发期用户选择，不是身份凭证、登录会话或授权。服务不会默认读取数据库中的第一位或最新用户。真实认证接入后应替换此解析方式。
+
+## User Space 与数据隔离 API
+
+每个 User 创建时会在同一事务建立一个 User Space。迁移 `015` 为既有用户回填空间；若已有活动 Subject，则按创建时间和 ID 稳定选择第一位作为当前助手。User Space 是数据归属根，不是认证会话。
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/user-space` | 返回空间 ID、用户 ID、开发期身份状态、空间状态和当前助手 ID |
+| `GET` | `/api/v1/users/:userId/user-space/assistants` | 返回本用户全部 Subject 的助手投影及 `current` 标记 |
+| `GET` | `/api/v1/users/:userId/user-space/current-assistant` | 返回 User Space 与当前助手；尚无助手时为 `null` |
+| `PATCH` | `/api/v1/users/:userId/user-space/current-assistant` | 使用 `{ "assistantId": "..." }` 切换到本用户的活动助手 |
+| `GET` | `/api/v1/data-access-boundaries` | 返回全部支持资源的分类、归属范围、固定查询字段和权限要求 |
+| `POST` | `/api/v1/users/:userId/data-access-checks` | 验证具体资源归属，并在需要时执行 Permission/Security 预检 |
+
+助手列表只投影 `assistantId`、`userId`、名称、头像、状态、当前标记和三类数据边界，不返回私域正文、动态状态正文或对话内容。切换当前助手不修改 Assistant Global Settings、Assistant Private Space、SubjectState、Conversation、Event 或生活记录。
+
+数据访问检查请求体：
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `resourceType` | 是 | 下表列出的隔离资源类型 |
+| `resourceId` | 是 | 已存在的平台不透明资源 ID；生活记录仍会映射到集合级 Permission 资源 |
+| `assistantId` | 按类型 | AI、设备和生活资源必填；Event 可选，User Space 不需要 |
+| `action` | 是 | 必须同时属于平台 Permission action 和该资源允许动作 |
+| `confirmationId` | 否 | Security 返回确认要求后，用于完全相同作用域的单次确认消费 |
+| `securitySessionId` | 否 | 开发期安全策略会话范围；不是登录或认证凭证 |
+
+支持的资源类型与访问规则：
+
+| 数据类别 | `resourceType` | 数据库归属过滤 | 后续安全门 |
+| --- | --- | --- | --- |
+| 用户数据 | `user_space` | `user_id + space_id` | 所有权校验 |
+| AI 数据 | `assistant`、`assistant_global_settings`、`subject_state` | 用户 + 助手 + 资源复合范围 | 所有权校验 |
+| AI 数据 | `assistant_private_space` | `user_id + assistant_id + space_id` | `private_domain` Permission → Security Policy → Confirmation |
+| 设备数据 | `device` | `owner_user_id + device_id`，并校验请求助手属于用户 | `device` Permission → Security Policy → Confirmation |
+| 生活数据 | `life_financial_record`、`life_budget`、`life_calendar_entry`、`life_body_record`、`life_body_goal`、`local_memory` | `user_id + subject_id + record_id` | 对应 `finance` / `calendar` / `body` / `local-memory` 的 `life_data` 安全链 |
+| 事件数据 | `event` | `user_id + event_id`，提供助手时额外限定 `subject_id` | 所有权校验 |
+
+成功响应返回 `resource`、`ownership`、`boundary`、`access` 与 `execution`。`operationStatus` 只可能为 `ready`、`confirmation_required` 或 `denied`；`ready` 也只代表资格检查通过，`execution.status` 固定为 `not_executed`，不会读取正文、执行设备、调用模型或访问外部服务。错误用户、助手、Space 或资源组合统一返回 `404`，避免泄露资源是否存在。
 
 ## Subject API
 
