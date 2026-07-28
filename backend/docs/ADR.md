@@ -239,6 +239,14 @@
 - 原因：基础授权、用户安全偏好和具体高风险操作确认是不同信任层。若策略可以放宽 Permission 或平台底线，配置错误会直接扩大权限；若“会话允许”只依赖客户端字符串，也会成为可伪造的长期放行。精确、短时、确认后生成且版本绑定的授权能保留用户便利性，同时维持默认拒绝和防重放边界。
 - 影响：新增 `security_policies`、`user_security_preferences`、`security_policy_session_grants`，Confirmation 增加策略版本、会话、原因、风险说明与用户选择。Permission 生命周期事件拆分为 `permission_created`、`permission_changed`、`permission_revoked`，新建确认产生 `confirmation_required`；策略/偏好变更和最终安全结果进入最小 AuditLog。全部响应仍固定未执行；没有真实 Tool、设备、外部服务或认证会话。SQLite 父表重建仅允许迁移首行显式声明关闭外键，并必须在提交前通过 `PRAGMA foreign_key_check`。
 
+## BE-ADR-030｜AI 私域独立存储、不可变版本与安全门分层
+
+- 日期：2026-07-28
+- 状态：已采用，仅限 AI 私域数据基础
+- 决策：AI Private Space 使用独立于 User Space 的 `assistant_private_spaces` 与 `assistant_private_content_versions` 表。`assistant_id` 映射已有 Subject；每个用户与助手最多一个 Space。五类正文只接受调用方显式 JSON 输入并按 `content_id` 追加不可变版本，`baseVersionId` 防止陈旧写；Event 和 AuditLog 不复制正文。创建空 Space 是生成精确 `spaceId` 的引导操作，不接收或读取正文；Space 建立后，元数据读取、正文读写、状态管理、Context 投影和导出准备分别使用 `private_domain` 的 `read`、`write`、`manage`、`export` 权限，并固定经过 Permission → Security Policy → Confirmation。通用 Conversation Context 不自动读取私域，私域使用独立受控投影接口。导出阶段只返回不含正文的版本清单，不生成文件。
+- 原因：若私域与普通用户内容混存、自动进入通用 Context 或把正文复制到事件/日志，会扩大高敏感数据的暴露面。Space ID 又必须先存在才能创建精确资源权限，因此需要一个不含内容的受限引导步骤。不可变版本同时满足来源、版本和未来迁移需求，而不把当前阶段扩展为披露决策、意识或自主行为系统。
+- 影响：新增迁移 `013_create_ai_private_spaces.sql`、十五类 Event、私域仓储/服务/API 和隔离测试。所有私域安全检查分类为高风险并逐次确认；安全结果保持 `not_executed` 以表明没有外部副作用，批准后只执行本地数据库操作。当前不实现目录申请/开放结果、删除、真实文件导出、生产加密、模型/continuity-engine 生成、机器人或外部服务连接；这些能力必须分别形成后续 ADR。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：

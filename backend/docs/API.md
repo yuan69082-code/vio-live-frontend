@@ -2,8 +2,8 @@
 
 ## 状态与边界
 
-- 当前阶段：权限与自定义安全栏
-- 后端版本：`0.13.0`
+- 当前阶段：AI 私域数据层
+- 后端版本：`0.14.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
@@ -64,6 +64,7 @@
 - Message `content` 必须是非空字符串，统一换行为 `\n`，最多 32768 个字符。
 - ConversationSummary `content` 最多 16384 字符，且必须包含 1—100 个可验证来源引用。
 - `state_update.intensity` 是 `0`—`1` 的有限数字；当前状态和连续性约束只保存调用方提交的数据，不由后端推演。
+- AI 私域 `content` 必须是非空普通 JSON 对象，最大 32 KiB；API Key、Token、密码、凭据和完整身份秘密字段会被拒绝。所有内容只表示调用方显式输入，不代表 AI 自主生成。
 - `expressionStyle` 接受普通 JSON 对象；`longTermRequirements` 和 `prohibitions` 各最多 100 个非空、去重字符串。全局设定不得包含模型密钥或被解释为平台安全规则替代物。
 - Tool 的 `inputDefinition` / `outputDefinition` 只接受 JSON Schema 风格的普通对象，用于描述未来输入输出，不接受实际 Tool 输入、命令、处理器地址或执行结果。
 - MCP `serviceUrl` 只保存注册元数据，必须为 HTTP(S)，不得包含用户名、密码、URL 片段或 Key/Token/Secret 类查询参数；保存不会发起连接。
@@ -285,7 +286,7 @@ MessageVersion 返回：
 
 ### 对话软件事件
 
-Event 当前共十二类：
+Event 当前共十五类：
 
 - `appearance_changed`
 - `subject_updated`
@@ -299,8 +300,11 @@ Event 当前共十二类：
 - `permission_created`
 - `permission_revoked`
 - `confirmation_required`
+- `private_space_created`
+- `private_memory_updated`
+- `private_state_changed`
 
-Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归属及 Conversation、Message、MessageVersion、父版本、序号、发送者或状态等必要引用。Permission 创建、变化和撤销分别生成生命周期事件；需要确认时 Security 生成 `confirmation_required`。自动事件不保存 Conversation `title`、Message `content`、安全策略正文或敏感操作数据，也不会触发模型、上下文装配、真实执行或连续性处理。Event 当前仍没有消费者。
+Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归属及必要引用。Permission 创建、变化和撤销分别生成生命周期事件；需要确认时 Security 生成 `confirmation_required`。AI 私域事件只保存 Space/Content/Version 标识、内容类型、版本和变化类型，不复制私域正文。自动事件不保存 Conversation `title`、Message `content`、安全策略正文或敏感操作数据，也不会触发模型、上下文装配、真实执行或连续性处理。Event 当前仍没有消费者。
 
 ## ConversationSummary API
 
@@ -397,6 +401,63 @@ Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归
 8. `currentUserMessage`：当前窗口最后一条用户消息；不满足时为 `null`。
 
 `execution` 固定标记 `modelCall`、`externalApiCall`、`continuityEngineCall` 为 `not_performed`。该接口不持久化装配结果、不生成模型格式、不消耗 Token，也不触发 Event 或外部请求。
+
+## AI Private Space API
+
+`assistantId` 当前映射到已有 `Subject.subjectId`。AI Private Space 与通用 User Space 使用独立物理表；所有响应明确返回 `storageScope=assistant_private_space` 和 `userSpaceIncluded=false`。
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces` | 创建该助手唯一的空私域，默认 `active` |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/current/read` | 经安全链读取当前私域元数据 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/status` | 经 `manage` 权限更新 `active` / `inactive` |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents` | 经 `write` 权限创建私域内容与版本 1 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents/query` | 经 `read` 权限筛选当前版本 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents/:contentId/read` | 经 `read` 权限读取当前版本 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents/:contentId` | 使用 `baseVersionId` 追加新版本 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents/:contentId/versions/query` | 经 `read` 权限读取完整不可变历史 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/context-projections` | 受控读取未来 Context 可用的独立私域投影 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/export-manifests` | 返回导出结构和版本元数据预留，不生成文件 |
+
+创建内容请求示例：
+
+```json
+{
+  "contentType": "ai_private_note",
+  "content": {
+    "note": "调用方显式提交的私域笔记"
+  }
+}
+```
+
+`contentType` 支持 `ai_state_record`、`ai_cognition_record`、`ai_long_term_preference`、`ai_work_record`、`ai_private_note`。内容版本只追加；更新必须提交当前 `baseVersionId`，成功后返回递增 `versionNumber` 和 `parentVersionId`。数据库触发器禁止直接更新或删除历史版本。
+
+`inactive` Space 禁止正文读取、写入、版本读取和 Context 投影；元数据读取、重新启用和用于保障用户数据权利的 Export Manifest 仍可经过各自安全链访问。
+
+除创建空 Space 外，私域操作固定经过：
+
+```text
+private_domain Permission → Security Policy → high-risk Confirmation → 本地数据操作
+```
+
+空 Space 创建不接收正文，也不读取数据；它先生成 `spaceId`，供调用方创建精确 `private_domain` Permission。其他操作第一次通常返回：
+
+```json
+{
+  "operationStatus": "confirmation_required",
+  "access": {
+    "decision": "confirm",
+    "executionStatus": "not_executed"
+  },
+  "result": null
+}
+```
+
+用户通过现有 Confirmation API 批准后，以相同请求和 `confirmationId` 重试。最终结果可能是 `completed` 或 `denied`；权限和策略拒绝时不会返回或写入正文。安全预检中的 `executionStatus=not_executed` 表示没有外部副作用，不否定批准后的本地数据库操作。
+
+Context 投影只读取请求中允许的内容类型和数量，固定声明模型、外部 API、continuity-engine 均未调用。它不会自动并入通用 Conversation Context，避免绕过独立安全门。Export Manifest 固定 `exportStatus=not_generated`、`contentIncluded=false`，只预留 JSON/人类可读格式、版本关系、数量和时间元数据；当前不创建文件、不发送数据，也不包含秘密字段。
+
+当前不实现私域目录披露申请、部分开放、删除、真实导出文件、AI 自主写入、意识、长期自主行为、模型生成、continuity-engine 生成或机器人连接。
 
 ## Dashboard API
 

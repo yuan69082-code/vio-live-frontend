@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、健康检查、User/Subject/Assistant Global Settings/Dashboard、Conversation/Message/MessageVersion、Event、Provider/Model、默认/备用模型路由规则、Tool/MCP/Skill/Plugin Registry、Device Registry/Capability、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、User/Subject/Assistant Global Settings/AI Private Space、Conversation/Message/Version/Context、Event、Provider/Model 路由、扩展/设备 Registry、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -126,6 +126,9 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 - `permission_created`
 - `permission_revoked`
 - `confirmation_required`
+- `private_space_created`
+- `private_memory_updated`
+- `private_state_changed`
 
 事件创建体包含 `eventType`、`source`、`occurredAt`、`data`、`summary` 和可选 `subjectId`。服务生成 `eventId` 与 `recordedAt`，并将初始 `status` 设为 `pending`。事件数据不得包含明显的密钥、密码、验证码、Token、Secret 或完整证件号字段。
 
@@ -137,7 +140,7 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 | `GET` | `/api/v1/users/:userId/events` | 查询该用户事件，可按 `subjectId`、`eventType`、`status`、`from`、`to` 和 `limit` 筛选 |
 | `GET` | `/api/v1/users/:userId/events/:eventId` | 查询该用户范围内的单个事件 |
 
-对话写入会在同一事务创建对应最小 Event，事件只包含 ID、发送者类型和版本关系，不包含会话标题或消息正文。这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和数据变化仍是规划范围，尚未成为当前接口接受的事件名。
+对话与 AI 私域写入会在同一事务创建对应最小 Event，事件只包含 ID、类型、状态和版本关系，不包含会话标题、消息或私域正文。这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和通用数据变化仍是规划范围，尚未成为当前接口接受的事件名。
 
 Device 服务也会在同一事务写入 `device_changed`。其 `changeType` 当前只包括 `connection_registered`、`registry_status_changed`、`authorization_changed` 与 `operation_requested`；这些是平台元数据和请求事实，不是设备在线、实际状态变化或执行成功证明。
 
@@ -177,6 +180,12 @@ Device Adapter 契约为未来 `connect`、`disconnect`、`readStatus` 和 `exec
 `state_update` 包含 `currentState`、`emotion`、`intensity`、`changeReason`、`unresolvedEventIds`、`continuityConstraints` 和 `source`。来源支持同主体 MessageVersion、Event 或 ConversationSummary；状态、未解决 Event 和当前指针原子提交，旧状态保持不可变。
 
 Context 支持限制近期消息和跨窗口摘要数量，按系统安全位置、完整助手全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、Memory 位置、本轮用户消息的顺序返回。系统规则内容固定为 `reserved`，Memory 固定为 `not_implemented`，模型、外部 API 和 continuity-engine 固定标记 `not_performed`。接口不生成提示词、不持久化装配结果，也不产生 Token 或外部请求。
+
+## AI Private Space 契约
+
+AI Private Space 路由完整携带 `userId + assistantId + spaceId`，内容路由继续携带 `contentId`。支持 Space 创建/受控读取/状态、Content 创建/当前读取/查询/追加版本/版本历史、独立 Context 投影和 Export Manifest。五类内容为 `ai_state_record`、`ai_cognition_record`、`ai_long_term_preference`、`ai_work_record`、`ai_private_note`。
+
+创建空 Space 不接收正文，用于先生成精确 Permission 资源 ID。其他操作按 `read`、`write`、`manage` 或 `export` 经过 `private_domain` Permission → Security Policy → Confirmation。响应使用 `operationStatus=completed|confirmation_required|denied`、`access` 和可空 `result`。通用 Context 不自动读取私域；Export Manifest 不含正文且不生成文件。完整路径和请求结构见后端 API 文档。
 
 ## 每轮模型契约
 

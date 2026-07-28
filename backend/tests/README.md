@@ -11,6 +11,7 @@
 - Tool/MCP/Skill/Plugin 注册、Capability 权限投影和 Tool 未执行使用记录
 - Device Registry、Capability、Adapter 契约、授权、安全确认、事件和未执行操作日志
 - Security Policy、用户安全偏好、生命周期事件、短时会话授权和迁移外键完整性
+- AI Private Space 五类内容、不可变版本、复合隔离、安全门、Context 投影和导出结构预留
 - continuity-engine、模型和外部能力边界
 - 导出、删除、备份和恢复范围
 - 错误结果不泄露密钥或其他用户数据
@@ -23,7 +24,9 @@
 pnpm test
 ```
 
-当前测试结果为 34/34 通过，已覆盖服务启动、统一响应 envelope、User 当前开发上下文、Subject 创建/列表/查询/更新、Assistant Global Settings、Dashboard、Subject 更新与 Event 事务回滚、Event、Provider/Model/默认备用路由、009/012 旧库升级、四类能力注册、Capability 权限投影、Tool 使用准备、Device Registry 与操作准备、Permission CRUD、五档三态判断、Security Policy 五种规则、用户偏好、四级风险、三种确认要求、确认隔离与防重放、AuditLog、`allow_once` 确认前预览与最终消费、软删除、重启持久化、跨用户/主体隔离和密钥字段拦截。
+当前测试结果为 37/37 通过，已覆盖服务启动、统一响应 envelope、User 当前开发上下文、Subject、Assistant Global Settings、AI Private Space、Dashboard、Conversation/Message/Version、Context、Event、Provider/Model/路由、009/012/013 迁移链、能力/设备注册、Permission、Security Policy、Confirmation、AuditLog、事务回滚、重启持久化、跨用户/主体/Space 隔离和秘密字段拦截。
+
+AI Private Space 测试覆盖五类内容、首版与更新版本、`baseVersionId`、数据库不可变触发器、Space 状态、高风险确认、Permission/Policy 拒绝、独立 Context 投影、无正文 Export Manifest、三类私域 Event 脱敏、重启持久化、复合归属隔离和外键完整性。测试输入均为显式样例，不运行模型、continuity-engine、机器人或外部设备。
 
 Conversation / Message / MessageVersion 测试覆盖会话与消息创建和查询、会话内 `sequenceNumber`、`currentVersionId` 指针、原始/编辑/重生成版本历史、不可变版本、`baseVersionId` 防陈旧写、发送者限制、复合归属隔离、自动 Event 不含标题或内容，以及 Event 失败时消息/版本/指针/会话活动时间的事务回滚。主体消息和重生成测试内容由调用方显式提交，不调用 AI。所有测试只访问本地测试服务与临时 SQLite，不调用真实模型、支付、设备或外部 API。
 

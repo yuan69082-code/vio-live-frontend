@@ -4,6 +4,7 @@ import { createRouter } from './http/router.js';
 import { createUnconfiguredDeviceAdapterRegistry } from './integrations/devices/unconfigured-device-adapter-registry.js';
 import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
 import { createSqliteAssistantGlobalSettingsRepository } from './integrations/database/sqlite-assistant-global-settings-repository.js';
+import { createSqliteAssistantPrivateSpaceRepository } from './integrations/database/sqlite-assistant-private-space-repository.js';
 import { createSqliteAuditLogRepository } from './integrations/database/sqlite-audit-log-repository.js';
 import { createSqliteCapabilityRegistryRepository } from './integrations/database/sqlite-capability-registry-repository.js';
 import { createSqliteConfirmationRepository } from './integrations/database/sqlite-confirmation-repository.js';
@@ -24,6 +25,7 @@ import { createSqliteUserRepository } from './integrations/database/sqlite-user-
 import { createUnconfiguredApiCredentialStore } from './integrations/secrets/unconfigured-api-credential-store.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAssistantGlobalSettingsService } from './modules/assistant-global-settings/assistant-global-settings-service.js';
+import { createAssistantPrivateSpaceService } from './modules/assistant-private-spaces/assistant-private-space-service.js';
 import { createAuditLogService } from './modules/audit-logs/audit-log-service.js';
 import { createCapabilityRegistryService } from './modules/capability-registries/capability-registry-service.js';
 import { createCapabilityService } from './modules/capabilities/capability-service.js';
@@ -55,6 +57,9 @@ export function createApplication({ config, logger = console }) {
   const subjectRepository = createSqliteSubjectRepository(database.connection);
   const assistantGlobalSettingsRepository =
     createSqliteAssistantGlobalSettingsRepository(database.connection);
+  const assistantPrivateSpaceRepository = createSqliteAssistantPrivateSpaceRepository(
+    database.connection,
+  );
   const conversationRepository = createSqliteConversationRepository(database.connection);
   const conversationSummaryRepository = createSqliteConversationSummaryRepository(
     database.connection,
@@ -210,6 +215,14 @@ export function createApplication({ config, logger = console }) {
     eventService,
     runInTransaction: database.runInTransaction,
   });
+  const assistantPrivateSpaceService = createAssistantPrivateSpaceService({
+    assistantPrivateSpaceRepository,
+    userRepository,
+    subjectRepository,
+    securityService,
+    eventService,
+    runInTransaction: database.runInTransaction,
+  });
   const sensitiveDataService = createSensitiveDataService();
   const capabilityRegistryService = createCapabilityRegistryService({
     capabilityRegistryRepository,
@@ -246,6 +259,7 @@ export function createApplication({ config, logger = console }) {
     userService,
     subjectService,
     assistantGlobalSettingsService,
+    assistantPrivateSpaceService,
     conversationService,
     conversationSummaryService,
     subjectStateService,

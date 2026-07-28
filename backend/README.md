@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前阶段为“权限与自定义安全栏”。后端已经可以独立启动，并在既有 Permission、Security、Confirmation、AuditLog 与 Event 基础上建立用户可配置的安全策略闭环：
+当前阶段为“AI 私域”。后端已经可以独立启动，并在既有 Permission、Security Policy、Confirmation、AuditLog 与 Event 基础上建立 AI Private Space 数据闭环：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -15,6 +15,7 @@ Tool 执行准备 → Permission 检查 → Security 检查/确认 → 未执行
 Device Registry → Capability 描述 → 未配置 Adapter 投影
 设备操作准备 → Permission → Security/Confirmation → device_changed Event → 未执行操作日志
 用户安全偏好/精确策略 → Permission → Policy → Confirmation → 未执行准备与审计
+AI Private Space → Permission → Security Policy → Confirmation → 受控本地读写/投影
 ```
 
 已实现：
@@ -40,7 +41,10 @@ Device Registry → Capability 描述 → 未配置 Adapter 投影
 - 按安全规则占位、完整助手全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、记忆占位和本轮用户消息顺序装配上下文
 - 上下文接口明确返回模型、外部 API 与 continuity-engine 均未调用
 - Event 创建、单项查询及按用户、主体、时间、类型和状态筛选
-- 十二类基础软件事件和事件数据秘密字段拦截
+- 十五类基础软件事件和事件数据秘密字段拦截
+- AI Private Space 按用户与助手一对一保存，和 User Space 使用独立表；五类私域内容按不可变版本追加
+- 私域读取、写入、状态管理、Context 投影和导出准备统一经过 `private_domain` Permission 与 Security Policy
+- 私域 Context 只提供独立、受控的数据投影；导出接口只返回版本清单预留，不生成文件或传输正文
 - APIProvider 创建、列表/单项查询和启停状态更新，保存 Base URL、接口格式及只读测试状态
 - Model 创建、单项查询、费用说明和按 `chat`、`long_text`、`vision`、`image`、`video`、`audio`、`search`、`embedding` 能力查询
 - 聊天、长文本、图片、视频、语音、搜索六类任务的默认/备用模型规则创建、查询和更新
@@ -78,7 +82,7 @@ Device Registry → Capability 描述 → 未配置 Adapter 投影
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- `pnpm test` 当前 34/34 通过，覆盖启动、API 契约、模型路由、能力注册、设备注册/适配契约、权限/策略/安全执行准备、全局设定、摘要来源、上下文装配、迁移升级、事务回滚、持久化和隔离
+- `pnpm test` 当前 37/37 通过，覆盖启动、API 契约、模型路由、能力注册、设备注册/适配契约、权限/策略/安全执行准备、AI 私域版本与隔离、全局设定、摘要来源、上下文装配、迁移升级、事务回滚和持久化
 
 本阶段只新增本地安全策略、用户偏好、确认与审计结构，不增加资源执行能力。Device `enabled` 仍只表示注册项允许进入安全准备，不表示设备已连接、在线或受控；操作准备不接受真实控制参数。Tool/MCP/Skill/Plugin 和设备的原有未执行边界保持不变。本阶段没有设备 SDK、手机权限、厂商凭据、真实状态读取、设备控制、第三方请求、真实模型或 continuity-engine。前端 `src`、页面与 mock 未修改。
 
@@ -173,6 +177,15 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/state-updates/:subjectStateId` | 查询单个主体状态版本 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/state` | 查询当前主体状态；尚无状态时返回 `null` |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/context` | 装配只读上下文投影，不调用模型或外部服务 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces` | 创建空 AI Private Space；用于先取得可授权的 `spaceId` |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/current/read` | 经 Permission 与 Security Policy 读取当前私域元数据 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/status` | 经安全链更新私域启停状态 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents` | 经安全链保存五类私域内容的首个不可变版本 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents/query` | 经安全链查询当前私域内容版本 |
+| `POST` / `PATCH` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents/:contentId/read` / `.../:contentId` | 经安全链读取或追加私域内容版本 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/contents/:contentId/versions/query` | 经安全链查询不可变版本历史 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/context-projections` | 生成独立私域 Context 数据投影，不调用模型或连续性引擎 |
+| `POST` | `/api/v1/users/:userId/subjects/:assistantId/private-spaces/:spaceId/export-manifests` | 返回导出结构与版本清单预留，不生成文件或传输正文 |
 | `POST` | `/api/v1/users/:userId/events` | 为用户或其主体记录软件事件 |
 | `GET` | `/api/v1/users/:userId/events` | 按主体、时间、类型、状态和数量筛选事件 |
 | `GET` | `/api/v1/users/:userId/events/:eventId` | 按用户归属查询单个事件 |
@@ -247,6 +260,7 @@ backend/
 │  ├─ modules/users/         # User 业务规则
 │  ├─ modules/subjects/      # Subject 业务规则
 │  ├─ modules/assistant-global-settings/ # AI 助手长期全局设定
+│  ├─ modules/assistant-private-spaces/ # AI 私域、内容版本与受控投影
 │  ├─ modules/dashboard/     # 现有 User/Subject 基础聚合
 │  ├─ modules/conversations/ # 用户/主体范围的对话容器
 │  ├─ modules/messages/      # 顺序消息与当前版本投影
@@ -280,11 +294,13 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_policies`、`user_security_preferences`、`security_policy_session_grants`、`security_confirmations`、`audit_logs`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry`、`tool_usage_records`、`device_registry`、`device_capabilities` 和 `device_operation_logs`。
+- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`assistant_private_spaces`、`assistant_private_content_versions`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_policies`、`user_security_preferences`、`security_policy_session_grants`、`security_confirmations`、`audit_logs`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry`、`tool_usage_records`、`device_registry`、`device_capabilities` 和 `device_operation_logs`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
 - `assistant_global_settings` 与 Subject 一对一绑定；名称和头像仍以 `subjects` 为唯一身份来源，人格、表达、关系、长期要求与禁止事项保存在独立设定表。新建 Subject 与默认设定原子提交，设定更新与最小 `subject_updated` Event 原子提交。
 - 全局设定是可由用户明确修改的长期配置；SubjectState 是带来源、不可变追加的动态状态历史。更新任何全局设定都不会新增、切换或覆盖 SubjectState。
+- `assistant_private_spaces` 与普通 User Space 表分离，每个用户/助手组合唯一；内容版本使用复合外键绑定相同用户、助手、Space 和 Content 父链。
+- 私域内容更新只追加新版本，数据库触发器禁止直接修改或删除历史；通用 Context 不读取私域，独立投影必须通过 `private_domain` Permission 和高风险确认。
 - Conversation、Message 和 MessageVersion 都保存 `user_id`、`subject_id`、`conversation_id` 复合归属；消息和版本不能跨用户、主体或对话引用。
 - Message 使用对话内唯一且递增的 `sequence_number` 稳定排序，并以复合外键 `current_version_id` 投影当前正文与版本号。
 - MessageVersion 正文由数据库触发器阻止覆盖；同一消息的版本号唯一，`parent_version_id` 只能引用同一用户、主体、对话和消息的版本。
@@ -319,6 +335,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`。当前 Context Service 只按固定产品顺序投影已有全局设定、状态、事件、消息和跨窗口摘要；它不生成提示词、不筛选长期 Memory、不调用模型，也不执行连续性算法。Dashboard 的 `continuityStatus` 仍表示独立引擎不可用。全局设定中的长期要求和禁止事项不能削弱平台最低安全规则；用户 Security Policy 同样不能放宽 Permission 拒绝或高风险底线。Capability Service 与 Device Service 只投影本地注册、能力、权限和安全准备事实；它们不连接 MCP、不加载插件、不执行 Skill/Tool、不获取手机权限、不读取或控制设备，也不访问支付或 AI 私域。分支、删除和窗口重置仍未实现。
+平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`；AI Private Space 则在独立存储范围中保存调用方显式提交的五类高敏感私域版本。通用 Context Service 不自动读取私域，只有独立私域投影接口通过 Permission → Security Policy 后返回受控内容。所有私域执行标记都明确未调用模型、外部 API 或连续性引擎，也不实现意识、自主行为或开放判断。Capability Service 与 Device Service 仍只投影本地注册、能力、权限和安全准备事实。分支、删除、窗口重置和私域披露流程仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

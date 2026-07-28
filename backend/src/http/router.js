@@ -40,6 +40,7 @@ export function createRouter({
   userService,
   subjectService,
   assistantGlobalSettingsService,
+  assistantPrivateSpaceService,
   conversationService,
   conversationSummaryService,
   subjectStateService,
@@ -411,6 +412,191 @@ export function createRouter({
                 'crossWindowSummaryLimit',
               ),
             },
+          ),
+        });
+        return;
+      }
+
+      const assistantPrivateSpacesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces$/,
+        ['userId', 'assistantId'],
+      );
+      if (request.method === 'POST' && assistantPrivateSpacesRoute) {
+        const input = await readJsonBody(request);
+        const space = assistantPrivateSpaceService.createSpace(
+          assistantPrivateSpacesRoute.userId,
+          assistantPrivateSpacesRoute.assistantId,
+          input,
+        );
+        sendJson(response, 201, { data: space }, {
+          location: `${url.pathname}/${encodeURIComponent(space.spaceId)}`,
+        });
+        return;
+      }
+
+      const currentAssistantPrivateSpaceRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces\/current\/read$/,
+        ['userId', 'assistantId'],
+      );
+      if (request.method === 'POST' && currentAssistantPrivateSpaceRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: assistantPrivateSpaceService.readCurrentSpace(
+            currentAssistantPrivateSpaceRoute.userId,
+            currentAssistantPrivateSpaceRoute.assistantId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const assistantPrivateSpaceStatusRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces\/([^/]+)\/status$/,
+        ['userId', 'assistantId', 'spaceId'],
+      );
+      if (request.method === 'PATCH' && assistantPrivateSpaceStatusRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: assistantPrivateSpaceService.updateSpaceStatus(
+            assistantPrivateSpaceStatusRoute.userId,
+            assistantPrivateSpaceStatusRoute.assistantId,
+            assistantPrivateSpaceStatusRoute.spaceId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const assistantPrivateContentsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces\/([^/]+)\/contents$/,
+        ['userId', 'assistantId', 'spaceId'],
+      );
+      if (request.method === 'POST' && assistantPrivateContentsRoute) {
+        const input = await readJsonBody(request);
+        const result = assistantPrivateSpaceService.createContent(
+          assistantPrivateContentsRoute.userId,
+          assistantPrivateContentsRoute.assistantId,
+          assistantPrivateContentsRoute.spaceId,
+          input,
+        );
+        const statusCode = result.operationStatus === 'completed' ? 201 : 200;
+        const headers = result.result
+          ? { location: `${url.pathname}/${encodeURIComponent(result.result.contentId)}` }
+          : {};
+        sendJson(response, statusCode, { data: result }, headers);
+        return;
+      }
+
+      const assistantPrivateContentQueryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces\/([^/]+)\/contents\/query$/,
+        ['userId', 'assistantId', 'spaceId'],
+      );
+      if (request.method === 'POST' && assistantPrivateContentQueryRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: assistantPrivateSpaceService.listContent(
+            assistantPrivateContentQueryRoute.userId,
+            assistantPrivateContentQueryRoute.assistantId,
+            assistantPrivateContentQueryRoute.spaceId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const assistantPrivateContentReadRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces\/([^/]+)\/contents\/([^/]+)\/read$/,
+        ['userId', 'assistantId', 'spaceId', 'contentId'],
+      );
+      if (request.method === 'POST' && assistantPrivateContentReadRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: assistantPrivateSpaceService.getContent(
+            assistantPrivateContentReadRoute.userId,
+            assistantPrivateContentReadRoute.assistantId,
+            assistantPrivateContentReadRoute.spaceId,
+            assistantPrivateContentReadRoute.contentId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const assistantPrivateContentVersionsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces\/([^/]+)\/contents\/([^/]+)\/versions\/query$/,
+        ['userId', 'assistantId', 'spaceId', 'contentId'],
+      );
+      if (request.method === 'POST' && assistantPrivateContentVersionsRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: assistantPrivateSpaceService.listContentVersions(
+            assistantPrivateContentVersionsRoute.userId,
+            assistantPrivateContentVersionsRoute.assistantId,
+            assistantPrivateContentVersionsRoute.spaceId,
+            assistantPrivateContentVersionsRoute.contentId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const assistantPrivateContentRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces\/([^/]+)\/contents\/([^/]+)$/,
+        ['userId', 'assistantId', 'spaceId', 'contentId'],
+      );
+      if (request.method === 'PATCH' && assistantPrivateContentRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: assistantPrivateSpaceService.updateContent(
+            assistantPrivateContentRoute.userId,
+            assistantPrivateContentRoute.assistantId,
+            assistantPrivateContentRoute.spaceId,
+            assistantPrivateContentRoute.contentId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const assistantPrivateContextRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces\/([^/]+)\/context-projections$/,
+        ['userId', 'assistantId', 'spaceId'],
+      );
+      if (request.method === 'POST' && assistantPrivateContextRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: assistantPrivateSpaceService.createContextProjection(
+            assistantPrivateContextRoute.userId,
+            assistantPrivateContextRoute.assistantId,
+            assistantPrivateContextRoute.spaceId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const assistantPrivateExportRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/private-spaces\/([^/]+)\/export-manifests$/,
+        ['userId', 'assistantId', 'spaceId'],
+      );
+      if (request.method === 'POST' && assistantPrivateExportRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: assistantPrivateSpaceService.createExportManifest(
+            assistantPrivateExportRoute.userId,
+            assistantPrivateExportRoute.assistantId,
+            assistantPrivateExportRoute.spaceId,
+            input,
           ),
         });
         return;
