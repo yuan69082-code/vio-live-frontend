@@ -65,6 +65,7 @@ export function createRouter({
   permissionChecker,
   securityService,
   securityPolicyService,
+  dataExportService,
   proactiveInteractionService,
   sensitiveDataService,
   auditLogService,
@@ -102,6 +103,21 @@ export function createRouter({
             database: database.ping() ? 'ok' : 'unavailable',
           },
         });
+        return;
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/v1/data-export/schemas') {
+        const schemas = dataExportService.listSchemas();
+        sendJson(response, 200, { data: schemas, meta: { count: schemas.length } });
+        return;
+      }
+
+      if (
+        request.method === 'GET'
+        && url.pathname === '/api/v1/data-export/migration-target-contracts'
+      ) {
+        const contracts = dataExportService.listMigrationTargetContracts();
+        sendJson(response, 200, { data: contracts, meta: { count: contracts.length } });
         return;
       }
 
@@ -204,6 +220,84 @@ export function createRouter({
         const input = await readJsonBody(request);
         sendJson(response, 200, {
           data: dataIsolationService.checkAccess(dataAccessChecksRoute.userId, input),
+        });
+        return;
+      }
+
+      const dataExportsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/data-exports$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && dataExportsRoute) {
+        const input = await readJsonBody(request);
+        const result = dataExportService.createExportRecord(
+          dataExportsRoute.userId,
+          dataExportsRoute.subjectId,
+          input,
+        );
+        sendJson(response, 201, { data: result }, {
+          location: `/api/v1/users/${encodeURIComponent(result.record.userId)}/subjects/${encodeURIComponent(result.record.subjectId)}/data-exports/${encodeURIComponent(result.record.exportId)}`,
+        });
+        return;
+      }
+      if (request.method === 'GET' && dataExportsRoute) {
+        const records = dataExportService.listExportRecords(
+          dataExportsRoute.userId,
+          dataExportsRoute.subjectId,
+        );
+        sendJson(response, 200, { data: records, meta: { count: records.length } });
+        return;
+      }
+
+      const dataExportRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/data-exports\/([^/]+)$/,
+        ['userId', 'subjectId', 'exportId'],
+      );
+      if (request.method === 'GET' && dataExportRoute) {
+        sendJson(response, 200, {
+          data: dataExportService.getExportRecord(
+            dataExportRoute.userId,
+            dataExportRoute.subjectId,
+            dataExportRoute.exportId,
+          ),
+        });
+        return;
+      }
+
+      const dataExportPreparationRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/data-exports\/([^/]+)\/preparations$/,
+        ['userId', 'subjectId', 'exportId'],
+      );
+      if (request.method === 'POST' && dataExportPreparationRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: dataExportService.prepareExport(
+            dataExportPreparationRoute.userId,
+            dataExportPreparationRoute.subjectId,
+            dataExportPreparationRoute.exportId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const migrationPreparationRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/data-exports\/([^/]+)\/migration-preparations$/,
+        ['userId', 'subjectId', 'exportId'],
+      );
+      if (request.method === 'POST' && migrationPreparationRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: dataExportService.prepareMigration(
+            migrationPreparationRoute.userId,
+            migrationPreparationRoute.subjectId,
+            migrationPreparationRoute.exportId,
+            input,
+          ),
         });
         return;
       }

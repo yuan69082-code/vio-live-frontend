@@ -42,6 +42,10 @@ function resourceRisk(resourceType, action) {
     return action === 'execute' ? 'medium' : 'low';
   }
 
+  if (resourceType === 'data_export') {
+    return 'high';
+  }
+
   if (resourceType === 'device' && action === 'control') {
     return 'critical';
   }

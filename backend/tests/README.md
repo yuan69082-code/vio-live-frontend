@@ -16,7 +16,7 @@
 - 生活管理管账/预算/月历/身体/本地记忆、安全链、事件脱敏与隔离
 - Wake、主动提示、Token 日/会话预算、后台策略和零执行边界
 - continuity-engine、模型和外部能力边界
-- 导出、删除、备份和恢复范围
+- Export Schema、十二类数据范围、完整性预检、安全确认、导出记录和未执行迁移契约
 - 错误结果不泄露密钥或其他用户数据
 
 当前使用 Node.js 内置测试运行器，不连接任何真实外部服务。测试数据库位于操作系统临时目录，每个测试使用独立 SQLite 文件并在结束后清理。
@@ -27,7 +27,9 @@
 pnpm test
 ```
 
-当前测试结果为 46/46 通过，已覆盖服务启动、统一响应 envelope、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+当前测试结果为 49/49 通过，已覆盖服务启动、统一响应 envelope、数据导出/迁移准备、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+
+Data Export 测试覆盖迁移 `017` 对既有 Permission、Security Policy、Confirmation 与 AuditLog 的保留和外键完整性，三类 Export Schema、十二类范围、归属/字段/关系预检、缺失字段阻止、`data_export` Permission、高风险逐次确认、导出记录持久化和跨用户/主体隔离。机器人/其他载体契约固定未实现、未连接、未执行，接口拒绝服务地址等连接载荷，所有结果均不包含业务数据、不创建文件、不连接外部存储。
 
 Account/Data Isolation 测试覆盖迁移 `015` 对既有用户的空间与当前助手回填、外键完整性、User/Space 原子创建、首个助手选择、助手列表、切换与重启持久化。测试同时验证多助手 Global Settings 与 SubjectState 保持独立，用户/AI/设备/生活/Event 资源只通过固定复合范围命中，错配组合按未找到处理；AI 私域、设备和生活资源在所有权命中后仍经过 Permission 与 Security Policy，全部结果保持 `not_executed`。
 

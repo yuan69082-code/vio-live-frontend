@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、账号/数据隔离、对话/Context、Event、模型路由、扩展/设备/生活/私域、Permission/Security，以及 Wake/主动提示/Token/后台策略基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、账号/数据隔离、对话/Context、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -100,6 +100,19 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 User 创建时与一对一 User Space 原子提交；首个 Subject 在空间没有当前助手时成为当前助手。当前助手是导航/请求选择，不属于 SubjectState，切换不得修改 Global Settings、Private Space、SubjectState、Conversation、Event 或生活数据。
 
 数据访问检查只接受预定义资源类型、资源 ID、可选助手 ID、动作和确认元数据。用户/普通 AI/Event 资源先使用固定复合查询验证所有权；AI Private Space、Device 与生活资源在所有权命中后继续进入精确 Permission → Security Policy → Confirmation。错配用户、助手或资源组合统一按 `404` 处理；通过检查也只返回 `ready`，执行状态固定 `not_executed`。完整类型与字段见后端 [`API.md`](../../backend/docs/API.md)。
+
+## 数据导出与未来迁移契约
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/data-export/schemas` | 查询三类 Schema 与十二类范围 |
+| `GET` | `/api/v1/data-export/migration-target-contracts` | 查询未配置机器人/其他载体契约 |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/data-exports` | 创建完整性预检记录或查询记录 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/data-exports/:exportId` | 按复合归属查询单条记录 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/data-exports/:exportId/preparations` | 执行 `data_export:export` 高风险安全准备 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/data-exports/:exportId/migration-preparations` | 返回未连接、未执行的未来载体契约 |
+
+`vio-live-export-v1` 支持 `full`、`selected`、`migration`。范围固定为用户数据、SubjectState、Event、MessageVersion、ConversationSummary、Assistant Private Space、Assistant Global Settings、Permission、Security Policy、Tool、Device、Life Data。创建记录只返回范围/数据源计数、缺失字段计数、关系字段和外键检查，不返回正文。`ready` 固定伴随 `payload=not_generated`、`file=not_created`、`externalStorage=not_connected`、`migration=not_executed`，未来真实生成和迁移必须重新通过安全检查。
 
 ## Wake、主动提示、Token 与后台策略契约
 

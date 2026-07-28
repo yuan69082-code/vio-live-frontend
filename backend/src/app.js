@@ -10,6 +10,7 @@ import { createSqliteCapabilityRegistryRepository } from './integrations/databas
 import { createSqliteConfirmationRepository } from './integrations/database/sqlite-confirmation-repository.js';
 import { createSqliteConversationRepository } from './integrations/database/sqlite-conversation-repository.js';
 import { createSqliteConversationSummaryRepository } from './integrations/database/sqlite-conversation-summary-repository.js';
+import { createSqliteDataExportRepository } from './integrations/database/sqlite-data-export-repository.js';
 import { createSqliteDataIsolationRepository } from './integrations/database/sqlite-data-isolation-repository.js';
 import { createSqliteDeviceRepository } from './integrations/database/sqlite-device-repository.js';
 import { createSqliteEventRepository } from './integrations/database/sqlite-event-repository.js';
@@ -26,6 +27,7 @@ import { createSqliteSubjectRepository } from './integrations/database/sqlite-su
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
 import { createSqliteUserRepository } from './integrations/database/sqlite-user-repository.js';
 import { createSqliteUserSpaceRepository } from './integrations/database/sqlite-user-space-repository.js';
+import { createUnconfiguredMigrationTargetRegistry } from './integrations/migrations/unconfigured-migration-target-registry.js';
 import { createUnconfiguredApiCredentialStore } from './integrations/secrets/unconfigured-api-credential-store.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAssistantGlobalSettingsService } from './modules/assistant-global-settings/assistant-global-settings-service.js';
@@ -37,6 +39,7 @@ import { createConfirmationService } from './modules/confirmations/confirmation-
 import { createContextService } from './modules/contexts/context-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
 import { createConversationSummaryService } from './modules/conversation-summaries/conversation-summary-service.js';
+import { createDataExportService } from './modules/data-exports/data-export-service.js';
 import { createDataIsolationService } from './modules/data-isolation/data-isolation-service.js';
 import { createDashboardService } from './modules/dashboard/dashboard-service.js';
 import { createDeviceService } from './modules/devices/device-service.js';
@@ -94,9 +97,11 @@ export function createApplication({ config, logger = console }) {
   );
   const deviceRepository = createSqliteDeviceRepository(database.connection);
   const confirmationRepository = createSqliteConfirmationRepository(database.connection);
+  const dataExportRepository = createSqliteDataExportRepository(database.connection);
   const dataIsolationRepository = createSqliteDataIsolationRepository(database.connection);
   const credentialStore = createUnconfiguredApiCredentialStore();
   const deviceAdapterRegistry = createUnconfiguredDeviceAdapterRegistry();
+  const migrationTargetRegistry = createUnconfiguredMigrationTargetRegistry();
   const userService = createUserService({
     userRepository,
     userSpaceRepository,
@@ -234,6 +239,14 @@ export function createApplication({ config, logger = console }) {
     eventService,
     runInTransaction: database.runInTransaction,
   });
+  const dataExportService = createDataExportService({
+    dataExportRepository,
+    userRepository,
+    subjectRepository,
+    securityService,
+    migrationTargetRegistry,
+    runInTransaction: database.runInTransaction,
+  });
   const proactiveInteractionService = createProactiveInteractionService({
     proactiveInteractionRepository,
     userRepository,
@@ -328,6 +341,7 @@ export function createApplication({ config, logger = console }) {
     permissionChecker,
     securityService,
     securityPolicyService,
+    dataExportService,
     proactiveInteractionService,
     sensitiveDataService,
     auditLogService,

@@ -271,6 +271,14 @@
 - 原因：浏览器配置、操作系统唤醒、模型生成和消息投递是不同信任边界。若“启用语音”直接等同于麦克风监听，或预算检查直接触发模型，会在缺少系统权限、模型适配和费用凭证时产生不可验证副作用。把显式计量元数据与平台真实调用状态分开，也可避免测试数据被误认为供应商账单。
 - 影响：新增迁移 `016_create_proactive_interaction_and_token_controls.sql`、四类 Wake、四级消息优先级、主动提示准备记录、Token Budget/Usage、后台策略及六类最小 Event。Permission/Security 增加 `proactive_interaction` 资源；Security 接受只能抬高风险的内部最低风险提示。Token 使用记录固定 `explicit_api_input`、`not_performed_by_platform`、`not_billed`。当前不申请麦克风、不监听音频、不注册系统唤醒、不运行后台调度、不投递消息、不调用模型或外部服务。
 
+## BE-ADR-034｜导出采用版本化 Schema、两步安全准备与零载荷记录
+
+- 日期：2026-07-28
+- 状态：已采用，仅限数据导出与未来迁移基础
+- 决策：平台以 `vio-live-export-v1` 登记 `full`、`selected`、`migration` 三类 Export Schema，以及用户数据、SubjectState、Event、MessageVersion、ConversationSummary、AI 私域、助手全局设定、Permission、Security Policy、Tool、Device、生活数据十二类范围。导出创建只生成用户/主体范围记录，并检查复合归属、必需字段与数据库外键；不读取或复制正文。由于精确 Permission 需要先取得 `exportId`，安全流程分为“无数据预检记录”与“`data_export:export` Permission → Security Policy → 高风险逐次 Confirmation”两步。通过后结果只到 `ready`，数据库固定载荷未生成、文件未创建、外部存储未连接、迁移未执行。
+- 原因：导出既是用户数据权利，也是高敏感、跨模块读取操作。若在生成资源 ID 前直接读取数据，权限无法精确绑定；若把 `ready` 当成文件或迁移已完成，会把安全资格误表示为外部副作用。版本化 Schema 和只含计数/关系检查的记录能先稳定兼容边界，同时避免把消息、摘要、状态、私域或生活正文复制到审计与导出历史。
+- 影响：新增迁移 `017_create_data_export_and_migration_foundation.sql`、Export Schema/记录仓储与 API，Permission/Security 增加 `data_export`。机器人与其他载体仅提供未配置契约，接口不接受地址、凭据、设备 ID、控制参数或业务数据；迁移准备不持久化授权、不连接、不传输、不执行，未来真实生成/下载/外部存储/恢复/载体迁移必须新增独立执行适配器、重新安全检查并形成 ADR。前端 `src` 不变。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：

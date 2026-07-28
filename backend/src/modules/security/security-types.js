@@ -33,6 +33,7 @@ export const SECURITY_RESOURCE_TYPES = Object.freeze([
   'private_domain',
   'life_data',
   'proactive_interaction',
+  'data_export',
   'identity',
   'payment',
 ]);

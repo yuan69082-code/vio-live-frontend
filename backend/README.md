@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 13｜语音唤醒、主动提示与 Token 控制”。后端已经可以独立启动，并在既有用户/主体、安全和事件基础上建立主动交互与资源预算框架：
+当前阶段为“平台后端 14｜数据导出与未来迁移”。后端已经可以独立启动，并在既有数据隔离与安全体系上建立版本化导出准备框架：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -21,6 +21,8 @@ AI Private Space → Permission → Security Policy → Confirmation → 受控�
 资源访问检查 → 数据库复合归属过滤 → Permission → Security Policy → Confirmation
 Wake/主动提示准备 → 用户授权/后台限制 → Permission → Security → Event → 固定未执行
 Token 请求 → 日/会话预算 → 超额策略 → 可选高风险确认 → 固定不调用模型
+Export Schema → 用户/主体归属与字段/外键预检 → data_export Permission → Security/Confirmation → ready 记录
+迁移契约准备 → Schema 兼容检查 → 未配置载体描述 → 固定不连接、不传输、不执行
 ```
 
 已实现：
@@ -67,7 +69,7 @@ Token 请求 → 日/会话预算 → 超额策略 → 可选高风险确认 →
 - Provider/Model 测试状态当前固定为 `not_tested`，不伪造真实连通性结果
 - API Key 安全存储端口占位、接口密钥输入拒绝和 Base URL 凭据检查；当前端口明确不支持写入
 - Permission 创建、单项/条件查询、更新和可追溯删除
-- 九类权限资源、五档权限等级和八种基础操作
+- 十类权限资源、五档权限等级和八种基础操作
 - 默认拒绝的 Permission Checker 三态判断
 - `allow_once` 首次判断后原子消费；权限创建、变化和撤销分别与 `permission_created`、`permission_changed`、`permission_revoked` 事件同事务提交
 - Security 统一检查入口和 `low`、`medium`、`high`、`critical` 四级风险判断
@@ -100,12 +102,16 @@ Token 请求 → 日/会话预算 → 超额策略 → 可选高风险确认 →
 - Token 使用记录只接收显式上报元数据，标记平台未调用模型、未计费；预算检查不会预留或消耗 Token
 - AI 后台策略保存 `idle` / `active`、后台开关、每小时限制、允许的 Wake 类型和安静时段，不启动调度器
 - Wake、主动提示和需确认的 Token 超额准备复用 `proactive_interaction` Permission、Security Policy、Confirmation 与 AuditLog
+- Export Schema 版本登记支持 `full`、`selected`、`migration` 三类导出和十二类稳定数据范围
+- 导出记录按用户/主体保存 Schema 版本、创建时间、范围、敏感分类、归属/字段/外键检查及最终安全准备结果
+- 导出准备使用精确 `data_export:export` Permission，并由 Security Policy 与高风险逐次 Confirmation 审核
+- 机器人与其他载体迁移只提供未配置契约和 Schema 兼容准备，固定不连接、不传输、不执行；未来真实执行必须重新检查安全
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- `pnpm test` 当前 46/46 通过，覆盖启动、API 契约、主动交互/Token 控制、User Space、当前助手、五类数据边界、生活数据、模型路由、能力/设备注册、权限/策略/安全执行准备、AI 私域版本与隔离、全局设定、摘要来源、上下文装配、迁移升级、事务回滚和持久化
+- `pnpm test` 当前 49/49 通过，覆盖启动、API 契约、数据导出/迁移准备、主动交互/Token 控制、User Space、当前助手、五类数据边界、生活数据、模型路由、能力/设备注册、权限/策略/安全执行准备、AI 私域版本与隔离、全局设定、摘要来源、上下文装配、迁移升级、事务回滚和持久化
 
-本阶段只新增主动交互配置、安全准备和 Token 预算/上报账本。`voice` 只是触发类型元数据，不申请麦克风权限、不监听声音、不建立系统级唤醒；所有准备结果均不投递消息、不调用模型或外部服务。前端 `src`、页面与 mock 未修改。
+本阶段只新增导出 Schema、完整性预检、安全准备记录和未来载体契约。`ready` 不代表已导出：接口不返回业务正文、不生成文件、不连接外部存储或机器人、不执行真实迁移。前端 `src`、页面与 mock 未修改。
 
 ## 运行要求
 
@@ -230,6 +236,12 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/memories/query` | 按上下文与导出标记查询本地记忆 |
 | `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/life/memories/:memoryId` | 更新本地记忆上下文与导出标记 |
 | `POST` | `/api/v1/users/:userId/subjects/:subjectId/life/memories/context-projections` | 读取已明确参与上下文的本地记忆，不调用模型 |
+| `GET` | `/api/v1/data-export/schemas` | 查询当前三类 Export Schema 版本及十二类稳定范围定义 |
+| `GET` | `/api/v1/data-export/migration-target-contracts` | 查询机器人/其他载体的未配置迁移契约，不建立连接 |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/data-exports` | 创建导出预检记录或查询本主体导出记录，不返回业务正文 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/data-exports/:exportId` | 按复合归属查询单个导出记录、完整性结果和执行边界 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/data-exports/:exportId/preparations` | 执行 Permission → Security Policy → Confirmation 导出准备，不生成文件 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/data-exports/:exportId/migration-preparations` | 预留载体 Schema 契约，固定不连接、不传输、不执行迁移 |
 | `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/wake-rules` | 创建或查询四类唤醒规则元数据，不接入麦克风或系统唤醒 |
 | `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/wake-rules/:wakeId` | 更新唤醒规则、用户授权或启停状态 |
 | `POST` | `/api/v1/users/:userId/subjects/:subjectId/wake-rules/:wakeId/preparations` | 执行后台策略、Permission 与 Security 准备检查，不真实唤醒 |
@@ -311,6 +323,7 @@ backend/
 │  ├─ core/                  # 错误、ID 和校验
 │  ├─ http/                  # JSON 传输与基础路由
 │  ├─ integrations/database/ # SQLite、迁移和仓储适配
+│  ├─ integrations/migrations/ # 未配置的未来载体迁移契约
 │  ├─ integrations/secrets/  # 未配置的安全密钥存储端口占位
 │  ├─ modules/users/         # User 业务规则
 │  ├─ modules/user-spaces/   # User Space、助手列表与当前助手
@@ -331,6 +344,7 @@ backend/
 │  ├─ modules/models/        # Model 目录与能力标签
 │  ├─ modules/model-routing-rules/ # 默认/备用模型路由规则
 │  ├─ modules/model-router/  # 本地规则匹配，不调用模型
+│  ├─ modules/data-exports/  # Export Schema、预检、记录与迁移契约
 │  ├─ modules/proactive-interactions/ # Wake、主动提示、Token 与后台策略
 │  ├─ modules/capability-registries/ # Tool/MCP/Skill/Plugin 注册元数据
 │  ├─ modules/capabilities/  # 主体范围统一能力与权限投影
@@ -353,7 +367,7 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构由 `001`—`016` 顺序迁移维护；`016` 新增 Wake、主动提示准备、Token Budget/Usage 和助手后台策略，并扩展主动交互安全资源与事件类型。
+- 当前物理结构由 `001`—`017` 顺序迁移维护；`017` 新增版本化 Export Schema、十二类范围定义与导出记录，并扩展 `data_export` 安全资源。
 - User 创建与 User Space 建立在同一事务提交；首个 Subject 创建会在当前指针为空时原子选为当前助手。迁移为既有用户回填一个空间，并按最早活动 Subject 稳定选择当前助手。
 - 当前助手只是用户空间内的导航选择，不改变 Subject、Assistant Global Settings、Assistant Private Space、SubjectState、对话、事件或生活数据的既有归属。
 - 数据隔离仓储只使用预定义资源查询，并按资源要求组合 `user_id`、`assistant_id` 与资源 ID；不存在或错配组合统一按未找到处理，不通过先查全局 ID 再做应用层过滤。
@@ -387,6 +401,8 @@ backend/
 - `session_allow` 只在低/中风险确认通过后生成精确范围、30 分钟授权；策略更新或作用域、主体、安全会话变化都会使其失配。
 - AuditLog 没有任意 payload、正文或详情 JSON 字段，也不提供客户端创建、更新或删除路由；资源引用必须使用平台不透明 ID，当前凭据形态拦截只是启发式规则，不是完整 DLP。
 - Event 与 AuditLog 分离：前者记录软件变化，后者记录安全治理事实。
+- `export_schema_versions`、`export_schema_types` 与 `export_schema_scopes` 固定保存 Schema 版本、三类导出类型及十二类范围；`data_export_records` 只保存选择、计数、完整性/安全结果和审计引用，不保存业务正文。
+- 导出记录必须按 `(user_id, subject_id, export_id)` 复合查询；`payload_status=not_generated`、`file_status=not_created`、`external_storage_status=not_connected`、`migration_status=not_executed` 由数据库约束固定。
 - `wake_rules`、`proactive_prompt_rules`、`token_budgets` 与 `assistant_background_policies` 均按用户/主体复合归属；提示记录绑定同用户触发 Event 和 Security AuditLog。
 - `token_usage_records` 保存显式上报的输入/输出/总 Token、预算会话与可选 Model 引用；数据库同时约束 `model_call_status=not_performed_by_platform` 和 `billing_status=not_billed`，不冒充平台真实调用或计费。
 - 内部嵌套写入加入同一最外层 SQLite 事务，保证安全确认、单次权限消费和审计结果一致。
@@ -401,6 +417,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、SubjectState、AI Private Space 与 User Space 生活数据保持独立语义和存储边界；切换当前助手不会复制或重写这些记录。通用 Context 不自动读取私域或本地记忆。主动交互模块只管理用户授权元数据、后台限制、安全准备和 Token 预算，不判断唤醒音频、不生成提示正文、不运行后台任务，也不调用模型。真实登录、系统语音、模型、外部服务、支付/银行、健康设备和 continuity-engine 仍未实现。
+平台后端与 continuity-engine 保持平行。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、SubjectState、AI Private Space 与 User Space 生活数据保持独立语义和存储边界；切换当前助手不会复制或重写这些记录。通用 Context 不自动读取私域或本地记忆。数据导出只形成版本化范围、完整性预检、安全准备和未来载体契约，不返回正文、不生成文件、不连接存储/机器人、不执行迁移。主动交互也不判断唤醒音频、不生成提示正文、不运行后台任务或调用模型。真实登录、系统语音、模型、外部存储、机器人、支付/银行、健康设备和 continuity-engine 仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

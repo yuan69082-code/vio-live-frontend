@@ -2,8 +2,8 @@
 
 ## 状态与边界
 
-- 当前阶段：平台后端 13｜语音唤醒、主动提示与 Token 控制
-- 后端版本：`0.17.0`
+- 当前阶段：平台后端 14｜数据导出与未来迁移
+- 后端版本：`0.18.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
@@ -73,6 +73,7 @@
 - 数据访问检查只接受资源类型、资源 ID、可选助手 ID、动作及安全确认元数据，不接受资源正文、查询 SQL、表名或任意过滤表达式。
 - Wake 与提示条件只接受最大 8 KiB 的普通 JSON 配置并拒绝秘密字段；`voice` 只表示规则分类，不上传音频或申请麦克风权限。
 - Token 使用记录是调用方显式上报的计量元数据，不是平台模型调用证明；响应固定标记 `not_performed_by_platform` / `not_billed`。
+- Data Export 创建只接受 `exportType` 和预定义 `scopes`；不接受正文、文件名、外部地址、机器人参数、密钥或迁移执行载荷。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
 ## 服务接口
@@ -85,6 +86,51 @@
 | `GET` | `/health` | 无 | `status`、`service`、`version`、`database` |
 
 `/health` 只表示服务和开发数据库可用，不表示用户已经登录或认证。
+
+## Data Export 与未来迁移 API
+
+当前 API 只建立版本化 Schema、导出范围预检、安全准备记录和未来载体契约。`ready` 表示通过本次准备检查，不代表已生成数据包；所有响应固定不返回业务正文、不创建文件、不连接外部存储或载体、不执行迁移。
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/data-export/schemas` | 返回当前 Export Schema 版本、创建时间、三类导出类型和十二类范围 |
+| `GET` | `/api/v1/data-export/migration-target-contracts` | 返回机器人/其他载体未配置契约，连接与执行能力均为关闭 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/data-exports` | 创建导出预检记录，不读取或返回业务正文 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/data-exports` | 查询本用户/主体最近 100 条导出记录 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/data-exports/:exportId` | 读取单条导出记录、完整性报告和固定执行边界 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/data-exports/:exportId/preparations` | 执行精确 Permission → Security Policy → Confirmation 准备 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/data-exports/:exportId/migration-preparations` | 为已就绪的 `migration` 记录返回未配置载体契约，不执行迁移 |
+
+当前 `schemaVersion=vio-live-export-v1`，支持：
+
+- `full`：自动选择全部十二类范围，请求必须省略 `scopes`。
+- `selected`：调用方显式选择一个或多个范围。
+- `migration`：调用方显式选择未来载体需要的范围；仍不生成包或传输。
+
+十二类范围为 `user_data`、`subject_state`、`event`、`message_version`、`conversation_summary`、`assistant_private_space`、`assistant_global_settings`、`permission`、`security_policy`、`tool`、`device`、`life_data`。Schema 返回每类的数据分类、用户/主体归属要求、敏感分类、必需字段和关系字段。
+
+创建导出记录请求示例：
+
+```json
+{
+  "exportType": "selected",
+  "scopes": ["user_data", "subject_state", "conversation_summary"]
+}
+```
+
+创建时按用户/主体复合条件统计数据，并检查必需字段和数据库外键；空数据集不是完整性错误。记录的 `requestedBy` 明确保存开发期请求用户并标记 `authenticationStatus=development_unverified`，不能作为真实登录证据。响应只包含每类/每表计数、缺失字段计数和检查结果，不包含消息、摘要、状态、私域或生活正文。失败记录保存为 `preflight_failed`，不能进入安全准备。
+
+通过预检后，调用方必须为返回的 `exportId` 创建精确 `resourceType=data_export`、`action=export` Permission。准备请求体只接受可选 `confirmationId` 与开发期 `securitySessionId`。数据导出最低风险固定为 `high`，因此必须逐次确认；第一次返回 `confirmation_required`，批准后以完全相同作用域再次请求才可到达 `ready`。Permission 决策、Security Policy、Confirmation 和 AuditLog 均复用现有安全链。
+
+迁移准备请求仅接受：
+
+```json
+{
+  "targetType": "robot"
+}
+```
+
+`targetType` 只支持 `robot`、`other_carrier`。接口不接受服务地址、设备 ID、控制参数、凭据或正文，返回固定 `adapterStatus=not_implemented`、`connectionStatus=not_connected`、`migrationStatus=not_executed`、`externalTransfer=not_performed`。未来真实迁移必须重新执行身份、归属、Permission、Security Policy 和 Confirmation 检查，当前 `ready` 不可复用为未来执行授权。
 
 ## User API
 
