@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、健康检查、User/Subject/Dashboard、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、健康检查、User/Subject/Dashboard、Conversation/Message/MessageVersion、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -86,6 +86,24 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 
 `x-vio-user-id` 与路径中的 `userId` 都只是当前开发请求范围，不是可信身份。服务不会自动选择数据库首位用户；真实认证前不得公开这些路由。
 
+## Conversation、Message 与 Version 契约
+
+所有对话路由完整携带 `userId`、`subjectId` 和 `conversationId`，消息/版本路由继续携带稳定 `messageId`，跨用户、主体或会话组合统一返回 `404`。
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations` | 创建或列出主体会话 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId` | 获取会话详情 |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages` | 添加消息或读取当前消息流 |
+| `GET` / `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId` | 查询消息；用户消息 PATCH 追加编辑版本 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId/regenerations` | 为主体消息追加重生成记录 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId/versions` | 查询同一消息全部版本 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId/versions/:messageVersionId` | 查询单个版本 |
+
+创建消息只接受 `senderType`（`user`、`subject`、`system`）和非空文本 `content`；服务端生成状态、顺序、初始 `original` 版本和时间。PATCH 只允许用户消息，重生成记录只允许主体消息，两者请求体均固定为 `baseVersionId` 与 `content`。`baseVersionId` 必须仍是当前版本，否则返回 `409`。
+
+普通消息列表只投影每个 Message 的当前版本；版本接口显式返回 `versionNumber`、`changeReason`、`parentVersionId` 与 `isCurrent`。主体内容由开发调用方提交，只记录数据，不调用 GPT、Claude、GLM 或其他模型。当前没有删除、分支、重置、附件、上下文装配或流式回复接口。
+
 ## 软件事件契约
 
 当前实现使用以下事件名：
@@ -95,6 +113,10 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 - `permission_changed`
 - `life_record_created`
 - `device_changed`
+- `conversation_created`
+- `message_created`
+- `message_updated`
+- `message_regenerated`
 
 事件创建体包含 `eventType`、`source`、`occurredAt`、`data`、`summary` 和可选 `subjectId`。服务生成 `eventId` 与 `recordedAt`，并将初始 `status` 设为 `pending`。事件数据不得包含明显的密钥、密码、验证码、Token、Secret 或完整证件号字段。
 
@@ -106,7 +128,7 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 | `GET` | `/api/v1/users/:userId/events` | 查询该用户事件，可按 `subjectId`、`eventType`、`status`、`from`、`to` 和 `limit` 筛选 |
 | `GET` | `/api/v1/users/:userId/events/:eventId` | 查询该用户范围内的单个事件 |
 
-这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和数据变化仍是规划范围，尚未成为当前接口接受的事件名。
+对话写入会在同一事务创建对应最小 Event，事件只包含 ID、发送者类型和版本关系，不包含会话标题或消息正文。这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和数据变化仍是规划范围，尚未成为当前接口接受的事件名。
 
 ## 每轮模型契约
 

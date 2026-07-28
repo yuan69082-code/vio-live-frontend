@@ -183,6 +183,14 @@
 - 原因：主体基础信息是后续 AI 感知的软件变化，若更新与事件分离会造成真实状态和事件视图不一致。Dashboard 不能从前端 mock、主体设定或模型配置猜测尚不存在的 SubjectState、待办、设备或连续性数据。
 - 影响：空 PATCH、未知字段和跨用户 Subject 均失败；无变化请求不发事件。Dashboard 的 `ready` 只表示用户和主体均为活动状态，不表示连续性引擎、模型或外部能力可用。
 
+## BE-ADR-023｜会话消息采用复合归属、当前指针与不可变版本链
+
+- 日期：2026-07-28
+- 状态：已采用
+- 决策：`006_create_conversations_messages_and_events.sql` 建立 `conversations`、`messages` 和 `message_versions`。三表都保存 `user_id`、`subject_id` 与 `conversation_id`，并通过复合外键把消息和版本限制在同一用户、主体、会话及消息范围。`Message` 表示稳定逻辑消息，在会话内使用唯一递增 `sequence_number` 排序，并以 `current_version_id` 指向当前内容；原始、用户编辑和主体重生成内容分别追加为 `original`、`edited`、`regenerated` 的 `MessageVersion`，父版本必须属于同一消息，数据库触发器禁止原地修改或直接删除版本。编辑和重生成必须提交等于当前指针的 `baseVersionId`，陈旧写入返回 `409`。消息写入、版本追加、当前指针更新、会话活动时间更新及对应 Event 必须在同一事务完成。
+- 原因：Vio Live 需要保留消息变化历史，同时防止跨归属引用、覆盖式写入、并发陈旧更新及部分提交造成当前内容和事件不一致。稳定 Message 与不可变版本分离后，读取当前内容和追溯历史都有明确来源。
+- 影响：平台自动生成 `conversation_created`、`message_created`、`message_updated`、`message_regenerated` 四类事件，事件数据只保存必要 ID、发送者或版本关系，不保存会话标题或消息内容；加上原五类 Event，当前共九类。`subject` 消息和重生成内容均由开发调用方显式提交，后端只记录版本，不调用 AI。当前未实现分支、删除、重置、上下文装配、连续性引擎、MCP 或 Tool；前端页面和 mock 未修改。路由仍未接入真实认证，复合归属只保证请求范围一致性，不代表调用者身份，因而不得公开部署。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：

@@ -39,6 +39,9 @@ export function createRouter({
   database,
   userService,
   subjectService,
+  conversationService,
+  messageService,
+  messageVersionService,
   dashboardService,
   eventService,
   apiProviderService,
@@ -172,6 +175,172 @@ export function createRouter({
           data: dashboardService.getDashboard(
             dashboardRoute.userId,
             dashboardRoute.subjectId,
+          ),
+        });
+        return;
+      }
+
+      const conversationsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && conversationsRoute) {
+        const input = await readJsonBody(request);
+        const conversation = conversationService.createConversation(
+          conversationsRoute.userId,
+          conversationsRoute.subjectId,
+          input,
+        );
+        sendJson(response, 201, { data: conversation }, {
+          location: `/api/v1/users/${encodeURIComponent(conversation.userId)}/subjects/${encodeURIComponent(conversation.subjectId)}/conversations/${encodeURIComponent(conversation.conversationId)}`,
+        });
+        return;
+      }
+
+      if (request.method === 'GET' && conversationsRoute) {
+        const conversations = conversationService.listConversations(
+          conversationsRoute.userId,
+          conversationsRoute.subjectId,
+        );
+        sendJson(response, 200, {
+          data: conversations,
+          meta: { count: conversations.length },
+        });
+        return;
+      }
+
+      const conversationRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)$/,
+        ['userId', 'subjectId', 'conversationId'],
+      );
+      if (request.method === 'GET' && conversationRoute) {
+        sendJson(response, 200, {
+          data: conversationService.getConversation(
+            conversationRoute.userId,
+            conversationRoute.subjectId,
+            conversationRoute.conversationId,
+          ),
+        });
+        return;
+      }
+
+      const messagesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/messages$/,
+        ['userId', 'subjectId', 'conversationId'],
+      );
+      if (request.method === 'POST' && messagesRoute) {
+        const input = await readJsonBody(request);
+        const message = messageService.createMessage(
+          messagesRoute.userId,
+          messagesRoute.subjectId,
+          messagesRoute.conversationId,
+          input,
+        );
+        sendJson(response, 201, { data: message }, {
+          location: `/api/v1/users/${encodeURIComponent(message.userId)}/subjects/${encodeURIComponent(message.subjectId)}/conversations/${encodeURIComponent(message.conversationId)}/messages/${encodeURIComponent(message.messageId)}`,
+        });
+        return;
+      }
+
+      if (request.method === 'GET' && messagesRoute) {
+        const messages = messageService.listMessages(
+          messagesRoute.userId,
+          messagesRoute.subjectId,
+          messagesRoute.conversationId,
+        );
+        sendJson(response, 200, {
+          data: messages,
+          meta: { count: messages.length },
+        });
+        return;
+      }
+
+      const messageRegenerationsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/messages\/([^/]+)\/regenerations$/,
+        ['userId', 'subjectId', 'conversationId', 'messageId'],
+      );
+      if (request.method === 'POST' && messageRegenerationsRoute) {
+        const input = await readJsonBody(request);
+        const version = messageVersionService.regenerateSubjectMessage(
+          messageRegenerationsRoute.userId,
+          messageRegenerationsRoute.subjectId,
+          messageRegenerationsRoute.conversationId,
+          messageRegenerationsRoute.messageId,
+          input,
+        );
+        sendJson(response, 201, { data: version }, {
+          location: `${url.pathname.replace(/\/regenerations$/, '/versions')}/${encodeURIComponent(version.messageVersionId)}`,
+        });
+        return;
+      }
+
+      const messageVersionsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/messages\/([^/]+)\/versions$/,
+        ['userId', 'subjectId', 'conversationId', 'messageId'],
+      );
+      if (request.method === 'GET' && messageVersionsRoute) {
+        const versions = messageVersionService.listMessageVersions(
+          messageVersionsRoute.userId,
+          messageVersionsRoute.subjectId,
+          messageVersionsRoute.conversationId,
+          messageVersionsRoute.messageId,
+        );
+        sendJson(response, 200, {
+          data: versions,
+          meta: { count: versions.length },
+        });
+        return;
+      }
+
+      const messageVersionRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/messages\/([^/]+)\/versions\/([^/]+)$/,
+        ['userId', 'subjectId', 'conversationId', 'messageId', 'messageVersionId'],
+      );
+      if (request.method === 'GET' && messageVersionRoute) {
+        sendJson(response, 200, {
+          data: messageVersionService.getMessageVersion(
+            messageVersionRoute.userId,
+            messageVersionRoute.subjectId,
+            messageVersionRoute.conversationId,
+            messageVersionRoute.messageId,
+            messageVersionRoute.messageVersionId,
+          ),
+        });
+        return;
+      }
+
+      const messageRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/messages\/([^/]+)$/,
+        ['userId', 'subjectId', 'conversationId', 'messageId'],
+      );
+      if (request.method === 'GET' && messageRoute) {
+        sendJson(response, 200, {
+          data: messageService.getMessage(
+            messageRoute.userId,
+            messageRoute.subjectId,
+            messageRoute.conversationId,
+            messageRoute.messageId,
+          ),
+        });
+        return;
+      }
+
+      if (request.method === 'PATCH' && messageRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: messageVersionService.editUserMessage(
+            messageRoute.userId,
+            messageRoute.subjectId,
+            messageRoute.conversationId,
+            messageRoute.messageId,
+            input,
           ),
         });
         return;

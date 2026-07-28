@@ -11,6 +11,8 @@
 7. 模型与扩展能力管理
 8. 设备、AI 私域、生活模块和数据治理
 
-模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现 User、Subject、Dashboard、Event、APIProvider、Model、Model Router、Permission、Security、SensitiveData 分类、Confirmation 与 AuditLog。Dashboard 只聚合已有 User/Subject 状态，不猜测连续性或设备数据；Security 只返回安全资格并标记未执行；Permission Checker 不执行资源操作，Router 也不调用真实模型。
+模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现 User、Subject、Dashboard、Conversation、Message、MessageVersion、Event、APIProvider、Model、Model Router、Permission、Security、SensitiveData 分类、Confirmation 与 AuditLog。Dashboard 只聚合已有 User/Subject 状态，不猜测连续性或设备数据；Security 只返回安全资格并标记未执行；Permission Checker 不执行资源操作，Router 也不调用真实模型。
+
+会话模块保持用户—主体—会话复合归属。Message 是稳定逻辑消息，使用会话内 `sequenceNumber` 排序并以 `currentVersionId` 指向当前内容；MessageVersion 只追加 `original`、`edited` 或 `regenerated` 版本，不原地覆盖。编辑和重生成要求当前 `baseVersionId` 以阻止陈旧写入。`subject` 消息与重生成内容由开发调用方明确提交，模块只记录版本，不调用 AI。当前不实现分支、删除、重置、上下文装配或连续性引擎。
 
 安全模块保持以下边界：Permission 决定基础权限，Security 只能收紧；SensitiveData 只定义分类元数据并提供只读查询；Confirmation 不代表执行；AuditLog 与 Event 分离且只记录最小字段。

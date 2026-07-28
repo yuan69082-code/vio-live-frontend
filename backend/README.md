@@ -2,11 +2,12 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 6｜基础 API 层与前后端连接”。后端已经可以独立启动，并建立前端可复用的统一 JSON 契约：
+当前阶段为“平台后端 7｜对话与消息版本基础”。后端已经可以独立启动，并在统一 JSON 契约之上建立可追溯的 Conversation、Message 与 MessageVersion 闭环：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
 API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一响应
+对话 → 顺序消息 → 当前版本指针 → 不可覆盖的版本历史 → 最小软件事件
 ```
 
 已实现：
@@ -19,8 +20,13 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 - Subject 创建、列表、所属用户绑定、查询和基础信息更新
 - Subject 实际更新与 `subject_updated` Event 同事务提交
 - Dashboard 对现有 User/Subject 与基础可用状态的安全聚合
+- Conversation 创建、列表和按用户/主体双重归属查询
+- `user`、`subject`、`system` 三类 Message 创建及稳定 `sequenceNumber` 排序
+- Message 当前版本投影与完整 MessageVersion 历史查询
+- 用户消息编辑和主体消息重生成记录；`baseVersionId` 防止陈旧写覆盖当前版本
+- `original`、`edited`、`regenerated` 三类不可覆盖消息版本及同消息父版本约束
 - Event 创建、单项查询及按用户、主体、时间、类型和状态筛选
-- 五类基础软件事件和事件数据秘密字段拦截
+- 九类基础软件事件和事件数据秘密字段拦截
 - APIProvider 创建、列表/单项查询和启停状态更新
 - Model 创建、单项查询及按 `chat`、`vision`、`image`、`video`、`embedding` 能力查询
 - 仅针对启用 Provider 的确定性 Model Router 规则匹配
@@ -39,9 +45,9 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- 启动、API 契约、事务回滚、持久化、冲突和跨用户隔离测试
+- `pnpm test` 当前 17/17 通过，覆盖启动、API 契约、版本不可变、陈旧写防护、事务回滚、持久化、冲突和跨用户/主体/对话隔离
 
-本阶段没有实现真实登录、正式数据库、真实 API Key、模型调用、供应商 SDK、事件消费器、连续性引擎、MCP/Skill/Tool 实际调用、真实支付、真实设备、手机权限或 AI 私域业务。前端页面继续使用原有 mock；当前只建立独立 API 层和真实健康连接，不把模拟页面声明为已接入真实数据。
+主体消息和“重生成”版本的正文都由开发调用方显式提交；后端只验证、保存和切换当前版本，不调用 AI、模型 Router 或供应商 API。本阶段没有实现分支、消息删除、窗口重置、上下文装配、连续性引擎、MCP/Skill/Tool 实际调用，也没有实现真实登录、正式数据库、真实 API Key、真实支付、真实设备、手机权限或 AI 私域业务。前端页面与 mock 未修改，现有对话页没有迁移到这些真实接口。
 
 ## 运行要求
 
@@ -113,6 +119,16 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId` | 按用户和主体双重归属查询主体 |
 | `PATCH` | `/api/v1/users/:userId/subjects/:subjectId` | 更新名字、头像引用或基础设定并记录事件 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/dashboard` | 聚合用户、主体和基础状态 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations` | 创建属于当前用户和主体的 Conversation |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations` | 按最近活动时间查询 Conversation 列表 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId` | 按复合归属查询 Conversation |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages` | 创建 Message 和 `original` 初始版本 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages` | 按 `sequenceNumber` 查询当前消息投影 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId` | 查询单条 Message 当前版本投影 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId` | 使用 `baseVersionId` 为用户消息追加编辑版本 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId/regenerations` | 使用显式正文为主体消息追加重生成记录，不调用 AI |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId/versions` | 查询消息的全部版本历史 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId/versions/:messageVersionId` | 查询单个消息版本 |
 | `POST` | `/api/v1/users/:userId/events` | 为用户或其主体记录软件事件 |
 | `GET` | `/api/v1/users/:userId/events` | 按主体、时间、类型、状态和数量筛选事件 |
 | `GET` | `/api/v1/users/:userId/events/:eventId` | 按用户归属查询单个事件 |
@@ -137,7 +153,7 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `GET` | `/api/v1/users/:userId/confirmations/:confirmationId` | 查询本用户的具体操作确认 |
 | `PATCH` | `/api/v1/users/:userId/confirmations/:confirmationId` | 批准或拒绝待确认操作；不执行资源 |
 
-成功与失败响应均统一包含 `success`、`data`、`error` 和 UTC `timestamp`；列表可额外返回 `meta`。当前路由只服务于本阶段闭环，不代表完整公开 API 已完成。真实认证加入前，不能将该服务直接公开部署。
+成功与失败响应均统一包含 `success`、`data`、`error` 和 UTC `timestamp`；列表可额外返回 `meta`。Conversation、Message 和 MessageVersion 路由逐层校验用户、主体、对话和消息归属，但这仍不是身份认证。当前路由只服务于开发闭环，不代表完整公开 API 已完成；真实认证加入前不能直接公开部署。
 
 ## 目录结构
 
@@ -155,6 +171,9 @@ backend/
 │  ├─ modules/users/         # User 业务规则
 │  ├─ modules/subjects/      # Subject 业务规则
 │  ├─ modules/dashboard/     # 现有 User/Subject 基础聚合
+│  ├─ modules/conversations/ # 用户/主体范围的对话容器
+│  ├─ modules/messages/      # 顺序消息与当前版本投影
+│  ├─ modules/message-versions/ # 编辑/重生成的不可覆盖版本链
 │  ├─ modules/events/        # Event 类型、记录和查询规则
 │  ├─ modules/api-providers/ # Provider 配置与安全边界
 │  ├─ modules/models/        # Model 目录与能力标签
@@ -175,9 +194,14 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions`、`security_confirmations` 和 `audit_logs`。
+- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`conversations`、`messages`、`message_versions`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions`、`security_confirmations` 和 `audit_logs`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
+- Conversation、Message 和 MessageVersion 都保存 `user_id`、`subject_id`、`conversation_id` 复合归属；消息和版本不能跨用户、主体或对话引用。
+- Message 使用对话内唯一且递增的 `sequence_number` 稳定排序，并以复合外键 `current_version_id` 投影当前正文与版本号。
+- MessageVersion 正文由数据库触发器阻止覆盖；同一消息的版本号唯一，`parent_version_id` 只能引用同一用户、主体、对话和消息的版本。
+- 编辑和重生成要求调用方提交当前 `baseVersionId`；不匹配时返回冲突，不追加陈旧版本。
+- Conversation/Message/Version 写入、当前指针切换、最近活动时间和对应 Event 在同一事务提交。平台自动生成的四类对话事件只保存 ID、版本、发送者或状态等最小字段，不包含 Conversation `title` 或 Message `content`。
 - 主体事件使用 `(user_id, subject_id)` 组合外键，数据库层同时保证用户和主体归属。
 - 事件按发生时间保存为 UTC ISO-8601，并为用户、主体、类型和状态查询建立索引。
 - Provider 归属于用户，Model 同时保存用户和 Provider 归属，能力标签使用独立关系表。
@@ -197,6 +221,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。本阶段 Dashboard 对尚未接入的连续性状态明确返回 `not_available`；不会从 mock 或 `basicSettings` 猜测主体状态。Security 仍只返回执行资格，不连接支付、手机权限、MCP、Skill、Tool、设备或 AI 私域，也不改变 continuity-engine 或模型调用边界。
+平台后端与 continuity-engine 保持平行。Conversation/Message 只是平台持久化和版本记录，不装配上下文、不生成回复、不更新 SubjectState 或 Memory；主体消息正文由开发调用方提供。Dashboard 对尚未接入的连续性状态仍返回 `not_available`。Security 仍只返回执行资格，不连接支付、手机权限、MCP、Skill、Tool、设备或 AI 私域，也不改变 continuity-engine 或模型调用边界。分支、删除和窗口重置仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

@@ -1,8 +1,8 @@
 # Vio Live
 
-Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。前端页面仍保留并使用原有 mock 数据；平台后端已完成 User、Subject、Event、模型目录与规则路由、Permission、Security、AuditLog，以及基础 API 连接层。
+Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。前端页面仍保留并使用原有 mock 数据；平台后端已完成 User、Subject、Conversation、Message、MessageVersion、Event、模型目录与规则路由、Permission、Security、AuditLog，以及基础 API 连接层。
 
-当前阶段首次建立了真实浏览器到后端的开发连接：前端入口通过 Vite 同源代理非阻塞检查 `/health`。这不代表登录、首次设置或工作台页面已经切换为真实数据，也不代表真实认证已经完成。
+后端现可保存主体范围的线性文本会话、当前消息和不可覆盖版本历史；用户编辑与主体回复重生成记录不会调用模型。前端入口仍只通过 Vite 同源代理非阻塞检查 `/health`，对话页面尚未迁移到真实 API。
 
 ## 前后端本地运行
 
@@ -44,5 +44,6 @@ pnpm test
 
 - 页面、组件和 `src/data/*Mock.ts` 仍是前端原型数据源。
 - 没有真实 Google/邮箱验证码登录或会话；`x-vio-user-id` 只用于开发期当前用户上下文。
+- 主体消息和重生成内容由开发调用方显式提交，只形成数据与事件记录，不代表 AI 已生成回复。
 - 没有真实 API Key、模型调用、MCP、Tool、设备、支付、AI 私域或 continuity-engine 接入。
 - 未认证后端不能直接公开部署。

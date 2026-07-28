@@ -4,7 +4,10 @@ import { createRouter } from './http/router.js';
 import { createSqliteAuditLogRepository } from './integrations/database/sqlite-audit-log-repository.js';
 import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
 import { createSqliteConfirmationRepository } from './integrations/database/sqlite-confirmation-repository.js';
+import { createSqliteConversationRepository } from './integrations/database/sqlite-conversation-repository.js';
 import { createSqliteEventRepository } from './integrations/database/sqlite-event-repository.js';
+import { createSqliteMessageRepository } from './integrations/database/sqlite-message-repository.js';
+import { createSqliteMessageVersionRepository } from './integrations/database/sqlite-message-version-repository.js';
 import { createSqliteDatabase } from './integrations/database/sqlite-database.js';
 import { createSqliteModelRepository } from './integrations/database/sqlite-model-repository.js';
 import { createSqlitePermissionRepository } from './integrations/database/sqlite-permission-repository.js';
@@ -13,10 +16,13 @@ import { createSqliteUserRepository } from './integrations/database/sqlite-user-
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAuditLogService } from './modules/audit-logs/audit-log-service.js';
 import { createConfirmationService } from './modules/confirmations/confirmation-service.js';
+import { createConversationService } from './modules/conversations/conversation-service.js';
 import { createDashboardService } from './modules/dashboard/dashboard-service.js';
 import { createEventService } from './modules/events/event-service.js';
 import { createModelRouterService } from './modules/model-router/model-router-service.js';
 import { createModelService } from './modules/models/model-service.js';
+import { createMessageService } from './modules/messages/message-service.js';
+import { createMessageVersionService } from './modules/message-versions/message-version-service.js';
 import { createPermissionChecker } from './modules/permissions/permission-checker.js';
 import { createPermissionService } from './modules/permissions/permission-service.js';
 import { createSecurityService } from './modules/security/security-service.js';
@@ -28,6 +34,9 @@ export function createApplication({ config, logger = console }) {
   const database = createSqliteDatabase(config);
   const userRepository = createSqliteUserRepository(database.connection);
   const subjectRepository = createSqliteSubjectRepository(database.connection);
+  const conversationRepository = createSqliteConversationRepository(database.connection);
+  const messageRepository = createSqliteMessageRepository(database.connection);
+  const messageVersionRepository = createSqliteMessageVersionRepository(database.connection);
   const eventRepository = createSqliteEventRepository(database.connection);
   const apiProviderRepository = createSqliteApiProviderRepository(database.connection);
   const modelRepository = createSqliteModelRepository(database.connection);
@@ -43,6 +52,30 @@ export function createApplication({ config, logger = console }) {
   const subjectService = createSubjectService({
     subjectRepository,
     userRepository,
+    eventService,
+    runInTransaction: database.runInTransaction,
+  });
+  const conversationService = createConversationService({
+    conversationRepository,
+    userRepository,
+    subjectRepository,
+    eventService,
+    runInTransaction: database.runInTransaction,
+  });
+  const messageService = createMessageService({
+    conversationService,
+    conversationRepository,
+    messageRepository,
+    messageVersionRepository,
+    eventService,
+    runInTransaction: database.runInTransaction,
+  });
+  const messageVersionService = createMessageVersionService({
+    conversationService,
+    conversationRepository,
+    messageService,
+    messageRepository,
+    messageVersionRepository,
     eventService,
     runInTransaction: database.runInTransaction,
   });
@@ -100,6 +133,9 @@ export function createApplication({ config, logger = console }) {
     database,
     userService,
     subjectService,
+    conversationService,
+    messageService,
+    messageVersionService,
     dashboardService,
     eventService,
     apiProviderService,
