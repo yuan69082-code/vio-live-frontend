@@ -17,6 +17,12 @@ export const EVENT_TYPES = Object.freeze([
   'private_space_created',
   'private_memory_updated',
   'private_state_changed',
+  'wake_configuration_changed',
+  'wake_trigger_prepared',
+  'proactive_prompt_prepared',
+  'token_budget_changed',
+  'token_usage_recorded',
+  'background_policy_changed',
 ]);
 
 export const EVENT_STATUSES = Object.freeze([

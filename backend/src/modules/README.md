@@ -11,7 +11,7 @@
 7. 模型与扩展能力管理
 8. 设备、AI 私域、生活模块和数据治理
 
-模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现账号/User Space/主体、数据隔离、设定/私域、对话/Context、事件、模型/扩展/设备、生活管理、Permission/Security/Confirmation/AuditLog。Dashboard 只聚合已有事实；Security 只返回安全资格并标记外部执行未发生；Permission Checker 不执行资源操作，Router 也不调用真实模型。
+模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现账号/User Space/主体、数据隔离、设定/私域、对话/Context、事件、模型/扩展/设备、生活管理、主动交互与 Token 控制、Permission/Security/Confirmation/AuditLog。Dashboard 只聚合已有事实；Security 只返回安全资格并标记外部执行未发生；Permission Checker 不执行资源操作，Router 也不调用真实模型。
 
 User Space 是账号的一对一数据根，只保存开发期身份状态、空间状态和当前助手指针。当前助手是用户导航选择，不是 Subject 状态；切换不会修改 Global Settings、Private Space、SubjectState、对话、事件或生活数据。数据隔离模块只接收预定义资源类型和不透明 ID，先通过仓储复合过滤验证归属，再对私域、设备和生活资源调用既有 Permission/Security 链。它不读取资源正文、不接受任意 SQL/表名，也不执行资源操作。
 
@@ -28,3 +28,5 @@ AI 私域模块只保存调用方显式提交的五类 JSON 记录，Space 与�
 设备模块保持以下边界：Device Registry 只保存用户范围的设备类型、品牌、名称、启停和能力声明；主体授权复用 `resource_type=device` 的 Permission。操作准备固定经过 Permission、Security 和 Confirmation，并记录 `device_changed`、AuditLog 和 `not_executed` 操作日志。注册或启用不表示设备已连接，设备状态固定未观测；统一 Adapter 端口和小米、美的、Apple、Android 描述均为 `not_implemented`，不接收控制参数、不加载 SDK、不调用厂商 API。
 
 生活管理模块保持以下边界：财务、预算、月历、身体与本地记忆属于 User Space，并按用户/主体复合隔离；全部使用 `life_data` Permission 与 Security Policy。金额、统计和趋势仅作本地确定性计算；AI 建议只保存显式输入；提醒只保存规则；本地记忆只有用户标记后进入独立 Context 投影。模块不支付、不连接银行/穿戴设备、不调用模型、不输出诊断，也不自动并入通用 Context。
+
+主动交互模块保持以下边界：Wake、主动提示、Token Budget/Usage 与后台策略按用户/主体隔离。`voice` 和应用授权不代表麦克风或系统权限；Event 触发只形成未投递准备记录。需要确认的提示和 Token 超额通过 `proactive_interaction` Permission/Security，并固定不执行。Token 使用仅保存显式上报计量，不验证供应商账单；后台策略不启动调度器或驻留进程。

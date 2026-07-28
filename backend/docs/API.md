@@ -2,8 +2,8 @@
 
 ## 状态与边界
 
-- 当前阶段：平台后端 12｜账号、数据库与数据隔离
-- 后端版本：`0.16.0`
+- 当前阶段：平台后端 13｜语音唤醒、主动提示与 Token 控制
+- 后端版本：`0.17.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
@@ -71,6 +71,8 @@
 - Device Registry 不接受外部设备 ID、位置、凭据、厂商 Token 或真实状态；设备操作准备只接受能力代码、可选 Confirmation ID 与可选开发期 `securitySessionId`，不接受温度、开关、摄像头命令或任意控制参数。
 - User Space 的 `identity.mode=development_unverified` 和 `authenticationStatus=not_connected` 是明确的开发期占位，不是登录结果；当前助手切换只改变空间指针。
 - 数据访问检查只接受资源类型、资源 ID、可选助手 ID、动作及安全确认元数据，不接受资源正文、查询 SQL、表名或任意过滤表达式。
+- Wake 与提示条件只接受最大 8 KiB 的普通 JSON 配置并拒绝秘密字段；`voice` 只表示规则分类，不上传音频或申请麦克风权限。
+- Token 使用记录是调用方显式上报的计量元数据，不是平台模型调用证明；响应固定标记 `not_performed_by_platform` / `not_billed`。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
 ## 服务接口
@@ -155,6 +157,66 @@
 | 事件数据 | `event` | `user_id + event_id`，提供助手时额外限定 `subject_id` | 所有权校验 |
 
 成功响应返回 `resource`、`ownership`、`boundary`、`access` 与 `execution`。`operationStatus` 只可能为 `ready`、`confirmation_required` 或 `denied`；`ready` 也只代表资格检查通过，`execution.status` 固定为 `not_executed`，不会读取正文、执行设备、调用模型或访问外部服务。错误用户、助手、Space 或资源组合统一返回 `404`，避免泄露资源是否存在。
+
+## Wake、主动提示、Token 与后台策略 API
+
+所有接口同时限定 `userId + subjectId`。它们只保存配置、产生最小 Event、执行 Permission/Security 预检或记录显式计量元数据；不会监听麦克风、注册系统唤醒、启动调度器、投递提示消息或调用模型。
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/wake-rules` | 创建/列出 Wake 规则 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/wake-rules/:wakeId` | 更新应用内授权或启停状态 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/wake-rules/:wakeId/preparations` | 按后台策略、Permission 与 Security 评估一次触发准备 |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/proactive-prompt-rules` | 创建/列出主动提示规则 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/proactive-prompt-rules/:promptRuleId` | 更新优先级、确认要求或启停状态 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/proactive-prompt-rules/:promptRuleId/preparations` | 使用同范围 Event 创建未投递的提示准备记录 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/proactive-prompt-records` | 查询最近 100 条提示准备记录 |
+| `PUT` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/token-budget` | 保存/读取每日与会话 Token 预算 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/token-budget/checks` | 根据现有显式使用记录评估一次 Token 估算 |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/token-usage-records` | 保存/列出显式上报的模型消耗元数据 |
+| `PUT` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/background-policy` | 保存/读取助手后台运行策略 |
+
+### Wake Framework
+
+创建体包含：
+
+- `wakeType`：`voice`、`desktop`、`schedule`、`event`。
+- `triggerCondition`：结构化匹配元数据，不得包含音频、命令、凭据或真实外部调用参数。
+- `userAuthorization`：`not_granted`、`granted`、`revoked`，仅表示 Vio Live 内应用级选择，不表示操作系统权限。
+- `status`：`enabled` 或 `disabled`；没有 `granted` 时不能启用，撤销授权会自动停用。
+
+准备接口只接受可选 `confirmationId` / `securitySessionId`。规则还必须被活动后台策略允许，并拥有精确 `resourceType=proactive_interaction`、`resourceId=wakeId`、`action=execute` Permission。响应中的麦克风、系统唤醒、消息投递、模型与外部服务状态均固定为 `not_performed`。
+
+### 主动提示与消息优先级
+
+提示规则包含名称、`triggerEventType`、结构化 `condition`、`requiresConfirmation`、状态，以及四级优先级：
+
+| 优先级 | 当前基础语义 |
+| --- | --- |
+| `urgent` | 排序最高；不能绕过高风险确认 |
+| `important` | 高于普通提示 |
+| `normal` | 默认普通提示语义 |
+| `silent` | 只形成 `suppressed` 记录，不进入安全执行或消息投递 |
+
+准备请求必须提交同用户、同主体范围且类型匹配的 `triggerEventId`。`requiresConfirmation=true` 会把本次安全最低风险抬高为 `high`，因此必须逐次确认；该规则不能被 `always_allow` 或会话授权绕过。结果只可能形成 `ready`、`confirmation_required`、`denied` 或 `suppressed` 记录，`deliveryStatus=not_delivered`、`modelCallStatus=not_performed` 固定不变。内部 `wake_trigger_prepared` / `proactive_prompt_prepared` Event 不能再次作为提示触发类型，避免配置回路。
+
+### Token Budget 与使用记录
+
+预算保存体包含正整数 `dailyTokenLimit`、不大于每日限额的 `sessionTokenLimit`、状态和超额策略：
+
+- `block`：返回 `blocked_by_budget`。
+- `defer`：返回 `deferred_by_budget`。
+- `require_confirmation`：使用预算 ID 作为精确 `proactive_interaction` Permission 资源，并以 `high` 最低风险进入 Security/Confirmation。
+
+检查体包含 `estimatedTokens` 与不透明 `budgetSessionId`。统计以 UTC 日和预算会话分别累计已保存的 `totalTokens`；检查本身不预留、不写入、不消耗 Token，且始终返回模型未调用。
+
+使用记录体包含 `budgetSessionId`、可选同用户 `modelId`、`inputTokens`、`outputTokens` 和可选 `occurredAt`。总量由后端求和，来源固定 `explicit_api_input`。这允许未来可信模型适配器接入同一账本，但当前 HTTP 输入未经供应商签名或账单验证，不能被解释为真实费用凭证。
+
+### AI 后台运行策略
+
+后台策略包含 `idle|active`、后台开关、每小时最多 Wake/提示次数、允许的 Wake 类型和可选 `HH:mm` 安静时段。`active` 必须同时启用后台开关；对应上限为 `0` 时会直接抑制该类准备。当前不存在调度器、计时执行器或系统驻留进程，非零每小时上限在真实执行层接入前不累计执行次数。
+
+本阶段新增最小 Event：`wake_configuration_changed`、`wake_trigger_prepared`、`proactive_prompt_prepared`、`token_budget_changed`、`token_usage_recorded`、`background_policy_changed`。Event 不保存触发正文、音频、提示正文、凭据或模型响应。
 
 ## Subject API
 

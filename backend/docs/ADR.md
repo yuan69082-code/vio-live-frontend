@@ -263,6 +263,14 @@
 - 原因：仅由 URL 或应用层先按全局 ID 取记录、再比较所有者，容易在新增模块时产生遗漏和存在性泄露；把“当前助手”存进 Subject 又会把用户导航偏好混入助手身份。独立 User Space 指针与固定复合查询既能支持多助手切换，也能保持各助手长期设定、动态状态和私域边界不变。所有权与授权是两类判断：所有权错配必须先按未找到终止，所有权成立也不能绕过高敏感安全规则。
 - 影响：新增迁移 `015_create_user_spaces_and_data_isolation.sql`、User Space/数据隔离仓储与服务，以及空间、助手切换、边界描述和资源预检 API。迁移为既有用户回填空间并稳定选择最早活动助手；User Space 身份固定标记 `development_unverified`，不把 URL、请求头或安全会话 ID 当作认证。访问检查只返回 `ready`、`confirmation_required` 或 `denied` 且固定未执行。真实登录、第三方身份、生产行级安全、数据库租户分区、语音和外部服务仍需后续独立决策。
 
+## BE-ADR-033｜主动交互采用“配置、预算、安全准备、真实执行”四层分离
+
+- 日期：2026-07-28
+- 状态：已采用，仅限主动交互与 Token 控制基础
+- 决策：Wake、主动提示、Token Budget 和助手后台策略均按 `user_id + subject_id` 独立保存。`voice` 只是一种 Wake 元数据类型，用户授权只表示 Vio Live 应用内选择，不等于麦克风或系统权限。主动提示必须引用同范围 Event，消息优先级只决定准备记录排序与静默抑制；`requires_confirmation` 把安全最低风险抬高到 `high`。每日/会话预算只根据显式上报的 Token 使用账本判断，超额使用 `block`、`defer` 或高风险确认。Wake、提示和需确认的超额请求统一使用精确 `proactive_interaction` Permission → Security Policy → Confirmation；所有结果固定不执行。
+- 原因：浏览器配置、操作系统唤醒、模型生成和消息投递是不同信任边界。若“启用语音”直接等同于麦克风监听，或预算检查直接触发模型，会在缺少系统权限、模型适配和费用凭证时产生不可验证副作用。把显式计量元数据与平台真实调用状态分开，也可避免测试数据被误认为供应商账单。
+- 影响：新增迁移 `016_create_proactive_interaction_and_token_controls.sql`、四类 Wake、四级消息优先级、主动提示准备记录、Token Budget/Usage、后台策略及六类最小 Event。Permission/Security 增加 `proactive_interaction` 资源；Security 接受只能抬高风险的内部最低风险提示。Token 使用记录固定 `explicit_api_input`、`not_performed_by_platform`、`not_billed`。当前不申请麦克风、不监听音频、不注册系统唤醒、不运行后台调度、不投递消息、不调用模型或外部服务。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：

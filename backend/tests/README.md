@@ -14,6 +14,7 @@
 - Security Policy、用户安全偏好、生命周期事件、短时会话授权和迁移外键完整性
 - AI Private Space 五类内容、不可变版本、复合隔离、安全门、Context 投影和导出结构预留
 - 生活管理管账/预算/月历/身体/本地记忆、安全链、事件脱敏与隔离
+- Wake、主动提示、Token 日/会话预算、后台策略和零执行边界
 - continuity-engine、模型和外部能力边界
 - 导出、删除、备份和恢复范围
 - 错误结果不泄露密钥或其他用户数据
@@ -26,11 +27,13 @@
 pnpm test
 ```
 
-当前测试结果为 43/43 通过，已覆盖服务启动、统一响应 envelope、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+当前测试结果为 46/46 通过，已覆盖服务启动、统一响应 envelope、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
 
 Account/Data Isolation 测试覆盖迁移 `015` 对既有用户的空间与当前助手回填、外键完整性、User/Space 原子创建、首个助手选择、助手列表、切换与重启持久化。测试同时验证多助手 Global Settings 与 SubjectState 保持独立，用户/AI/设备/生活/Event 资源只通过固定复合范围命中，错配组合按未找到处理；AI 私域、设备和生活资源在所有权命中后仍经过 Permission 与 Security Policy，全部结果保持 `not_executed`。
 
 Life Management 测试覆盖收入/支出、整数金额精度、预算提醒、分类统计、UTC 月度汇总、四类月历与提醒、身体指标/目标/趋势、显式建议字段、本地记忆上下文/导出标记和 Context 投影。迁移测试从 `013` 结构保留 Permission、Security Policy、Confirmation、AuditLog 和 SessionGrant 关系升级到 `014`。同时验证 `life_data` 安全链、策略拒绝、重启持久化、跨用户/主体隔离、三类 Event 脱敏和外键完整性；不连接支付、银行、穿戴设备、模型或外部服务。
+
+Proactive Interaction 测试覆盖 `015` 权限/策略迁移保留、`proactive_interaction` 安全范围、四类 Wake、应用内授权、后台允许范围、Event 驱动提示、四级优先级、高风险确认与静默抑制。Token 测试覆盖日/会话累计、三种超额策略、显式使用账本和跨用户/主体隔离。所有断言要求麦克风、系统唤醒、消息投递、模型、计费和外部调用保持未执行。
 
 AI Private Space 测试覆盖五类内容、首版与更新版本、`baseVersionId`、数据库不可变触发器、Space 状态、高风险确认、Permission/Policy 拒绝、独立 Context 投影、无正文 Export Manifest、三类私域 Event 脱敏、重启持久化、复合归属隔离和外键完整性。测试输入均为显式样例，不运行模型、continuity-engine、机器人或外部设备。
 

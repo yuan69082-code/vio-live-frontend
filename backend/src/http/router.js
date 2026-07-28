@@ -65,6 +65,7 @@ export function createRouter({
   permissionChecker,
   securityService,
   securityPolicyService,
+  proactiveInteractionService,
   sensitiveDataService,
   auditLogService,
   confirmationService,
@@ -203,6 +204,237 @@ export function createRouter({
         const input = await readJsonBody(request);
         sendJson(response, 200, {
           data: dataIsolationService.checkAccess(dataAccessChecksRoute.userId, input),
+        });
+        return;
+      }
+
+      const wakeRulesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/wake-rules$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && wakeRulesRoute) {
+        const input = await readJsonBody(request);
+        const rule = proactiveInteractionService.createWakeRule(
+          wakeRulesRoute.userId,
+          wakeRulesRoute.subjectId,
+          input,
+        );
+        sendJson(response, 201, { data: rule }, {
+          location: `/api/v1/users/${encodeURIComponent(rule.userId)}/subjects/${encodeURIComponent(rule.subjectId)}/wake-rules/${encodeURIComponent(rule.wakeId)}`,
+        });
+        return;
+      }
+      if (request.method === 'GET' && wakeRulesRoute) {
+        const rules = proactiveInteractionService.listWakeRules(
+          wakeRulesRoute.userId,
+          wakeRulesRoute.subjectId,
+        );
+        sendJson(response, 200, { data: rules, meta: { count: rules.length } });
+        return;
+      }
+
+      const wakeRuleRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/wake-rules\/([^/]+)$/,
+        ['userId', 'subjectId', 'wakeId'],
+      );
+      if (request.method === 'PATCH' && wakeRuleRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: proactiveInteractionService.updateWakeRule(
+            wakeRuleRoute.userId,
+            wakeRuleRoute.subjectId,
+            wakeRuleRoute.wakeId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const wakePreparationRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/wake-rules\/([^/]+)\/preparations$/,
+        ['userId', 'subjectId', 'wakeId'],
+      );
+      if (request.method === 'POST' && wakePreparationRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: proactiveInteractionService.prepareWake(
+            wakePreparationRoute.userId,
+            wakePreparationRoute.subjectId,
+            wakePreparationRoute.wakeId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const promptRulesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/proactive-prompt-rules$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && promptRulesRoute) {
+        const input = await readJsonBody(request);
+        const rule = proactiveInteractionService.createPromptRule(
+          promptRulesRoute.userId,
+          promptRulesRoute.subjectId,
+          input,
+        );
+        sendJson(response, 201, { data: rule }, {
+          location: `/api/v1/users/${encodeURIComponent(rule.userId)}/subjects/${encodeURIComponent(rule.subjectId)}/proactive-prompt-rules/${encodeURIComponent(rule.promptRuleId)}`,
+        });
+        return;
+      }
+      if (request.method === 'GET' && promptRulesRoute) {
+        const rules = proactiveInteractionService.listPromptRules(
+          promptRulesRoute.userId,
+          promptRulesRoute.subjectId,
+        );
+        sendJson(response, 200, { data: rules, meta: { count: rules.length } });
+        return;
+      }
+
+      const promptRuleRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/proactive-prompt-rules\/([^/]+)$/,
+        ['userId', 'subjectId', 'promptRuleId'],
+      );
+      if (request.method === 'PATCH' && promptRuleRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: proactiveInteractionService.updatePromptRule(
+            promptRuleRoute.userId,
+            promptRuleRoute.subjectId,
+            promptRuleRoute.promptRuleId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const promptPreparationRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/proactive-prompt-rules\/([^/]+)\/preparations$/,
+        ['userId', 'subjectId', 'promptRuleId'],
+      );
+      if (request.method === 'POST' && promptPreparationRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: proactiveInteractionService.preparePrompt(
+            promptPreparationRoute.userId,
+            promptPreparationRoute.subjectId,
+            promptPreparationRoute.promptRuleId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const promptRecordsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/proactive-prompt-records$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'GET' && promptRecordsRoute) {
+        const records = proactiveInteractionService.listPromptRecords(
+          promptRecordsRoute.userId,
+          promptRecordsRoute.subjectId,
+        );
+        sendJson(response, 200, { data: records, meta: { count: records.length } });
+        return;
+      }
+
+      const tokenBudgetRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/token-budget$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'PUT' && tokenBudgetRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: proactiveInteractionService.upsertTokenBudget(
+            tokenBudgetRoute.userId,
+            tokenBudgetRoute.subjectId,
+            input,
+          ),
+        });
+        return;
+      }
+      if (request.method === 'GET' && tokenBudgetRoute) {
+        sendJson(response, 200, {
+          data: proactiveInteractionService.getTokenBudget(
+            tokenBudgetRoute.userId,
+            tokenBudgetRoute.subjectId,
+          ),
+        });
+        return;
+      }
+
+      const tokenBudgetCheckRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/token-budget\/checks$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && tokenBudgetCheckRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: proactiveInteractionService.checkTokenBudget(
+            tokenBudgetCheckRoute.userId,
+            tokenBudgetCheckRoute.subjectId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const tokenUsageRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/token-usage-records$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && tokenUsageRoute) {
+        const input = await readJsonBody(request);
+        const record = proactiveInteractionService.recordTokenUsage(
+          tokenUsageRoute.userId,
+          tokenUsageRoute.subjectId,
+          input,
+        );
+        sendJson(response, 201, { data: record });
+        return;
+      }
+      if (request.method === 'GET' && tokenUsageRoute) {
+        const records = proactiveInteractionService.listTokenUsage(
+          tokenUsageRoute.userId,
+          tokenUsageRoute.subjectId,
+        );
+        sendJson(response, 200, { data: records, meta: { count: records.length } });
+        return;
+      }
+
+      const backgroundPolicyRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/background-policy$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'PUT' && backgroundPolicyRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: proactiveInteractionService.upsertBackgroundPolicy(
+            backgroundPolicyRoute.userId,
+            backgroundPolicyRoute.subjectId,
+            input,
+          ),
+        });
+        return;
+      }
+      if (request.method === 'GET' && backgroundPolicyRoute) {
+        sendJson(response, 200, {
+          data: proactiveInteractionService.getBackgroundPolicy(
+            backgroundPolicyRoute.userId,
+            backgroundPolicyRoute.subjectId,
+          ),
         });
         return;
       }

@@ -38,6 +38,10 @@ function resourceRisk(resourceType, action) {
     return 'high';
   }
 
+  if (resourceType === 'proactive_interaction') {
+    return action === 'execute' ? 'medium' : 'low';
+  }
+
   if (resourceType === 'device' && action === 'control') {
     return 'critical';
   }
@@ -58,9 +62,15 @@ export function classifySecurityRisk({
   resourceType,
   action,
   sensitiveDataCategories,
+  minimumRiskLevel = 'low',
 }) {
   const reasons = new Set();
-  const levels = [operationRisk[operationType], actionRisk[action], resourceRisk(resourceType, action)];
+  const levels = [
+    operationRisk[operationType],
+    actionRisk[action],
+    resourceRisk(resourceType, action),
+    minimumRiskLevel,
+  ];
 
   if (operationRisk[operationType] !== 'low') {
     reasons.add(`operation:${operationType}`);
@@ -72,6 +82,10 @@ export function classifySecurityRisk({
 
   if (resourceRisk(resourceType, action) !== 'low') {
     reasons.add(`resource:${resourceType}`);
+  }
+
+  if (minimumRiskLevel !== 'low') {
+    reasons.add(`minimum_risk:${minimumRiskLevel}`);
   }
 
   for (const category of sensitiveDataCategories) {

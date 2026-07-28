@@ -10,6 +10,7 @@ export const PERMISSION_RESOURCE_TYPES = Object.freeze([
   'api',
   'private_domain',
   'life_data',
+  'proactive_interaction',
 ]);
 
 export const PERMISSION_LEVELS = Object.freeze([

@@ -20,6 +20,7 @@ import { createSqliteModelRoutingRuleRepository } from './integrations/database/
 import { createSqliteDatabase } from './integrations/database/sqlite-database.js';
 import { createSqliteModelRepository } from './integrations/database/sqlite-model-repository.js';
 import { createSqlitePermissionRepository } from './integrations/database/sqlite-permission-repository.js';
+import { createSqliteProactiveInteractionRepository } from './integrations/database/sqlite-proactive-interaction-repository.js';
 import { createSqliteSecurityPolicyRepository } from './integrations/database/sqlite-security-policy-repository.js';
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
@@ -48,6 +49,7 @@ import { createMessageService } from './modules/messages/message-service.js';
 import { createMessageVersionService } from './modules/message-versions/message-version-service.js';
 import { createPermissionChecker } from './modules/permissions/permission-checker.js';
 import { createPermissionService } from './modules/permissions/permission-service.js';
+import { createProactiveInteractionService } from './modules/proactive-interactions/proactive-interaction-service.js';
 import { createSecurityService } from './modules/security/security-service.js';
 import { createSecurityPolicyService } from './modules/security-policies/security-policy-service.js';
 import { createSensitiveDataService } from './modules/sensitive-data/sensitive-data-service.js';
@@ -82,6 +84,9 @@ export function createApplication({ config, logger = console }) {
     database.connection,
   );
   const permissionRepository = createSqlitePermissionRepository(database.connection);
+  const proactiveInteractionRepository = createSqliteProactiveInteractionRepository(
+    database.connection,
+  );
   const securityPolicyRepository = createSqliteSecurityPolicyRepository(database.connection);
   const auditLogRepository = createSqliteAuditLogRepository(database.connection);
   const capabilityRegistryRepository = createSqliteCapabilityRegistryRepository(
@@ -229,6 +234,16 @@ export function createApplication({ config, logger = console }) {
     eventService,
     runInTransaction: database.runInTransaction,
   });
+  const proactiveInteractionService = createProactiveInteractionService({
+    proactiveInteractionRepository,
+    userRepository,
+    subjectRepository,
+    eventRepository,
+    modelRepository,
+    securityService,
+    eventService,
+    runInTransaction: database.runInTransaction,
+  });
   const userSpaceService = createUserSpaceService({
     userSpaceRepository,
     userRepository,
@@ -313,6 +328,7 @@ export function createApplication({ config, logger = console }) {
     permissionChecker,
     securityService,
     securityPolicyService,
+    proactiveInteractionService,
     sensitiveDataService,
     auditLogService,
     confirmationService,

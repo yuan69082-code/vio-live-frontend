@@ -130,7 +130,7 @@ export function createSecurityService({
   }
 
   return {
-    checkSecurity(userId, value) {
+    checkSecurity(userId, value, { minimumRiskLevel = 'low' } = {}) {
       const input = requireOnlyFields(value, [
         'subjectId',
         'resourceType',
@@ -159,6 +159,11 @@ export function createSecurityService({
       const sensitiveDataCategories = normalizeSensitiveDataCategories(
         input.sensitiveDataCategories,
       );
+      const normalizedMinimumRiskLevel = requireSecurityValue(
+        minimumRiskLevel,
+        'minimumRiskLevel',
+        ['low', 'medium', 'high', 'critical'],
+      );
       const confirmationId = optionalString(
         input.confirmationId,
         'confirmationId',
@@ -179,6 +184,7 @@ export function createSecurityService({
           resourceType: scope.resourceType,
           action: scope.action,
           sensitiveDataCategories,
+          minimumRiskLevel: normalizedMinimumRiskLevel,
         });
         let securityPolicy = securityPolicyService.evaluate({
           userId,

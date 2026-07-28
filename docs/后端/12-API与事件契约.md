@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、User/User Space/当前助手/数据隔离检查、Subject/Assistant Global Settings/AI Private Space、Conversation/Message/Version/Context、Event、Provider/Model 路由、扩展/设备 Registry、生活管理、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、账号/数据隔离、对话/Context、Event、模型路由、扩展/设备/生活/私域、Permission/Security，以及 Wake/主动提示/Token/后台策略基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -100,6 +100,28 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 User 创建时与一对一 User Space 原子提交；首个 Subject 在空间没有当前助手时成为当前助手。当前助手是导航/请求选择，不属于 SubjectState，切换不得修改 Global Settings、Private Space、SubjectState、Conversation、Event 或生活数据。
 
 数据访问检查只接受预定义资源类型、资源 ID、可选助手 ID、动作和确认元数据。用户/普通 AI/Event 资源先使用固定复合查询验证所有权；AI Private Space、Device 与生活资源在所有权命中后继续进入精确 Permission → Security Policy → Confirmation。错配用户、助手或资源组合统一按 `404` 处理；通过检查也只返回 `ready`，执行状态固定 `not_executed`。完整类型与字段见后端 [`API.md`](../../backend/docs/API.md)。
+
+## Wake、主动提示、Token 与后台策略契约
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/wake-rules` | 创建/列出 Wake 规则 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/wake-rules/:wakeId` | 更新应用内授权或状态 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/wake-rules/:wakeId/preparations` | 执行未连接、未唤醒的安全准备 |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/proactive-prompt-rules` | 创建/列出主动提示规则 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/proactive-prompt-rules/:promptRuleId` | 更新优先级、确认要求或状态 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/proactive-prompt-rules/:promptRuleId/preparations` | 使用同范围 Event 形成未投递记录 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/proactive-prompt-records` | 查询提示准备记录 |
+| `PUT` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/token-budget` | 保存/读取日与会话预算 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/token-budget/checks` | 评估估算 Token 与超额策略 |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/token-usage-records` | 保存/列出显式计量元数据 |
+| `PUT` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/background-policy` | 保存/读取后台运行限制 |
+
+Wake 类型为 `voice`、`desktop`、`schedule`、`event`，授权是应用内元数据，不代表麦克风或系统权限。提示优先级为 `urgent`、`important`、`normal`、`silent`；静默只形成 `suppressed` 记录。提示 Event 必须属于同一用户，主体 Event 还必须属于相同主体；内部准备 Event 不能循环触发提示。
+
+Token 超额策略为 `block`、`require_confirmation`、`defer`。预算检查只计算 UTC 日和预算会话投影，不写使用记录。显式使用记录固定 `usageSource=explicit_api_input`、`modelCallStatus=not_performed_by_platform`、`billingStatus=not_billed`。后台策略字段只参与准备资格，不启动调度器。
+
+本阶段新增 `wake_configuration_changed`、`wake_trigger_prepared`、`proactive_prompt_prepared`、`token_budget_changed`、`token_usage_recorded`、`background_policy_changed`。事件只保存规则/预算/记录 ID、类型、状态和执行边界，不保存音频、提示正文、模型响应或凭据。
 
 ## Conversation、Message 与 Version 契约
 
