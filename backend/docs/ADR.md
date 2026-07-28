@@ -199,6 +199,14 @@
 - 原因：摘要与状态如果覆盖写入或缺少来源，将无法解释跨窗口连续从何而来；如果 Context Service 在没有模型、Memory、权限筛选和 continuity-engine 的阶段自行生成提示词或推演状态，会把基础数据投影误当成真实连续性能力。不可变记录、强来源引用和独立当前指针可以兼顾历史追溯与快速读取，只读装配则保持模型和连续性边界。
 - 影响：摘要、状态和来源均按用户/主体复合归属隔离，事务故障不会留下无来源摘要、孤立状态或错误当前指针。摘要和 `state_update` 都由开发调用方提交，不代表 AI 已生成或 continuity-engine 已计算；本阶段不新增摘要/状态 Event，避免派生数据形成自动消费回路。Context 响应固定标记模型、外部 API 与 continuity-engine 未调用，Memory 返回 `not_implemented`。真实摘要生成、相关性检索、Token 预算、Memory、权限过滤、分支、删除、重置和生产保留策略仍需后续独立决策。
 
+## BE-ADR-025｜助手全局设定与动态主体状态分离
+
+- 日期：2026-07-28
+- 状态：已采用，仅限开发期全局设定基础
+- 决策：AI Assistant Global Settings 是 Subject 的一对一、可由用户明确更新的长期配置。`subjects.name` 和 `subjects.avatar_ref` 继续作为助手身份的唯一事实来源，避免复制身份字段；新表 `assistant_global_settings` 保存人格描述、表达方式、关系定义、长期要求和禁止事项。服务层把两处数据投影成单一全局设定对象，并在同一事务更新身份字段、扩展设定和最小 `subject_updated` Event。Context 读取该投影作为 `subjectGlobalSettings`，不再把通用 `basicSettings` 冒充完整长期设定。
+- 原因：名称和头像已被 Subject、Dashboard 与现有 API 使用，复制到新表会产生双写漂移；而把长期设定继续塞入无类型的 `basicSettings`，又无法形成稳定接口和与 SubjectState 的清晰边界。独立一对一扩展表兼容既有身份数据，同时为表达、关系和长期规则提供明确结构。
+- 影响：创建 Subject 时必须原子创建默认空白全局设定，迁移为既有主体回填空白结构但不从旧 JSON 猜测人格。全局设定允许原地更新且无变化不写库；SubjectState 仍为带来源的不可变动态状态历史，任何设定更新都不能创建、覆盖或切换状态版本。长期要求和禁止事项只能约束助手偏好，不能削弱系统最低安全规则。当前不生成设定、不调用模型、外部 API 或 continuity-engine，也不修改前端页面。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：

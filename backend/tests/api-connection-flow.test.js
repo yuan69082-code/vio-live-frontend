@@ -109,6 +109,20 @@ test('User, Subject and Dashboard APIs share one envelope and persisted data flo
     assert.deepEqual(updated.body.data.basicSettings, {
       responseStyle: 'warm-and-clear',
     });
+    const settingsAfterSubjectUpdate = await getJson(
+      context.baseUrl,
+      `/api/v1/users/${user.userId}/subjects/${subject.subjectId}/global-settings`,
+    );
+    assert.equal(settingsAfterSubjectUpdate.response.status, 200);
+    assert.equal(settingsAfterSubjectUpdate.body.data.name, 'Vio Connected');
+    assert.equal(
+      settingsAfterSubjectUpdate.body.data.avatarRef,
+      'builtin-avatar:moon',
+    );
+    assert.equal(
+      settingsAfterSubjectUpdate.body.data.updatedAt,
+      updated.body.data.updatedAt,
+    );
 
     const updateEvents = await getJson(
       context.baseUrl,

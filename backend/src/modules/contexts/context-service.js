@@ -47,6 +47,7 @@ function projectEvent(event) {
 export function createContextService({
   userService,
   subjectService,
+  assistantGlobalSettingsService,
   conversationService,
   messageRepository,
   conversationSummaryService,
@@ -58,6 +59,10 @@ export function createContextService({
     assembleContext(userId, subjectId, conversationId, options = {}) {
       const user = userService.getUser(userId);
       const subject = subjectService.getSubject(user.userId, subjectId);
+      const subjectGlobalSettings = assistantGlobalSettingsService.getSettings(
+        user.userId,
+        subject.subjectId,
+      );
       const conversation = conversationService.getConversation(
         user.userId,
         subject.subjectId,
@@ -112,11 +117,7 @@ export function createContextService({
             status: 'reserved',
             items: [],
           },
-          subjectGlobalSettings: {
-            name: subject.name,
-            avatarRef: subject.avatarRef,
-            basicSettings: subject.basicSettings,
-          },
+          subjectGlobalSettings,
           currentSubjectState,
           unresolvedEvents,
           recentMessages: messages,

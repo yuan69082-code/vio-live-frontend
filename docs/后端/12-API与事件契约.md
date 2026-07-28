@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、健康检查、User/Subject/Dashboard、Conversation/Message/MessageVersion、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、健康检查、User/Subject/Assistant Global Settings/Dashboard、Conversation/Message/MessageVersion、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -78,9 +78,15 @@
 | `GET` | `/api/v1/users/:userId/subjects` | 查询该用户主体列表，返回 `meta.count` |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId` | 按用户/主体双重归属查询单项 |
 | `PATCH` | `/api/v1/users/:userId/subjects/:subjectId` | 更新名字、头像引用或基础设定 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/global-settings` | 读取助手长期全局设定 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/global-settings` | 局部更新助手长期全局设定 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/dashboard` | 聚合用户、主体和基础活动状态 |
 
 Subject PATCH 只接受 `name`、`avatarRef`、`basicSettings`，至少提供一个字段；`basicSettings` 使用整对象替换。只有实际变化才与最小 `subject_updated` Event 同事务提交，无变化请求不更新时间或重复发事件。
+
+Global Settings PATCH 只接受 `name`、`avatarRef`、`personalityDescription`、`expressionStyle`、`relationshipDefinition`、`longTermRequirements` 和 `prohibitions`。名称/头像复用 Subject 唯一身份字段，其他长期设定保存于一对一扩展表。实际变化与只含 `changedFields` 的 `subject_updated` Event 原子提交；无变化不写库。设定正文不复制到 Event，长期要求和禁止事项不能削弱平台最低安全规则。
+
+Global Settings 是用户明确配置、允许更新的长期静态层；SubjectState 是带来源、不可变追加的动态层。任一 Global Settings 更新都不得创建、覆盖或切换 SubjectState，也不表示模型或 continuity-engine 已运行。
 
 Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示用户和主体均为 `active`；连续性固定返回 `not_available`，不从 mock、设定或模型配置猜测未实现状态，也不返回设备、待办、提醒或模型结果。
 
@@ -146,7 +152,7 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 
 `state_update` 包含 `currentState`、`emotion`、`intensity`、`changeReason`、`unresolvedEventIds`、`continuityConstraints` 和 `source`。来源支持同主体 MessageVersion、Event 或 ConversationSummary；状态、未解决 Event 和当前指针原子提交，旧状态保持不可变。
 
-Context 支持限制近期消息和跨窗口摘要数量，按系统安全位置、主体全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、Memory 位置、本轮用户消息的顺序返回。系统规则内容固定为 `reserved`，Memory 固定为 `not_implemented`，模型、外部 API 和 continuity-engine 固定标记 `not_performed`。接口不生成提示词、不持久化装配结果，也不产生 Token 或外部请求。
+Context 支持限制近期消息和跨窗口摘要数量，按系统安全位置、完整助手全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、Memory 位置、本轮用户消息的顺序返回。系统规则内容固定为 `reserved`，Memory 固定为 `not_implemented`，模型、外部 API 和 continuity-engine 固定标记 `not_performed`。接口不生成提示词、不持久化装配结果，也不产生 Token 或外部请求。
 
 ## 每轮模型契约
 

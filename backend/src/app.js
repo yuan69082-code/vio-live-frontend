@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 
 import { createRouter } from './http/router.js';
+import { createSqliteAssistantGlobalSettingsRepository } from './integrations/database/sqlite-assistant-global-settings-repository.js';
 import { createSqliteAuditLogRepository } from './integrations/database/sqlite-audit-log-repository.js';
 import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
 import { createSqliteConfirmationRepository } from './integrations/database/sqlite-confirmation-repository.js';
@@ -16,6 +17,7 @@ import { createSqliteSubjectRepository } from './integrations/database/sqlite-su
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
 import { createSqliteUserRepository } from './integrations/database/sqlite-user-repository.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
+import { createAssistantGlobalSettingsService } from './modules/assistant-global-settings/assistant-global-settings-service.js';
 import { createAuditLogService } from './modules/audit-logs/audit-log-service.js';
 import { createConfirmationService } from './modules/confirmations/confirmation-service.js';
 import { createContextService } from './modules/contexts/context-service.js';
@@ -39,6 +41,8 @@ export function createApplication({ config, logger = console }) {
   const database = createSqliteDatabase(config);
   const userRepository = createSqliteUserRepository(database.connection);
   const subjectRepository = createSqliteSubjectRepository(database.connection);
+  const assistantGlobalSettingsRepository =
+    createSqliteAssistantGlobalSettingsRepository(database.connection);
   const conversationRepository = createSqliteConversationRepository(database.connection);
   const conversationSummaryRepository = createSqliteConversationSummaryRepository(
     database.connection,
@@ -60,6 +64,7 @@ export function createApplication({ config, logger = console }) {
   });
   const subjectService = createSubjectService({
     subjectRepository,
+    assistantGlobalSettingsRepository,
     userRepository,
     eventService,
     runInTransaction: database.runInTransaction,
@@ -104,9 +109,16 @@ export function createApplication({ config, logger = console }) {
     eventRepository,
     runInTransaction: database.runInTransaction,
   });
+  const assistantGlobalSettingsService = createAssistantGlobalSettingsService({
+    subjectRepository,
+    assistantGlobalSettingsRepository,
+    eventService,
+    runInTransaction: database.runInTransaction,
+  });
   const contextService = createContextService({
     userService,
     subjectService,
+    assistantGlobalSettingsService,
     conversationService,
     messageRepository,
     conversationSummaryService,
@@ -167,6 +179,7 @@ export function createApplication({ config, logger = console }) {
     database,
     userService,
     subjectService,
+    assistantGlobalSettingsService,
     conversationService,
     conversationSummaryService,
     subjectStateService,

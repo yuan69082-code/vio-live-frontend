@@ -39,6 +39,7 @@ export function createRouter({
   database,
   userService,
   subjectService,
+  assistantGlobalSettingsService,
   conversationService,
   conversationSummaryService,
   subjectStateService,
@@ -162,6 +163,33 @@ export function createRouter({
           data: subjectService.updateSubject(
             subjectRoute.userId,
             subjectRoute.subjectId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const assistantGlobalSettingsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/global-settings$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'GET' && assistantGlobalSettingsRoute) {
+        sendJson(response, 200, {
+          data: assistantGlobalSettingsService.getSettings(
+            assistantGlobalSettingsRoute.userId,
+            assistantGlobalSettingsRoute.subjectId,
+          ),
+        });
+        return;
+      }
+
+      if (request.method === 'PATCH' && assistantGlobalSettingsRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: assistantGlobalSettingsService.updateSettings(
+            assistantGlobalSettingsRoute.userId,
+            assistantGlobalSettingsRoute.subjectId,
             input,
           ),
         });

@@ -2,12 +2,13 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 4｜上下文、摘要与跨窗口连续”。后端已经可以独立启动，并在既有对话事实之上建立可追溯摘要、主体状态版本和只读上下文装配闭环：
+当前阶段为“平台后端 5｜AI 助手全局设定”。后端已经可以独立启动，并在既有主体身份与上下文基础上建立长期全局设定闭环：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
 API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一响应
 对话事实 → 可追溯摘要 → 跨窗口读取 → 当前主体状态 → 只读上下文投影
+主体身份 → 长期全局设定 → 跨窗口读取/更新 → Context 只读投影
 ```
 
 已实现：
@@ -19,6 +20,8 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 - 开发期当前用户解析；显式标明不是认证或登录会话
 - Subject 创建、列表、所属用户绑定、查询和基础信息更新
 - Subject 实际更新与 `subject_updated` Event 同事务提交
+- AI Assistant Global Settings 读取与局部更新，支持名称、头像、人格描述、表达方式、关系定义、长期要求和禁止事项
+- 全局设定与 SubjectState 分库存储、语义分离；设定更新不创建或覆盖动态状态版本
 - Dashboard 对现有 User/Subject 与基础可用状态的安全聚合
 - Conversation 创建、列表和按用户/主体双重归属查询
 - `user`、`subject`、`system` 三类 Message 创建及稳定 `sequenceNumber` 排序
@@ -28,7 +31,7 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 - ConversationSummary 不可变追加、会话内单调版本及 MessageVersion/Event 来源引用
 - 从当前 Conversation 读取同一主体其他窗口的最新摘要
 - `state_update` 接收、不可变 SubjectState 历史、当前状态指针和未解决 Event 引用
-- 按安全规则占位、主体全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、记忆占位和本轮用户消息顺序装配上下文
+- 按安全规则占位、完整助手全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、记忆占位和本轮用户消息顺序装配上下文
 - 上下文接口明确返回模型、外部 API 与 continuity-engine 均未调用
 - Event 创建、单项查询及按用户、主体、时间、类型和状态筛选
 - 九类基础软件事件和事件数据秘密字段拦截
@@ -50,9 +53,9 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- `pnpm test` 当前 20/20 通过，覆盖启动、API 契约、摘要来源、跨窗口读取、状态版本、上下文装配、不可变约束、事务回滚、持久化和跨用户/主体/对话隔离
+- `pnpm test` 当前 23/23 通过，覆盖启动、API 契约、全局设定、摘要来源、跨窗口读取、状态版本、上下文装配、不可变约束、事务回滚、持久化和跨用户/主体/对话隔离
 
-主体消息、“重生成”版本、摘要和 `state_update` 都由开发调用方显式提交；后端只验证、保存、读取和装配结构化投影，不生成摘要、不推演状态，也不调用 AI、Model Router、供应商 API 或 continuity-engine。本阶段没有实现分支、消息删除、窗口重置、Memory 持久化、MCP/Skill/Tool 实际调用，也没有实现真实登录、正式数据库、真实 API Key、真实支付、真实设备、手机权限或 AI 私域业务。前端页面与 mock 未修改，现有对话页没有迁移到这些真实接口。
+助手全局设定由用户或开发调用方显式配置；主体消息、“重生成”版本、摘要和 `state_update` 也都由开发调用方显式提交。后端只验证、保存、读取和装配结构化投影，不生成设定或摘要、不推演状态，也不调用 AI、Model Router、供应商 API 或 continuity-engine。本阶段没有实现分支、消息删除、窗口重置、Memory 持久化、MCP/Skill/Tool 实际调用，也没有实现真实登录、正式数据库、真实 API Key、真实支付、真实设备、手机权限或 AI 私域业务。前端页面与 mock 未修改，现有页面没有迁移到这些真实接口。
 
 ## 运行要求
 
@@ -123,6 +126,8 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `GET` | `/api/v1/users/:userId/subjects` | 查询该用户的主体列表 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId` | 按用户和主体双重归属查询主体 |
 | `PATCH` | `/api/v1/users/:userId/subjects/:subjectId` | 更新名字、头像引用或基础设定并记录事件 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/global-settings` | 读取 AI 助手长期全局设定 |
+| `PATCH` | `/api/v1/users/:userId/subjects/:subjectId/global-settings` | 局部更新长期全局设定并记录事件 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/dashboard` | 聚合用户、主体和基础状态 |
 | `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations` | 创建属于当前用户和主体的 Conversation |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations` | 按最近活动时间查询 Conversation 列表 |
@@ -184,6 +189,7 @@ backend/
 │  ├─ integrations/database/ # SQLite、迁移和仓储适配
 │  ├─ modules/users/         # User 业务规则
 │  ├─ modules/subjects/      # Subject 业务规则
+│  ├─ modules/assistant-global-settings/ # AI 助手长期全局设定
 │  ├─ modules/dashboard/     # 现有 User/Subject 基础聚合
 │  ├─ modules/conversations/ # 用户/主体范围的对话容器
 │  ├─ modules/messages/      # 顺序消息与当前版本投影
@@ -211,9 +217,11 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions`、`security_confirmations` 和 `audit_logs`。
+- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions`、`security_confirmations` 和 `audit_logs`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
+- `assistant_global_settings` 与 Subject 一对一绑定；名称和头像仍以 `subjects` 为唯一身份来源，人格、表达、关系、长期要求与禁止事项保存在独立设定表。新建 Subject 与默认设定原子提交，设定更新与最小 `subject_updated` Event 原子提交。
+- 全局设定是可由用户明确修改的长期配置；SubjectState 是带来源、不可变追加的动态状态历史。更新任何全局设定都不会新增、切换或覆盖 SubjectState。
 - Conversation、Message 和 MessageVersion 都保存 `user_id`、`subject_id`、`conversation_id` 复合归属；消息和版本不能跨用户、主体或对话引用。
 - Message 使用对话内唯一且递增的 `sequence_number` 稳定排序，并以复合外键 `current_version_id` 投影当前正文与版本号。
 - MessageVersion 正文由数据库触发器阻止覆盖；同一消息的版本号唯一，`parent_version_id` 只能引用同一用户、主体、对话和消息的版本。
@@ -241,6 +249,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。当前 Context Service 只按固定产品顺序投影已有主体设定、状态、事件、消息和跨窗口摘要；它不生成提示词、不筛选长期 Memory、不调用模型，也不执行连续性算法。SubjectState 仅保存开发调用方提交且带来源的 `state_update`，不代表 continuity-engine 已接入。Dashboard 的 `continuityStatus` 仍表示独立引擎不可用。Security 仍只返回执行资格，不连接支付、手机权限、MCP、Skill、Tool、设备或 AI 私域。分支、删除和窗口重置仍未实现。
+平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`。当前 Context Service 只按固定产品顺序投影已有全局设定、状态、事件、消息和跨窗口摘要；它不生成提示词、不筛选长期 Memory、不调用模型，也不执行连续性算法。Dashboard 的 `continuityStatus` 仍表示独立引擎不可用。全局设定中的长期要求和禁止事项不能削弱平台最低安全规则。Security 仍只返回执行资格，不连接支付、手机权限、MCP、Skill、Tool、设备或 AI 私域。分支、删除和窗口重置仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

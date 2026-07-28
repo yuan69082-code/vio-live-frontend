@@ -2,13 +2,13 @@
 
 ## 状态与边界
 
-- 当前阶段：平台后端 4｜上下文、摘要与跨窗口连续
-- 后端版本：`0.8.0`
+- 当前阶段：平台后端 5｜AI 助手全局设定
+- 后端版本：`0.9.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
 
-前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。前端页面和 mock 本阶段没有修改，也没有接入 Conversation、Summary、SubjectState 或 Context API；当前真实页面连接仍只包含独立 API 客户端和应用启动健康握手。
+前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。前端页面和 mock 本阶段没有修改，也没有接入 Global Settings、Conversation、Summary、SubjectState 或 Context API；当前真实页面连接仍只包含独立 API 客户端和应用启动健康握手。
 
 ## 统一返回结构
 
@@ -64,6 +64,7 @@
 - Message `content` 必须是非空字符串，统一换行为 `\n`，最多 32768 个字符。
 - ConversationSummary `content` 最多 16384 字符，且必须包含 1—100 个可验证来源引用。
 - `state_update.intensity` 是 `0`—`1` 的有限数字；当前状态和连续性约束只保存调用方提交的数据，不由后端推演。
+- `expressionStyle` 接受普通 JSON 对象；`longTermRequirements` 和 `prohibitions` 各最多 100 个非空、去重字符串。全局设定不得包含模型密钥或被解释为平台安全规则替代物。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
 ## 服务接口
@@ -149,6 +150,38 @@
 | `basicSettings` | 普通 JSON 对象，使用整对象替换，不做隐式深层合并 |
 
 实际发生变化时，主体更新与一个只含 `changedFields` 的 `subject_updated` Event 在同一事务提交；无变化请求不更新时间，也不重复产生事件。
+
+## AI Assistant Global Settings API
+
+全局设定属于 `userId + subjectId` 范围，跨窗口长期生效。名称与头像继续复用 Subject 的唯一身份字段；人格、表达、关系、长期要求和禁止事项由一对一 `assistant_global_settings` 记录保存。
+
+### 读取全局设定
+
+`GET /api/v1/users/:userId/subjects/:subjectId/global-settings`
+
+返回：
+
+| 字段 | 说明 |
+| --- | --- |
+| `userId` / `subjectId` | 用户与主体复合归属 |
+| `name` | 助手名称，来源于 Subject |
+| `avatarRef` | 头像或标识资源引用，来源于 Subject |
+| `personalityDescription` | 长期人格与基础定位描述 |
+| `expressionStyle` | 表达方式配置 JSON 对象 |
+| `relationshipDefinition` | 助手与用户的长期关系定义 |
+| `longTermRequirements` | 用户明确设置的长期要求数组 |
+| `prohibitions` | 助手禁止事项数组；不能削弱平台安全规则 |
+| `createdAt` / `updatedAt` | 设定创建时间及身份/设定最后更新时间 |
+
+### 更新全局设定
+
+`PATCH /api/v1/users/:userId/subjects/:subjectId/global-settings`
+
+请求体至少包含一个返回中的可编辑设定字段，不接受 `userId`、`subjectId`、时间、状态字段或 SubjectState 字段。`name` 最多 80 字符；`avatarRef` 最多 2048 字符并可用 `null` 清除；人格描述最多 8000 字符；关系定义最多 4000 字符；长期要求和禁止事项各最多 100 条，每条最多 1000 字符且不得重复。`expressionStyle` 会递归拒绝 API Key、Token、Secret、密码等明显秘密字段名。
+
+更新只改变实际变化的字段；无变化请求保持原 `updatedAt` 且不重复产生 Event。Subject 身份字段、扩展设定和最小 `subject_updated` Event 在同一事务提交，任一步失败整体回滚。事件只记录 `changedFields`，不复制人格、关系、要求或禁止事项正文。
+
+Global Settings 与 SubjectState 是不同数据层：前者是用户明确修改的长期静态配置，可原地更新；后者是带 MessageVersion/Event/ConversationSummary 来源的动态状态快照，只追加版本并由当前指针选择。更新全局设定不会创建、覆盖或切换 SubjectState，也不会调用模型或 continuity-engine。
 
 ## Conversation、Message 与 MessageVersion API
 

@@ -10,6 +10,7 @@ import {
 
 export function createSubjectService({
   subjectRepository,
+  assistantGlobalSettingsRepository,
   userRepository,
   eventService,
   runInTransaction,
@@ -39,7 +40,22 @@ export function createSubjectService({
         updatedAt: now,
       };
 
-      return subjectRepository.insert(subject);
+      return runInTransaction(() => {
+        const created = subjectRepository.insert(subject);
+        assistantGlobalSettingsRepository.insert({
+          ownerUserId: created.ownerUserId,
+          subjectId: created.subjectId,
+          personalityDescription: '',
+          expressionStyle: {},
+          relationshipDefinition: '',
+          longTermRequirements: [],
+          prohibitions: [],
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        return created;
+      });
     },
     getSubject(ownerUserId, subjectId) {
       const normalizedUserId = requireString(ownerUserId, 'userId', { maxLength: 128 });
@@ -114,6 +130,24 @@ export function createSubjectService({
 
         if (!updated) {
           throw new NotFoundError('Subject was not found for this user.');
+        }
+
+        if (changedFields.includes('name') || changedFields.includes('avatarRef')) {
+          const settings = assistantGlobalSettingsRepository.findBySubject(
+            normalizedUserId,
+            normalizedSubjectId,
+          );
+          if (!settings) {
+            throw new NotFoundError('Assistant global settings were not found.');
+          }
+
+          const updatedSettings = assistantGlobalSettingsRepository.update({
+            ...settings,
+            updatedAt: next.updatedAt,
+          });
+          if (!updatedSettings) {
+            throw new NotFoundError('Assistant global settings were not found.');
+          }
         }
 
         eventService.createEvent(normalizedUserId, {
