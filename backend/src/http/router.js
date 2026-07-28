@@ -55,6 +55,7 @@ export function createRouter({
   permissionService,
   permissionChecker,
   securityService,
+  securityPolicyService,
   sensitiveDataService,
   auditLogService,
   confirmationService,
@@ -1278,6 +1279,96 @@ export function createRouter({
         const input = await readJsonBody(request);
         sendJson(response, 200, {
           data: securityService.checkSecurity(securityChecksRoute.userId, input),
+        });
+        return;
+      }
+
+      const securityPreferencesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/security-preferences$/,
+        ['userId'],
+      );
+      if (request.method === 'GET' && securityPreferencesRoute) {
+        sendJson(response, 200, {
+          data: securityPolicyService.getPreferences(securityPreferencesRoute.userId),
+        });
+        return;
+      }
+      if (request.method === 'PATCH' && securityPreferencesRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: securityPolicyService.updatePreferences(
+            securityPreferencesRoute.userId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const securityPoliciesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/security-policies$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && securityPoliciesRoute) {
+        const input = await readJsonBody(request);
+        const policy = securityPolicyService.createPolicy(
+          securityPoliciesRoute.userId,
+          input,
+        );
+        sendJson(response, 201, { data: policy }, {
+          location: `/api/v1/users/${encodeURIComponent(policy.userId)}/security-policies/${encodeURIComponent(policy.policyId)}`,
+        });
+        return;
+      }
+      if (request.method === 'GET' && securityPoliciesRoute) {
+        const policies = securityPolicyService.listPolicies(
+          securityPoliciesRoute.userId,
+          {
+            resourceType: url.searchParams.get('resourceType'),
+            actionType: url.searchParams.get('actionType'),
+            riskLevel: url.searchParams.get('riskLevel'),
+            status: url.searchParams.get('status'),
+          },
+        );
+        sendJson(response, 200, {
+          data: policies,
+          meta: { count: policies.length },
+        });
+        return;
+      }
+
+      const securityPolicyRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/security-policies\/([^/]+)$/,
+        ['userId', 'policyId'],
+      );
+      if (request.method === 'GET' && securityPolicyRoute) {
+        sendJson(response, 200, {
+          data: securityPolicyService.getPolicy(
+            securityPolicyRoute.userId,
+            securityPolicyRoute.policyId,
+          ),
+        });
+        return;
+      }
+      if (request.method === 'PATCH' && securityPolicyRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: securityPolicyService.updatePolicy(
+            securityPolicyRoute.userId,
+            securityPolicyRoute.policyId,
+            input,
+          ),
+        });
+        return;
+      }
+      if (request.method === 'DELETE' && securityPolicyRoute) {
+        sendJson(response, 200, {
+          data: securityPolicyService.deletePolicy(
+            securityPolicyRoute.userId,
+            securityPolicyRoute.policyId,
+          ),
         });
         return;
       }

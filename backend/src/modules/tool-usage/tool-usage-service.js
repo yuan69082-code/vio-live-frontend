@@ -13,7 +13,7 @@ function requireOnlyFields(value, allowedFields) {
   );
   if (unexpectedFields.length > 0) {
     throw new ValidationError(
-      'Tool execution preparation accepts confirmation metadata only.',
+      'Tool execution preparation accepts security-session and confirmation metadata only.',
       { unexpectedFields },
     );
   }
@@ -93,7 +93,7 @@ export function createToolUsageService({
   return {
     prepareToolExecution(userId, subjectId, toolId, value) {
       const scope = requireScope(userId, subjectId);
-      const input = requireOnlyFields(value, ['confirmationId']);
+      const input = requireOnlyFields(value, ['confirmationId', 'securitySessionId']);
       const tool = capabilityRegistryService.getTool(scope.userId, toolId);
       if (tool.status !== 'enabled') {
         throw new ConflictError('Tool registry entry is disabled.');
@@ -101,6 +101,11 @@ export function createToolUsageService({
       const confirmationId = optionalString(
         input.confirmationId,
         'confirmationId',
+        { maxLength: 128 },
+      );
+      const securitySessionId = optionalString(
+        input.securitySessionId,
+        'securitySessionId',
         { maxLength: 128 },
       );
 
@@ -113,6 +118,7 @@ export function createToolUsageService({
           operationType: 'general_access',
           sensitiveDataCategories: [],
           ...(confirmationId ? { confirmationId } : {}),
+          ...(securitySessionId ? { securitySessionId } : {}),
         });
         const status = preparationStatus(security.decision);
         const usageRecord = capabilityRegistryRepository.insertToolUsage({

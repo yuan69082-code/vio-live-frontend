@@ -363,8 +363,8 @@ export function createDeviceService({
       const scope = requireScope(userId, subjectId);
       const input = requireOnlyFields(
         value,
-        ['capability', 'confirmationId'],
-        'Device operation preparation accepts capability and confirmation metadata only.',
+        ['capability', 'confirmationId', 'securitySessionId'],
+        'Device operation preparation accepts capability, security-session and confirmation metadata only.',
       );
       const device = requireDevice(scope.userId, deviceId);
       if (device.status !== 'enabled') {
@@ -374,6 +374,11 @@ export function createDeviceService({
       const confirmationId = optionalString(
         input.confirmationId,
         'confirmationId',
+        { maxLength: 128 },
+      );
+      const securitySessionId = optionalString(
+        input.securitySessionId,
+        'securitySessionId',
         { maxLength: 128 },
       );
 
@@ -386,6 +391,7 @@ export function createDeviceService({
           operationType: 'device_control',
           sensitiveDataCategories: [],
           ...(confirmationId ? { confirmationId } : {}),
+          ...(securitySessionId ? { securitySessionId } : {}),
         });
         const status = preparationStatus(security.decision);
         const event = recordDeviceEvent({

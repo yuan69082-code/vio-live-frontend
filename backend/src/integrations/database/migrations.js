@@ -33,15 +33,35 @@ export function runMigrations(connection, migrationsPath) {
     }
 
     const sql = readFileSync(join(migrationsPath, filename), 'utf8');
+    const requiresForeignKeysOff = /^\uFEFF?[ \t]*--[ \t]*vio-migration:[ \t]*foreign-keys-off[ \t]*(?:\r?\n|$)/.test(sql);
 
-    connection.exec('BEGIN IMMEDIATE');
+    if (requiresForeignKeysOff) {
+      connection.exec('PRAGMA foreign_keys = OFF;');
+    }
+
+    let transactionStarted = false;
     try {
+      connection.exec('BEGIN IMMEDIATE');
+      transactionStarted = true;
       connection.exec(sql);
+      if (requiresForeignKeysOff) {
+        const violations = connection.prepare('PRAGMA foreign_key_check;').all();
+        if (violations.length > 0) {
+          throw new Error(`Foreign key check failed with ${violations.length} violation(s).`);
+        }
+      }
       recordMigration.run(filename, new Date().toISOString());
       connection.exec('COMMIT');
+      transactionStarted = false;
     } catch (error) {
-      connection.exec('ROLLBACK');
+      if (transactionStarted) {
+        connection.exec('ROLLBACK');
+      }
       throw new Error(`Database migration failed: ${filename}`, { cause: error });
+    } finally {
+      if (requiresForeignKeysOff) {
+        connection.exec('PRAGMA foreign_keys = ON;');
+      }
     }
   }
 }

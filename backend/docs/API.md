@@ -2,8 +2,8 @@
 
 ## 状态与边界
 
-- 当前阶段：手机、家电与穿戴设备适配层
-- 后端版本：`0.12.0`
+- 当前阶段：权限与自定义安全栏
+- 后端版本：`0.13.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
@@ -67,7 +67,7 @@
 - `expressionStyle` 接受普通 JSON 对象；`longTermRequirements` 和 `prohibitions` 各最多 100 个非空、去重字符串。全局设定不得包含模型密钥或被解释为平台安全规则替代物。
 - Tool 的 `inputDefinition` / `outputDefinition` 只接受 JSON Schema 风格的普通对象，用于描述未来输入输出，不接受实际 Tool 输入、命令、处理器地址或执行结果。
 - MCP `serviceUrl` 只保存注册元数据，必须为 HTTP(S)，不得包含用户名、密码、URL 片段或 Key/Token/Secret 类查询参数；保存不会发起连接。
-- Device Registry 不接受外部设备 ID、位置、凭据、厂商 Token 或真实状态；设备操作准备只接受能力代码与可选 Confirmation ID，不接受温度、开关、摄像头命令或任意控制参数。
+- Device Registry 不接受外部设备 ID、位置、凭据、厂商 Token 或真实状态；设备操作准备只接受能力代码、可选 Confirmation ID 与可选开发期 `securitySessionId`，不接受温度、开关、摄像头命令或任意控制参数。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
 ## 服务接口
@@ -285,7 +285,7 @@ MessageVersion 返回：
 
 ### 对话软件事件
 
-Event 类型由五类扩展为九类：
+Event 当前共十二类：
 
 - `appearance_changed`
 - `subject_updated`
@@ -296,8 +296,11 @@ Event 类型由五类扩展为九类：
 - `message_created`
 - `message_updated`
 - `message_regenerated`
+- `permission_created`
+- `permission_revoked`
+- `confirmation_required`
 
-Conversation/Message 服务自动生成的四类新增 Event 只保存用户/主体归属及 Conversation、Message、MessageVersion、父版本、序号、发送者或状态等必要引用。自动事件不保存 Conversation `title` 或 Message `content`，也不会触发模型、上下文装配或连续性处理。Event 当前仍没有消费者。
+Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归属及 Conversation、Message、MessageVersion、父版本、序号、发送者或状态等必要引用。Permission 创建、变化和撤销分别生成生命周期事件；需要确认时 Security 生成 `confirmation_required`。自动事件不保存 Conversation `title`、Message `content`、安全策略正文或敏感操作数据，也不会触发模型、上下文装配、真实执行或连续性处理。Event 当前仍没有消费者。
 
 ## ConversationSummary API
 
@@ -536,6 +539,79 @@ Conversation/Message 服务自动生成的四类新增 Event 只保存用户/主
 
 Router 的 `execution` 始终返回 `modelCall=not_performed` 与 `externalApiCall=not_performed`。测试状态只是保留元数据，不被当成真实服务可用性证明。本模块不读取 Context，不装配提示词，不读取或修改 SubjectState、Assistant Global Settings，也不触发模型、MCP、Tool 或 continuity-engine。
 
+## Security Policy 与用户安全偏好 API
+
+安全执行顺序固定为 `Permission → Security Policy → Confirmation → execution preparation`。Security Policy 只能继续收紧 Permission，不能将基础权限的 `deny` 变为允许；`high` 和 `critical` 还受平台最低规则约束，始终逐次确认。
+
+### 用户安全偏好
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/security-preferences` | 读取用户安全偏好；尚未保存时返回安全默认值 |
+| `PATCH` | `/api/v1/users/:userId/security-preferences` | 局部更新默认等级、高风险策略、自动确认范围或禁止范围 |
+
+默认值为 `defaultSecurityLevel=low`、`highRiskOperationPolicy=always_confirm`，两个范围列表为空。更新示例：
+
+```json
+{
+  "defaultSecurityLevel": "medium",
+  "highRiskOperationPolicy": "always_confirm",
+  "autoConfirmationScopes": [
+    {
+      "resourceType": "memory",
+      "actionType": "read",
+      "maximumRiskLevel": "medium"
+    }
+  ],
+  "forbiddenScopes": [
+    {
+      "resourceType": "private_domain",
+      "actionType": "export"
+    }
+  ]
+}
+```
+
+- `defaultSecurityLevel` 支持 `low`、`medium`、`high`、`critical`，只会抬高平台分类结果。
+- `highRiskOperationPolicy` 只支持 `always_confirm`、`deny`、`deny_without_confirm`。
+- 自动确认范围只允许把上限设为 `low` 或 `medium`，不能跳过高风险底线。
+- 禁止范围按资源类型与动作匹配，并优先产生拒绝结果。
+
+### Security Policy
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/security-policies` | 创建精确的用户安全策略 |
+| `GET` | `/api/v1/users/:userId/security-policies` | 按 `resourceType`、`actionType`、`riskLevel`、`status` 筛选；默认只返回活动策略 |
+| `GET` | `/api/v1/users/:userId/security-policies/:policyId` | 查询单条用户范围策略 |
+| `PATCH` | `/api/v1/users/:userId/security-policies/:policyId` | 更新 `riskLevel` 或 `rule` |
+| `DELETE` | `/api/v1/users/:userId/security-policies/:policyId` | 标记为 `deleted`，保留审计轨迹 |
+
+创建请求：
+
+```json
+{
+  "resourceType": "tool",
+  "actionType": "execute",
+  "riskLevel": "medium",
+  "rule": "session_allow"
+}
+```
+
+`rule` 支持 `always_allow`、`session_allow`、`always_confirm`、`deny`、`deny_without_confirm`。同一用户、资源类型、动作和风险只能存在一条活动策略；更新策略会改变策略版本，使既有 Confirmation 与短时授权失配。
+
+### 安全检查、确认与短时会话授权
+
+`POST /api/v1/users/:userId/security-checks` 可在原有字段外提交可选 `securitySessionId`。该值是最多 128 字符的平台不透明开发期标识，不是登录 Session、Cookie 或认证凭证。
+
+- `session_allow` 在低/中风险下首次要求确认；确认批准并由完全匹配的安全检查消费后，才建立 30 分钟精确授权。
+- 短时授权绑定用户、主体、策略版本、安全会话、资源类型、资源 ID、动作和风险；任一变化都会失配。
+- 高/极高风险即使配置 `session_allow` 或 `always_allow`，仍必须每次确认且不创建短时授权。
+- 新建确认同时生成最小 `confirmation_required` Event。Confirmation 返回 `confirmationReason`、`riskDescription` 和用户决策后的 `userChoice=approve|reject`。
+- 所有结果仍固定 `executionAllowed=false`、`executionStatus=not_executed`；本接口不执行 Tool、设备或外部服务。
+
+策略、偏好、确认和最终安全结果写入最小 AuditLog。审计记录包含请求用户/主体、资源、动作、风险和最终结果，但不保存任意请求正文、秘密或外部响应。
+
 ## Tool、MCP、Skill 与 Plugin Registry API
 
 四类 Registry 都属于用户范围，`status` 只支持 `enabled`、`disabled`，创建时默认 `disabled`。`enabled` 仅表示注册项可进入能力选择，不表示 MCP 已连接、Plugin 已安装或 Skill/Tool 可执行。同一用户内同类注册项名称唯一；所有读取和更新都校验用户归属。
@@ -673,11 +749,12 @@ Router 的 `execution` 始终返回 `modelCall=not_performed` 与 `externalApiCa
 
 `POST /api/v1/users/:userId/subjects/:subjectId/tools/:toolId/execution-preparations`
 
-请求体只能为空对象，或在批准现有 Confirmation 后提交：
+请求体只能包含可选的 Confirmation 与开发期安全会话标识：
 
 ```json
 {
-  "confirmationId": "opaque-confirmation-id"
+  "confirmationId": "opaque-confirmation-id",
+  "securitySessionId": "local-security-session-1"
 }
 ```
 
@@ -792,7 +869,7 @@ Tool 注册状态 → Permission → Security 风险与 Confirmation → 使用�
 }
 ```
 
-可选 `status` 仍只支持 Permission 的 `active`、`inactive`。服务先验证用户、主体、Device 及能力归属，再使用能力映射出的 `read` 或 `control` 创建精确 `resourceType=device` Permission。Permission、`permission_changed` Event、Permission AuditLog 和 `authorization_changed` Device Event 在同一最外层事务提交。
+可选 `status` 仍只支持 Permission 的 `active`、`inactive`。服务先验证用户、主体、Device 及能力归属，再使用能力映射出的 `read` 或 `control` 创建精确 `resourceType=device` Permission。Permission、`permission_created` Event、Permission AuditLog 和 `authorization_changed` Device Event 在同一最外层事务提交。
 
 同一设备的多个能力如果映射到相同 action，会共享同一 Device Permission 范围；当前 Permission 唯一性仍按用户、主体、设备 ID 与 action，而不是按能力名称。
 
@@ -813,7 +890,8 @@ Tool 注册状态 → Permission → Security 风险与 Confirmation → 使用�
 ```json
 {
   "capability": "view_status",
-  "confirmationId": "opaque-confirmation-id"
+  "confirmationId": "opaque-confirmation-id",
+  "securitySessionId": "local-security-session-1"
 }
 ```
 
@@ -829,7 +907,7 @@ Device 注册启用
 → DeviceOperationLog(not_executed)
 ```
 
-所有设备能力当前都通过 `operationType=device_control` 进入 Security，因此风险等级为 `critical`，即使已有 `always_allow` 也必须每次确认。Permission 拒绝不能被 Confirmation 绕过。
+所有设备能力当前都通过 `operationType=device_control` 进入 Security，因此风险等级为 `critical`，即使已有 `always_allow` 或 `session_allow` 也必须每次确认，且不会建立短时会话授权。Permission 拒绝不能被 Security Policy 或 Confirmation 绕过。
 
 响应 `preparationStatus` 为 `ready`、`confirmation_required` 或 `denied`。即使 `ready`，以下字段也固定不变：
 

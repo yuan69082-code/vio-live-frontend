@@ -11,6 +11,7 @@ export const SECURITY_RISK_LEVELS = Object.freeze([
 export const SECURITY_OPERATION_TYPES = Object.freeze([
   'general_access',
   'permission_change',
+  'security_policy_change',
   'api_configuration_change',
   'privacy_access_request',
   'payment_operation',
@@ -21,6 +22,7 @@ export const SECURITY_OPERATION_TYPES = Object.freeze([
 
 export const SECURITY_RESOURCE_TYPES = Object.freeze([
   'permission',
+  'security_policy',
   'api_provider',
   'memory',
   'tool',
@@ -73,6 +75,11 @@ export const AUDIT_REASON_CODES = Object.freeze([
   'permission_updated',
   'permission_deleted',
   'permission_consumed',
+  'security_policy_created',
+  'security_policy_updated',
+  'security_policy_deleted',
+  'security_preference_updated',
+  'security_policy_denied',
   'api_provider_created',
   'api_provider_status_updated',
   'permission_denied',

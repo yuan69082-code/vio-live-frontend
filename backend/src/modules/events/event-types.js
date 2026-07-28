@@ -1,7 +1,10 @@
 export const EVENT_TYPES = Object.freeze([
   'appearance_changed',
   'subject_updated',
+  'permission_created',
   'permission_changed',
+  'permission_revoked',
+  'confirmation_required',
   'life_record_created',
   'device_changed',
   'conversation_created',

@@ -11,13 +11,13 @@ import {
   requirePermissionValue,
 } from '../permissions/permission-types.js';
 import { normalizeSensitiveDataCategories } from '../sensitive-data/sensitive-data-types.js';
+import { requireSecuritySessionId } from '../security-policies/security-policy-types.js';
 import {
   classifySecurityRisk,
   createSecurityPolicyFingerprint,
 } from './risk-classifier.js';
 import {
   SECURITY_OPERATION_TYPES,
-  confirmationModeForRisk,
   requireSecurityValue,
 } from './security-types.js';
 
@@ -34,19 +34,51 @@ function requireOnlyFields(value, allowedFields) {
   return input;
 }
 
-function confirmationView(mode, required, status, confirmationId = null) {
+function confirmationView(
+  mode,
+  required,
+  status,
+  confirmationId = null,
+  confirmationReason = null,
+  riskDescription = null,
+) {
   return {
     mode,
     required,
     status,
     confirmationId,
+    ...(confirmationReason ? { confirmationReason } : {}),
+    ...(riskDescription ? { riskDescription } : {}),
   };
+}
+
+function presentPolicy(evaluation) {
+  return {
+    policy: evaluation.policy,
+    decision: evaluation.decision,
+    canAsk: evaluation.canAsk,
+    confirmationMode: evaluation.confirmationMode,
+    reason: evaluation.reason,
+    effectiveRiskLevel: evaluation.effectiveRiskLevel,
+    preferences: evaluation.preferences,
+    securitySessionId: evaluation.securitySessionId,
+    sessionGrant: evaluation.sessionGrant,
+  };
+}
+
+function describeRisk(risk) {
+  const factors = risk.reasons.length > 0
+    ? risk.reasons.join(', ')
+    : 'platform baseline';
+  return `Risk level ${risk.level}; factors: ${factors}.`;
 }
 
 export function createSecurityService({
   permissionChecker,
+  securityPolicyService,
   confirmationService,
   auditLogService,
+  eventService,
   runInTransaction,
 }) {
   function recordResult({
@@ -81,6 +113,7 @@ export function createSecurityService({
     permission,
     risk,
     confirmation,
+    securityPolicy,
     auditLog,
   }) {
     return {
@@ -90,6 +123,7 @@ export function createSecurityService({
       executionStatus: 'not_executed',
       permission,
       risk,
+      securityPolicy: presentPolicy(securityPolicy),
       confirmation,
       auditLogId: auditLog.auditLogId,
     };
@@ -105,6 +139,7 @@ export function createSecurityService({
         'operationType',
         'sensitiveDataCategories',
         'confirmationId',
+        'securitySessionId',
       ]);
       const scope = {
         subjectId: requireString(input.subjectId, 'subjectId', { maxLength: 128 }),
@@ -129,6 +164,9 @@ export function createSecurityService({
         'confirmationId',
         { maxLength: 128 },
       );
+      const securitySessionId = input.securitySessionId === undefined
+        ? null
+        : requireSecuritySessionId(input.securitySessionId);
 
       return runInTransaction(() => {
         let permission = permissionChecker.checkPermission(
@@ -136,13 +174,37 @@ export function createSecurityService({
           scope,
           { consumeAllowOnce: false },
         );
-        const risk = classifySecurityRisk({
+        const classifiedRisk = classifySecurityRisk({
           operationType,
           resourceType: scope.resourceType,
           action: scope.action,
           sensitiveDataCategories,
         });
-        const policyMode = confirmationModeForRisk(risk.level);
+        let securityPolicy = securityPolicyService.evaluate({
+          userId,
+          subjectId: scope.subjectId,
+          resourceType: scope.resourceType,
+          resourceId: scope.resourceId,
+          actionType: scope.action,
+          classifiedRiskLevel: classifiedRisk.level,
+          securitySessionId,
+        });
+        const risk = {
+          ...classifiedRisk,
+          level: securityPolicy.effectiveRiskLevel,
+          sensitiveOperation: ['high', 'critical'].includes(
+            securityPolicy.effectiveRiskLevel,
+          ),
+          reasons: securityPolicy.effectiveRiskLevel === classifiedRisk.level
+            ? classifiedRisk.reasons
+            : [
+                ...classifiedRisk.reasons,
+                `user_default_security_level:${securityPolicy.effectiveRiskLevel}`,
+              ],
+          policyVersion: 'security-policy-v2',
+          classificationSource: 'platform_rules_and_user_security_policy',
+        };
+        const policyMode = securityPolicy.confirmationMode;
 
         if (permission.decision === 'deny') {
           const auditLog = recordResult({
@@ -160,10 +222,37 @@ export function createSecurityService({
             decision: 'deny',
             permission,
             risk,
+            securityPolicy,
             confirmation: confirmationView(
               policyMode,
               false,
               'blocked_by_permission',
+            ),
+            auditLog,
+          });
+        }
+
+        if (securityPolicy.decision === 'deny') {
+          const auditLog = recordResult({
+            userId,
+            scope,
+            operationType,
+            risk,
+            permission,
+            confirmationMode: 'not_required',
+            result: 'denied',
+            reasonCode: 'security_policy_denied',
+            confirmationId: null,
+          });
+          return result({
+            decision: 'deny',
+            permission,
+            risk,
+            securityPolicy,
+            confirmation: confirmationView(
+              'not_required',
+              false,
+              'blocked_by_security_policy',
             ),
             auditLog,
           });
@@ -179,8 +268,14 @@ export function createSecurityService({
           sensitiveDataCategories,
           risk,
           confirmationMode,
+          securityPolicy,
         });
         let confirmation = null;
+        let shouldCreateSessionGrant = false;
+        const confirmationReason = permission.decision === 'ask'
+          ? 'The active Permission requires confirmation for every request.'
+          : `Security policy requires confirmation before ${scope.action} on ${scope.resourceType}.`;
+        const riskDescription = describeRisk(risk);
 
         if (!confirmationRequired && confirmationId) {
           throw new ValidationError('confirmationId is not accepted when confirmation is not required.', {
@@ -200,6 +295,30 @@ export function createSecurityService({
               policyFingerprint,
               confirmationMode,
               riskLevel: risk.level,
+              securityPolicyId: securityPolicy.policy?.policyId ?? null,
+              securityPolicyUpdatedAt: securityPolicy.policy?.updatedAt ?? null,
+              securitySessionId,
+              confirmationReason,
+              riskDescription,
+            });
+            eventService.createEvent(userId, {
+              subjectId: scope.subjectId,
+              eventType: 'confirmation_required',
+              source: {
+                type: 'security-service',
+                reference: confirmation.confirmationId,
+              },
+              summary: 'Security confirmation is required.',
+              data: {
+                confirmationId: confirmation.confirmationId,
+                operationType,
+                resourceType: scope.resourceType,
+                action: scope.action,
+                riskLevel: risk.level,
+                confirmationMode,
+                securityPolicyId: securityPolicy.policy?.policyId ?? null,
+                executionStatus: 'not_executed',
+              },
             });
             const auditLog = recordResult({
               userId,
@@ -216,11 +335,14 @@ export function createSecurityService({
               decision: 'confirm',
               permission,
               risk,
+              securityPolicy,
               confirmation: confirmationView(
                 confirmationMode,
                 true,
                 confirmation.status,
                 confirmation.confirmationId,
+                confirmation.confirmationReason,
+                confirmation.riskDescription,
               ),
               auditLog,
             });
@@ -235,6 +357,9 @@ export function createSecurityService({
             policyFingerprint,
             confirmationMode,
             riskLevel: risk.level,
+            securityPolicyId: securityPolicy.policy?.policyId ?? null,
+            securityPolicyUpdatedAt: securityPolicy.policy?.updatedAt ?? null,
+            securitySessionId,
           });
           confirmation = confirmationUse.confirmation;
 
@@ -254,11 +379,14 @@ export function createSecurityService({
               decision: 'confirm',
               permission,
               risk,
+              securityPolicy,
               confirmation: confirmationView(
                 confirmationMode,
                 true,
                 confirmation.status,
                 confirmation.confirmationId,
+                confirmation.confirmationReason,
+                confirmation.riskDescription,
               ),
               auditLog,
             });
@@ -290,14 +418,26 @@ export function createSecurityService({
               decision: 'deny',
               permission,
               risk,
+              securityPolicy,
               confirmation: confirmationView(
                 confirmationMode,
                 true,
                 displayStatus,
                 confirmation.confirmationId,
+                confirmation.confirmationReason,
+                confirmation.riskDescription,
               ),
               auditLog,
             });
+          }
+
+          if (
+            permission.decision !== 'ask'
+            && securityPolicy.policy?.rule === 'session_allow'
+            && securitySessionId
+            && !['high', 'critical'].includes(securityPolicy.effectiveRiskLevel)
+          ) {
+            shouldCreateSessionGrant = true;
           }
         }
 
@@ -320,15 +460,35 @@ export function createSecurityService({
               decision: 'deny',
               permission,
               risk,
+              securityPolicy,
               confirmation: confirmationView(
                 confirmationMode,
                 confirmationRequired,
                 confirmation?.status ?? 'not_required',
                 confirmation?.confirmationId ?? null,
+                confirmation?.confirmationReason ?? null,
+                confirmation?.riskDescription ?? null,
               ),
               auditLog,
             });
           }
+        }
+
+        if (shouldCreateSessionGrant) {
+          const sessionGrant = securityPolicyService.createSessionGrant({
+            userId,
+            subjectId: scope.subjectId,
+            resourceId: scope.resourceId,
+            actionType: scope.action,
+            evaluation: securityPolicy,
+          });
+          securityPolicy = {
+            ...securityPolicy,
+            sessionGrant,
+            decision: 'allow',
+            confirmationMode: 'not_required',
+            reason: 'session_grant_created',
+          };
         }
 
         const auditLog = recordResult({
@@ -346,11 +506,14 @@ export function createSecurityService({
           decision: 'allow',
           permission,
           risk,
+          securityPolicy,
           confirmation: confirmationView(
             confirmationMode,
             confirmationRequired,
             confirmation?.status ?? 'not_required',
             confirmation?.confirmationId ?? null,
+            confirmation?.confirmationReason ?? null,
+            confirmation?.riskDescription ?? null,
           ),
           auditLog,
         });

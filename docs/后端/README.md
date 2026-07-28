@@ -4,7 +4,7 @@
 
 本目录依据《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》整理，用于描述平台后端的职责、数据边界、接口原则、安全约束和开发顺序。
 
-本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、User/Subject/Dashboard、AI Assistant Global Settings、Conversation/Message/MessageVersion、可追溯 ConversationSummary、SubjectState / `state_update`、跨窗口摘要和只读 Context 装配基础 API，以及 Event、Provider/Model、六类任务默认/备用路由、Permission 判断、Security/Confirmation/AuditLog、Tool/MCP/Skill/Plugin Registry、主体 Capability 视图、Device Registry/Capability 和 Tool/设备未执行准备记录；前端已建立独立 API 客户端和真实健康握手。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实摘要生成、模型连接/测试、API Key、Memory、continuity-engine、支付、真实 MCP、插件安装、Skill/Tool 执行、真实设备连接或其他外部能力已经完成。
+本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、User/Subject/Dashboard、AI Assistant Global Settings、Conversation/Message/MessageVersion、可追溯 ConversationSummary、SubjectState / `state_update`、跨窗口摘要和只读 Context 装配基础 API，以及 Event、Provider/Model、六类任务默认/备用路由、Permission 判断、用户 Security Policy/安全偏好、Security/Confirmation/AuditLog、Tool/MCP/Skill/Plugin Registry、主体 Capability 视图、Device Registry/Capability 和 Tool/设备未执行准备记录；前端已建立独立 API 客户端和真实健康握手。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实摘要生成、模型连接/测试、API Key、Memory、continuity-engine、支付、真实 MCP、插件安装、Skill/Tool 执行、真实设备连接或其他外部能力已经完成。
 
 ## 系统边界
 
@@ -23,17 +23,18 @@ Vio Live 由五层协作组成：
 - 项目当前包含 React + Vite + TypeScript 前端，以及独立的 Node.js 平台后端工程。
 - 当前前端页面仍使用模拟数据；独立 API 客户端已通过 Vite 同源代理连接后端并执行启动健康检查，但页面尚未消费真实 User/Subject/Dashboard/Conversation 数据。
 - 已建立独立 `backend/` 工程、README、后端 ADR、开发日志和阶段实施路线。
-- 后端可以独立启动，并提供统一响应、健康检查、User/Subject/Dashboard、Assistant Global Settings、Conversation/Message/MessageVersion、Event、Provider/Model、Model Routing Rule、四类扩展能力 Registry、Capability、Tool Usage、Device Registry/Capability/Operation、Permission、Security、Confirmation 和 AuditLog 基础接口。
-- 已完成核心逻辑数据模型，并使用开发期 SQLite 实现 `users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry`、`tool_usage_records`、`device_registry`、`device_capabilities`、`device_operation_logs`、`permissions`、`security_confirmations`、`audit_logs` 和迁移记录。
+- 后端可以独立启动，并提供统一响应、健康检查、User/Subject/Dashboard、Assistant Global Settings、Conversation/Message/MessageVersion、Event、Provider/Model、Model Routing Rule、四类扩展能力 Registry、Capability、Tool Usage、Device Registry/Capability/Operation、Permission、Security Policy、安全偏好、Security、Confirmation 和 AuditLog 基础接口。
+- 已完成核心逻辑数据模型，并使用开发期 SQLite 实现 `users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry`、`tool_usage_records`、`device_registry`、`device_capabilities`、`device_operation_logs`、`permissions`、`security_policies`、`user_security_preferences`、`security_policy_session_grants`、`security_confirmations`、`audit_logs` 和迁移记录。
 - Conversation 当前只支持主体范围的线性文本流；Message 保存稳定顺序和当前版本指针，MessageVersion 保存不可覆盖的原始、编辑和重生成记录。
 - ConversationSummary 按会话不可变追加并引用 MessageVersion/Event 来源；跨窗口只读取同主体其他 Conversation 的最新摘要。
 - SubjectState 按版本保存开发调用方提交的 `state_update`，当前指针与历史分离，未解决 Event 和状态来源均校验用户/主体归属。
 - AI Assistant Global Settings 一对一绑定 Subject，支持长期身份与偏好读取/更新；它不会创建、覆盖或切换动态 SubjectState。
 - Context 接口只读装配主体设定、当前状态、未解决事件、近期消息和跨窗口摘要；系统规则正文与 Memory 仍为明确占位，不调用模型或 continuity-engine。
-- Event 当前支持用户/可选主体归属、九种事件类型，以及按用户、主体、发生时间、类型和状态筛选；对话事件不复制标题或消息正文，尚无事件消费者。
+- Event 当前支持用户/可选主体归属、十二种事件类型，以及按用户、主体、发生时间、类型和状态筛选；对话和安全生命周期事件不复制标题、消息正文或敏感操作数据，尚无事件消费者。
 - Model Router 当前支持聊天、长文本、图片、视频、语音、搜索六类默认/备用规则和目录回退，只返回本地模型描述；测试状态固定未测试，API Key 安全存储端口不支持写入，不调用真实模型。
-- Permission 当前支持七类资源、五档权限、精确操作判断和权限变化事件；不执行任何真实资源操作。
-- Security 当前按 Permission、四级风险和三种确认要求返回执行资格，明确标记未执行；确认绑定完整作用域并单次消费。
+- Permission 当前支持七类资源、五档权限、精确操作判断和创建/变化/撤销生命周期事件；不执行任何真实资源操作。
+- Security Policy 支持五种规则、用户默认风险/高风险/自动确认/禁止偏好和 30 分钟精确会话授权；策略只能收紧 Permission，高/极高风险保持逐次确认。
+- Security 当前按 Permission → Policy → Confirmation 返回执行资格，明确标记未执行；确认绑定完整作用域、权限/策略版本和开发期安全会话并单次消费。
 - SensitiveData 只定义五类分类元数据；AuditLog 与 Event 分离且只保存最小脱敏字段。
 - Tool/MCP/Skill/Plugin 当前只保存注册元数据并按主体投影权限；MCP 未连接、Plugin 未安装、Skill/Tool 未执行。Tool 准备记录只表示 Permission 与 Security 门槛结果。
 - Device 当前按用户保存七类设备和四类能力元数据，主体授权复用 Permission；统一 Adapter 只有小米、美的、Apple、Android 和通用类型的未配置描述。设备始终标记未连接、状态未观测，操作准备与日志始终标记未执行，不包含厂商客户端或真实控制参数。

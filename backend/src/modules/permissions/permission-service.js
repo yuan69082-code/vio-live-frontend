@@ -68,9 +68,15 @@ export function createPermissionService({
   }
 
   function recordChange(permission, changeType, previous = null) {
+    const eventType = {
+      created: 'permission_created',
+      deleted: 'permission_revoked',
+      updated: 'permission_changed',
+      consumed: 'permission_changed',
+    }[changeType];
     eventService.createEvent(permission.userId, {
       subjectId: permission.subjectId,
-      eventType: 'permission_changed',
+      eventType,
       source: {
         type: 'permission-service',
         reference: permission.permissionId,

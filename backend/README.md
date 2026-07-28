@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前阶段为“手机、家电与穿戴设备适配层”。后端已经可以独立启动，并在既有 Permission、Security、Confirmation 与 Event 基础上建立设备注册、统一适配契约和设备操作准备闭环：
+当前阶段为“权限与自定义安全栏”。后端已经可以独立启动，并在既有 Permission、Security、Confirmation、AuditLog 与 Event 基础上建立用户可配置的安全策略闭环：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -14,6 +14,7 @@ Tool/MCP/Skill/Plugin 元数据 → 主体能力视图 → Permission 预览
 Tool 执行准备 → Permission 检查 → Security 检查/确认 → 未执行使用记录
 Device Registry → Capability 描述 → 未配置 Adapter 投影
 设备操作准备 → Permission → Security/Confirmation → device_changed Event → 未执行操作日志
+用户安全偏好/精确策略 → Permission → Policy → Confirmation → 未执行准备与审计
 ```
 
 已实现：
@@ -39,7 +40,7 @@ Device Registry → Capability 描述 → 未配置 Adapter 投影
 - 按安全规则占位、完整助手全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、记忆占位和本轮用户消息顺序装配上下文
 - 上下文接口明确返回模型、外部 API 与 continuity-engine 均未调用
 - Event 创建、单项查询及按用户、主体、时间、类型和状态筛选
-- 九类基础软件事件和事件数据秘密字段拦截
+- 十二类基础软件事件和事件数据秘密字段拦截
 - APIProvider 创建、列表/单项查询和启停状态更新，保存 Base URL、接口格式及只读测试状态
 - Model 创建、单项查询、费用说明和按 `chat`、`long_text`、`vision`、`image`、`video`、`audio`、`search`、`embedding` 能力查询
 - 聊天、长文本、图片、视频、语音、搜索六类任务的默认/备用模型规则创建、查询和更新
@@ -49,8 +50,12 @@ Device Registry → Capability 描述 → 未配置 Adapter 投影
 - Permission 创建、单项/条件查询、更新和可追溯删除
 - 七类权限资源、五档权限等级和八种基础操作
 - 默认拒绝的 Permission Checker 三态判断
-- `allow_once` 首次判断后原子消费，权限写入与 `permission_changed` 事件同事务提交
+- `allow_once` 首次判断后原子消费；权限创建、变化和撤销分别与 `permission_created`、`permission_changed`、`permission_revoked` 事件同事务提交
 - Security 统一检查入口和 `low`、`medium`、`high`、`critical` 四级风险判断
+- Security Policy 按用户、资源类型、动作和风险精确匹配，支持 `always_allow`、`session_allow`、`always_confirm`、`deny`、`deny_without_confirm`
+- 用户安全偏好支持默认安全等级、高风险策略、低/中风险自动确认范围和禁止范围
+- Permission → Security Policy → Confirmation 固定执行顺序；策略只能收紧 Permission，高风险/极高风险始终逐次确认
+- `session_allow` 仅在用户明确确认后创建精确作用域、30 分钟的开发期会话授权；安全会话 ID 不承担认证
 - API Key、身份、支付、私密记录和 AI Private Domain 五类敏感数据分类元数据
 - `not_required`、`every_time`、`user_defined` 三种确认要求
 - 绑定完整作用域、Permission 快照与策略指纹，五分钟过期且批准后单次消费的 Confirmation
@@ -66,16 +71,16 @@ Device Registry → Capability 描述 → 未配置 Adapter 投影
 - Device Registry 保存手机、手表、空调、扫地机器人、洗衣机、摄像头和通用家电七类设备的用户归属、品牌、名称、启停状态与能力列表
 - Device Capability 支持 `view_status`、`power`、`adjust_parameter`、`get_data`，并分别映射 `read` 或 `control` Permission 操作
 - Xiaomi、Midea、Apple、Android 和 Generic Adapter 只提供统一未来契约描述，全部固定为 `not_implemented`、不连接、不控制、不调用厂商 API
-- 设备授权入口创建精确 Device Permission，并同时记录 `permission_changed`、`device_changed` 与最小 AuditLog
+- 设备授权入口创建精确 Device Permission，并同时记录 `permission_created`、`device_changed` 与最小 AuditLog
 - 设备操作准备按 Device 状态、Permission、Security 与 Confirmation 处理；`device_control` 固定进入极高风险确认，执行状态始终为 `not_executed`
 - Device Event 记录连接注册、授权变化、注册状态变化和操作请求；所有事件均明确 `not_connected` / `not_executed`
 - 设备操作日志保存用户、主体、设备、能力、动作、时间、权限/安全结果、Event 与 AuditLog 引用，不保存控制参数或设备数据
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- `pnpm test` 当前 30/30 通过，覆盖启动、API 契约、模型路由、能力注册、设备注册/适配契约、权限/安全执行准备、全局设定、摘要来源、上下文装配、事务回滚、持久化和隔离
+- `pnpm test` 当前 34/34 通过，覆盖启动、API 契约、模型路由、能力注册、设备注册/适配契约、权限/策略/安全执行准备、全局设定、摘要来源、上下文装配、迁移升级、事务回滚、持久化和隔离
 
-本阶段的 Device `enabled` 只表示注册项允许进入安全准备，不表示设备已连接、在线或受控。设备响应固定 `connectionStatus=not_connected`、`stateStatus=not_observed`、`controlSupport=not_implemented`；操作准备不接受开关值、温度、摄像头命令或其他参数，也不会访问手机、家电、摄像头、穿戴设备或厂商网络。Tool/MCP/Skill/Plugin 的原有未执行边界保持不变。本阶段没有设备 SDK、手机权限、厂商凭据、真实状态读取、设备控制、第三方请求、真实模型或 continuity-engine。前端 `src`、页面与 mock 未修改。
+本阶段只新增本地安全策略、用户偏好、确认与审计结构，不增加资源执行能力。Device `enabled` 仍只表示注册项允许进入安全准备，不表示设备已连接、在线或受控；操作准备不接受真实控制参数。Tool/MCP/Skill/Plugin 和设备的原有未执行边界保持不变。本阶段没有设备 SDK、手机权限、厂商凭据、真实状态读取、设备控制、第三方请求、真实模型或 continuity-engine。前端 `src`、页面与 mock 未修改。
 
 ## 运行要求
 
@@ -214,7 +219,10 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `DELETE` | `/api/v1/users/:userId/permissions/:permissionId` | 将规则标记为已删除并记录事件 |
 | `POST` | `/api/v1/users/:userId/permission-checks` | 按主体、资源和操作返回 `allow`、`ask` 或 `deny` |
 | `GET` | `/api/v1/security/sensitive-data-categories` | 查询五类敏感数据分类元数据，不返回敏感正文 |
-| `POST` | `/api/v1/users/:userId/security-checks` | 按 Permission、风险和确认要求返回安全资格，不执行资源 |
+| `POST` | `/api/v1/users/:userId/security-checks` | 按 Permission → Policy → Confirmation 返回安全资格，不执行资源 |
+| `GET` / `PATCH` | `/api/v1/users/:userId/security-preferences` | 读取或局部更新用户安全偏好 |
+| `POST` / `GET` | `/api/v1/users/:userId/security-policies` | 创建或筛选用户安全策略 |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/users/:userId/security-policies/:policyId` | 查询、更新或可追溯删除安全策略 |
 | `GET` | `/api/v1/users/:userId/audit-logs` | 按主体、操作、资源、风险和结果查询审计记录 |
 | `GET` | `/api/v1/users/:userId/audit-logs/:auditLogId` | 按用户归属查询单条审计记录 |
 | `GET` | `/api/v1/users/:userId/confirmations/:confirmationId` | 查询本用户的具体操作确认 |
@@ -256,6 +264,7 @@ backend/
 │  ├─ modules/tool-usage/    # Tool 安全准备与未执行使用记录
 │  ├─ modules/devices/       # Device Registry、能力、Adapter 契约和操作准备
 │  ├─ modules/permissions/   # 权限规则、五档语义与三态判断
+│  ├─ modules/security-policies/ # 用户安全策略、偏好和短时会话授权
 │  ├─ modules/security/      # 安全编排、风险识别和执行前资格
 │  ├─ modules/sensitive-data/ # 敏感分类元数据，不保存正文
 │  ├─ modules/confirmations/ # 具体操作确认与防重放
@@ -271,7 +280,7 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_confirmations`、`audit_logs`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry`、`tool_usage_records`、`device_registry`、`device_capabilities` 和 `device_operation_logs`。
+- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_policies`、`user_security_preferences`、`security_policy_session_grants`、`security_confirmations`、`audit_logs`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry`、`tool_usage_records`、`device_registry`、`device_capabilities` 和 `device_operation_logs`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
 - `assistant_global_settings` 与 Subject 一对一绑定；名称和头像仍以 `subjects` 为唯一身份来源，人格、表达、关系、长期要求与禁止事项保存在独立设定表。新建 Subject 与默认设定原子提交，设定更新与最小 `subject_updated` Event 原子提交。
@@ -292,8 +301,10 @@ backend/
 - Router 优先使用启用规则的默认模型；默认 Provider 停用时选择已配置且 Provider 启用的备用模型。规则停用或不存在时才按稳定目录顺序回退，所有结果都标记模型与外部 API 未调用。
 - Permission 同时保存用户、主体、资源类型、资源 ID、操作、权限等级和状态；复合外键阻止跨用户主体规则。
 - 当前同一用户/主体/资源/操作只允许一个未终结规则；`allow_once` 使用后标记为 `consumed`，删除标记为 `deleted`。
-- Permission 变更与对应 Event 使用同一 SQLite 事务，任一写入失败时整体回滚。
-- Confirmation 同时绑定用户、主体、资源、动作、风险、Permission 快照和策略指纹；五分钟后过期，批准结果只能被匹配请求消费一次。
+- Permission 创建、变化和撤销与对应生命周期 Event 使用同一 SQLite 事务，任一写入失败时整体回滚。
+- Security Policy 按用户、资源、动作和风险保存精确规则；用户偏好保存安全等级、高风险策略、自动确认范围与禁止范围。策略只能收紧 Permission，且 `high` / `critical` 平台底线不能被放宽。
+- Confirmation 同时绑定用户、主体、资源、动作、风险、Permission 快照、安全策略版本、开发期安全会话和策略指纹；五分钟后过期，批准结果只能被匹配请求消费一次。
+- `session_allow` 只在低/中风险确认通过后生成精确范围、30 分钟授权；策略更新或作用域、主体、安全会话变化都会使其失配。
 - AuditLog 没有任意 payload、正文或详情 JSON 字段，也不提供客户端创建、更新或删除路由；资源引用必须使用平台不透明 ID，当前凭据形态拦截只是启发式规则，不是完整 DLP。
 - Event 与 AuditLog 分离：前者记录软件变化，后者记录安全治理事实。
 - 内部嵌套写入加入同一最外层 SQLite 事务，保证安全确认、单次权限消费和审计结果一致。
@@ -308,6 +319,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`。当前 Context Service 只按固定产品顺序投影已有全局设定、状态、事件、消息和跨窗口摘要；它不生成提示词、不筛选长期 Memory、不调用模型，也不执行连续性算法。Dashboard 的 `continuityStatus` 仍表示独立引擎不可用。全局设定中的长期要求和禁止事项不能削弱平台最低安全规则。Capability Service 与 Device Service 只投影本地注册、能力、权限和安全准备事实；它们不连接 MCP、不加载插件、不执行 Skill/Tool、不获取手机权限、不读取或控制设备，也不访问支付或 AI 私域。分支、删除和窗口重置仍未实现。
+平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`。当前 Context Service 只按固定产品顺序投影已有全局设定、状态、事件、消息和跨窗口摘要；它不生成提示词、不筛选长期 Memory、不调用模型，也不执行连续性算法。Dashboard 的 `continuityStatus` 仍表示独立引擎不可用。全局设定中的长期要求和禁止事项不能削弱平台最低安全规则；用户 Security Policy 同样不能放宽 Permission 拒绝或高风险底线。Capability Service 与 Device Service 只投影本地注册、能力、权限和安全准备事实；它们不连接 MCP、不加载插件、不执行 Skill/Tool、不获取手机权限、不读取或控制设备，也不访问支付或 AI 私域。分支、删除和窗口重置仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

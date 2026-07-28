@@ -130,7 +130,7 @@
 ## BE-ADR-016｜权限变更与事件同事务提交，单次许可和删除保留终态
 
 - 日期：2026-07-26
-- 状态：已采用
+- 状态：已采用；Event 类型细分由 BE-ADR-029 修订
 - 决策：Permission 创建、实际更新、删除和 `allow_once` 消费必须与对应 `permission_changed` Event 在同一 SQLite 事务中提交。`allow_once` 首次成功判断后变为 `consumed`；删除变为 `deleted`，不物理抹除记录。
 - 原因：权限规则与事件任一单独成功都会造成实际判断和审计视图不一致；单次许可若不原子消费可能被重复使用；物理删除会破坏权限变化追溯。
 - 影响：`consumed` 和 `deleted` 规则不参与判断，且不能再更新；默认列表排除 `deleted`，但可通过明确状态筛选查看。正式数据库需要提供等价事务和并发保证，保留期限仍待隐私策略决定。
@@ -138,7 +138,7 @@
 ## BE-ADR-017｜安全检查采用分层收紧与非执行预检
 
 - 日期：2026-07-27
-- 状态：已采用
+- 状态：已采用；用户 Security Policy 层由 BE-ADR-029 扩展
 - 决策：统一安全检查固定按 Permission、规则化风险、确认要求的顺序返回 `allow`、`confirm` 或 `deny`，只能收紧权限结果，不能用确认绕过拒绝。风险使用 `low`、`medium`、`high`、`critical` 四级；低风险不要求确认，中风险进入用户自定义确认，高风险和极高风险每次确认。响应中的 `executionStatus` 固定为 `not_executed`，本阶段不执行资源。安全预检不消费 `allow_once`，仅当权限、风险和确认全部满足时才在同一事务内消费。
 - 原因：Permission 的长期允许不等于高风险操作可以直接执行；若预检阶段提前消费单次许可，用户尚未确认就会丢失授权；若安全检查同时承担执行，会越过本阶段没有真实能力适配器的边界。
 - 影响：现有独立 Permission Checker 接口保持首次判断消费 `allow_once` 的语义；Security Service 使用非消费预览，并在最终返回可执行资格前消费。风险规则目前是平台内确定性基线，生产阶段必须由服务端资源元数据推导，不能信任客户端标签降低风险。
@@ -230,6 +230,14 @@
 - 决策：Device Registry 只保存用户范围的七类设备、品牌、名称、启停状态、Adapter 类型与四种能力关系，不保存厂商设备 ID、位置、凭据或真实状态。Xiaomi、Midea、Apple、Android 与 Generic 只实现统一 Adapter 契约描述，所有连接、状态读取和执行方法均标记不支持。设备能力映射到现有 `device` Permission 的 `read` / `control` action；操作准备固定通过 `Security(device_control)` 与 Confirmation，随后原子追加最小 `device_changed` Event 和 `device_operation_logs`。数据库约束执行状态只能为 `not_executed`。
 - 原因：注册、适配器选择、安全准备和真实设备副作用属于不同信任层。缺少厂商认证、设备身份校验、秘密存储、撤销、超时、幂等、状态可信度及隐私治理时，不能让“已启用”或“确认通过”被误认为设备已连接或已受控。先建立不含执行参数的稳定契约，可以验证用户/主体隔离、权限、极高风险确认、事件和日志一致性，而不触碰真实手机、摄像头、家电或穿戴数据。
 - 影响：Device 创建默认停用；所有响应固定 `not_connected`、`not_observed`、`not_implemented`。`connection_registered` 只表示连接元数据登记，`registry_status_changed` 只表示注册状态变化，`operation_requested` 只表示安全准备请求。设备操作即使返回 `ready` 也不执行，不接收参数，不调用 SDK 或厂商 API。设备授权复用 Permission 表而不建立重复授权表；同一设备映射到相同 action 的能力共享 Permission 范围。未来每个真实厂商 Adapter 必须新增独立 ADR，覆盖设备身份、凭据、数据分类、状态签名、超时/重试/幂等、立即停止、撤销、离线行为、审计和安全测试。
+
+## BE-ADR-029｜用户安全策略是 Permission 之后的收紧层
+
+- 日期：2026-07-28
+- 状态：已采用，仅限开发期自定义安全栏
+- 决策：基础执行顺序固定为 Permission → Security Policy → Confirmation → execution preparation。Security Policy 以用户、资源类型、动作和有效风险等级精确匹配，不能将 Permission 的拒绝改为允许。用户偏好可以抬高默认风险、禁止范围、控制低/中风险自动确认和定义高风险策略；平台仍强制 `high` / `critical` 每次确认。`session_allow` 只有在明确确认被完全匹配的安全检查消费后，才生成绑定用户、主体、策略版本、安全会话、资源实例、动作和风险的 30 分钟授权；安全会话 ID 不是身份凭证。策略或偏好版本参与 Confirmation 指纹，策略更新使旧确认和授权失配。
+- 原因：基础授权、用户安全偏好和具体高风险操作确认是不同信任层。若策略可以放宽 Permission 或平台底线，配置错误会直接扩大权限；若“会话允许”只依赖客户端字符串，也会成为可伪造的长期放行。精确、短时、确认后生成且版本绑定的授权能保留用户便利性，同时维持默认拒绝和防重放边界。
+- 影响：新增 `security_policies`、`user_security_preferences`、`security_policy_session_grants`，Confirmation 增加策略版本、会话、原因、风险说明与用户选择。Permission 生命周期事件拆分为 `permission_created`、`permission_changed`、`permission_revoked`，新建确认产生 `confirmation_required`；策略/偏好变更和最终安全结果进入最小 AuditLog。全部响应仍固定未执行；没有真实 Tool、设备、外部服务或认证会话。SQLite 父表重建仅允许迁移首行显式声明关闭外键，并必须在提交前通过 `PRAGMA foreign_key_check`。
 
 ## 待形成的 ADR
 

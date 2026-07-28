@@ -137,17 +137,32 @@ test('permission rules support CRUD, three-state checks and event linkage', asyn
     );
     assert.equal(deletedPermissions.body.meta.count, 1);
 
-    const permissionEvents = await getJson(
+    const changedEvents = await getJson(
       context.baseUrl,
       `/api/v1/users/${userId}/events?eventType=permission_changed`,
     );
-    assert.equal(permissionEvents.response.status, 200);
-    assert.equal(permissionEvents.body.meta.count, 5);
+    assert.equal(changedEvents.response.status, 200);
+    assert.equal(changedEvents.body.meta.count, 3);
+    const createdEvents = await getJson(
+      context.baseUrl,
+      `/api/v1/users/${userId}/events?eventType=permission_created`,
+    );
+    const revokedEvents = await getJson(
+      context.baseUrl,
+      `/api/v1/users/${userId}/events?eventType=permission_revoked`,
+    );
+    assert.equal(createdEvents.body.meta.count, 1);
+    assert.equal(revokedEvents.body.meta.count, 1);
+    const permissionEvents = [
+      ...createdEvents.body.data,
+      ...changedEvents.body.data,
+      ...revokedEvents.body.data,
+    ];
     assert.deepEqual(
-      new Set(permissionEvents.body.data.map((event) => event.data.changeType)),
+      new Set(permissionEvents.map((event) => event.data.changeType)),
       new Set(['created', 'updated', 'deleted']),
     );
-    assert.ok(permissionEvents.body.data.every((event) => (
+    assert.ok(permissionEvents.every((event) => (
       event.subjectId === subjectId
       && event.source.type === 'permission-service'
       && event.source.reference === permissionId

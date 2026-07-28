@@ -17,6 +17,7 @@ import { createSqliteModelRoutingRuleRepository } from './integrations/database/
 import { createSqliteDatabase } from './integrations/database/sqlite-database.js';
 import { createSqliteModelRepository } from './integrations/database/sqlite-model-repository.js';
 import { createSqlitePermissionRepository } from './integrations/database/sqlite-permission-repository.js';
+import { createSqliteSecurityPolicyRepository } from './integrations/database/sqlite-security-policy-repository.js';
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
 import { createSqliteUserRepository } from './integrations/database/sqlite-user-repository.js';
@@ -41,6 +42,7 @@ import { createMessageVersionService } from './modules/message-versions/message-
 import { createPermissionChecker } from './modules/permissions/permission-checker.js';
 import { createPermissionService } from './modules/permissions/permission-service.js';
 import { createSecurityService } from './modules/security/security-service.js';
+import { createSecurityPolicyService } from './modules/security-policies/security-policy-service.js';
 import { createSensitiveDataService } from './modules/sensitive-data/sensitive-data-service.js';
 import { createSubjectService } from './modules/subjects/subject-service.js';
 import { createSubjectStateService } from './modules/subject-states/subject-state-service.js';
@@ -67,6 +69,7 @@ export function createApplication({ config, logger = console }) {
     database.connection,
   );
   const permissionRepository = createSqlitePermissionRepository(database.connection);
+  const securityPolicyRepository = createSqliteSecurityPolicyRepository(database.connection);
   const auditLogRepository = createSqliteAuditLogRepository(database.connection);
   const capabilityRegistryRepository = createSqliteCapabilityRegistryRepository(
     database.connection,
@@ -150,6 +153,12 @@ export function createApplication({ config, logger = console }) {
     userRepository,
     subjectRepository,
   });
+  const securityPolicyService = createSecurityPolicyService({
+    securityPolicyRepository,
+    userRepository,
+    auditLogService,
+    runInTransaction: database.runInTransaction,
+  });
   const confirmationService = createConfirmationService({
     confirmationRepository,
     auditLogService,
@@ -195,8 +204,10 @@ export function createApplication({ config, logger = console }) {
   });
   const securityService = createSecurityService({
     permissionChecker,
+    securityPolicyService,
     confirmationService,
     auditLogService,
+    eventService,
     runInTransaction: database.runInTransaction,
   });
   const sensitiveDataService = createSensitiveDataService();
@@ -250,6 +261,7 @@ export function createApplication({ config, logger = console }) {
     permissionService,
     permissionChecker,
     securityService,
+    securityPolicyService,
     sensitiveDataService,
     auditLogService,
     confirmationService,

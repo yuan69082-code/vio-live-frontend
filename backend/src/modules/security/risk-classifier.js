@@ -95,6 +95,7 @@ export function createSecurityPolicyFingerprint({
   sensitiveDataCategories,
   risk,
   confirmationMode,
+  securityPolicy,
 }) {
   const canonicalPolicy = JSON.stringify({
     policyVersion: risk.policyVersion,
@@ -106,6 +107,15 @@ export function createSecurityPolicyFingerprint({
     riskLevel: risk.level,
     riskReasons: [...risk.reasons].sort(),
     confirmationMode,
+    securityPolicy: securityPolicy ? {
+      policyId: securityPolicy.policy?.policyId ?? null,
+      policyUpdatedAt: securityPolicy.policy?.updatedAt ?? null,
+      rule: securityPolicy.policy?.rule ?? null,
+      decision: securityPolicy.decision,
+      reason: securityPolicy.reason,
+      preferenceUpdatedAt: securityPolicy.preferences.updatedAt,
+      securitySessionId: securityPolicy.securitySessionId,
+    } : null,
   });
 
   return createHash('sha256').update(canonicalPolicy).digest('hex');

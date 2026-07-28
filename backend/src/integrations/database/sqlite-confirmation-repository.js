@@ -15,8 +15,14 @@ function mapConfirmation(row) {
     permissionLevel: row.permission_level,
     permissionUpdatedAt: row.permission_updated_at,
     policyFingerprint: row.policy_fingerprint,
+    securityPolicyId: row.security_policy_id,
+    securityPolicyUpdatedAt: row.security_policy_updated_at,
+    securitySessionId: row.security_session_id,
     confirmationMode: row.confirmation_mode,
     riskLevel: row.risk_level,
+    confirmationReason: row.confirmation_reason,
+    riskDescription: row.risk_description,
+    userChoice: row.user_choice,
     status: row.status,
     requestedAt: row.requested_at,
     expiresAt: row.expires_at,
@@ -39,8 +45,14 @@ export function createSqliteConfirmationRepository(connection) {
       permission_level,
       permission_updated_at,
       policy_fingerprint,
+      security_policy_id,
+      security_policy_updated_at,
+      security_session_id,
       confirmation_mode,
       risk_level,
+      confirmation_reason,
+      risk_description,
+      user_choice,
       status,
       requested_at,
       expires_at,
@@ -61,14 +73,20 @@ export function createSqliteConfirmationRepository(connection) {
       permission_level,
       permission_updated_at,
       policy_fingerprint,
+      security_policy_id,
+      security_policy_updated_at,
+      security_session_id,
       confirmation_mode,
       risk_level,
+      confirmation_reason,
+      risk_description,
+      user_choice,
       status,
       requested_at,
       expires_at,
       decided_at,
       consumed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const findByIdStatement = connection.prepare(`
     ${selection}
@@ -76,7 +94,7 @@ export function createSqliteConfirmationRepository(connection) {
   `);
   const decideStatement = connection.prepare(`
     UPDATE security_confirmations
-    SET status = ?, decided_at = ?
+    SET status = ?, decided_at = ?, user_choice = ?
     WHERE user_id = ? AND confirmation_id = ? AND status = 'pending'
   `);
   const consumeStatement = connection.prepare(`
@@ -106,8 +124,14 @@ export function createSqliteConfirmationRepository(connection) {
         confirmation.permissionLevel,
         confirmation.permissionUpdatedAt,
         confirmation.policyFingerprint,
+        confirmation.securityPolicyId,
+        confirmation.securityPolicyUpdatedAt,
+        confirmation.securitySessionId,
         confirmation.confirmationMode,
         confirmation.riskLevel,
+        confirmation.confirmationReason,
+        confirmation.riskDescription,
+        confirmation.userChoice,
         confirmation.status,
         confirmation.requestedAt,
         confirmation.expiresAt,
@@ -120,8 +144,14 @@ export function createSqliteConfirmationRepository(connection) {
     findById(userId, confirmationId) {
       return mapConfirmation(findByIdStatement.get(userId, confirmationId));
     },
-    decide(userId, confirmationId, status, decidedAt) {
-      const result = decideStatement.run(status, decidedAt, userId, confirmationId);
+    decide(userId, confirmationId, status, decidedAt, userChoice) {
+      const result = decideStatement.run(
+        status,
+        decidedAt,
+        userChoice,
+        userId,
+        confirmationId,
+      );
 
       if (result.changes === 0) {
         return null;

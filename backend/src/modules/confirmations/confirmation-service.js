@@ -1,6 +1,7 @@
 import { ConflictError, NotFoundError, ValidationError } from '../../core/errors.js';
 import { createId } from '../../core/ids.js';
 import {
+  optionalString,
   requireOpaqueResourceId,
   requirePlainObject,
   requireString,
@@ -36,6 +37,9 @@ function sameScope(confirmation, expected) {
     && confirmation.permissionLevel === expected.permissionLevel
     && confirmation.permissionUpdatedAt === expected.permissionUpdatedAt
     && confirmation.policyFingerprint === expected.policyFingerprint
+    && confirmation.securityPolicyId === (expected.securityPolicyId ?? null)
+    && confirmation.securityPolicyUpdatedAt === (expected.securityPolicyUpdatedAt ?? null)
+    && confirmation.securitySessionId === (expected.securitySessionId ?? null)
     && confirmation.confirmationMode === expected.confirmationMode
     && confirmation.riskLevel === expected.riskLevel;
 }
@@ -119,6 +123,21 @@ export function createConfirmationService({
           'policyFingerprint',
           { minLength: 64, maxLength: 64 },
         ),
+        securityPolicyId: optionalString(
+          value.securityPolicyId,
+          'securityPolicyId',
+          { maxLength: 128 },
+        ),
+        securityPolicyUpdatedAt: optionalString(
+          value.securityPolicyUpdatedAt,
+          'securityPolicyUpdatedAt',
+          { maxLength: 40 },
+        ),
+        securitySessionId: optionalString(
+          value.securitySessionId,
+          'securitySessionId',
+          { maxLength: 128 },
+        ),
         confirmationMode: requireSecurityValue(
           value.confirmationMode,
           'confirmationMode',
@@ -129,6 +148,17 @@ export function createConfirmationService({
           'riskLevel',
           SECURITY_RISK_LEVELS,
         ),
+        confirmationReason: requireString(
+          value.confirmationReason,
+          'confirmationReason',
+          { maxLength: 500 },
+        ),
+        riskDescription: requireString(
+          value.riskDescription,
+          'riskDescription',
+          { maxLength: 1000 },
+        ),
+        userChoice: null,
         status: 'pending',
         requestedAt: now,
         expiresAt: new Date(currentTime.getTime() + CONFIRMATION_TTL_MS).toISOString(),
@@ -200,6 +230,7 @@ export function createConfirmationService({
           current.confirmationId,
           status,
           clock().toISOString(),
+          decision,
         );
         auditLogService.recordAuditLog({
           userId: updated.userId,

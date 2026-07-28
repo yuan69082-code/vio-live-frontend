@@ -123,6 +123,9 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 - `message_created`
 - `message_updated`
 - `message_regenerated`
+- `permission_created`
+- `permission_revoked`
+- `confirmation_required`
 
 事件创建体包含 `eventType`、`source`、`occurredAt`、`data`、`summary` 和可选 `subjectId`。服务生成 `eventId` 与 `recordedAt`，并将初始 `status` 设为 `pending`。事件数据不得包含明显的密钥、密码、验证码、Token、Secret 或完整证件号字段。
 
@@ -155,7 +158,7 @@ Device 服务也会在同一事务写入 `device_changed`。其 `changeType` 当
 
 Device Adapter 契约为未来 `connect`、`disconnect`、`readStatus` 和 `executeCapability` 预留方法。小米、美的、Apple、Android 与通用 Adapter 当前仅有只读描述，全部返回 `implementationStatus=not_implemented`、`connectionSupported=false`、`controlSupported=false` 和 `externalApiCallsSupported=false`。
 
-授权请求把查看状态/获取数据映射为 `read`，开关/调节参数映射为 `control`，复用现有 Permission。操作准备只接受 `capability` 和可选 `confirmationId`，拒绝实际控制参数；它依次检查设备启用与能力声明、Permission、`device_control` Security 和 Confirmation。所有成功或待确认响应及日志仍固定 `executionStatus=not_executed`、`deviceCall=not_performed`、`vendorApiCall=not_performed`，不连接、读取或控制真实设备。
+授权请求把查看状态/获取数据映射为 `read`，开关/调节参数映射为 `control`，复用现有 Permission。操作准备只接受 `capability`、可选 `confirmationId` 和可选开发期 `securitySessionId`，拒绝实际控制参数；它依次检查设备启用与能力声明、Permission、Security Policy、`device_control` Security 和 Confirmation。所有设备操作风险当前均为 `critical`，不会被会话策略放行。所有成功或待确认响应及日志仍固定 `executionStatus=not_executed`、`deviceCall=not_performed`、`vendorApiCall=not_performed`，不连接、读取或控制真实设备。
 
 ## 摘要、状态与 Context 契约
 
@@ -221,26 +224,29 @@ Context 数据顺序已形成基础接口；以下模型调用、格式转换与
 | `DELETE` | `/api/v1/users/:userId/permissions/:permissionId` | 将权限规则标记为 `deleted` |
 | `POST` | `/api/v1/users/:userId/permission-checks` | 输入主体、资源与操作，返回 `allow`、`ask` 或 `deny` |
 
-Checker 只进行完全匹配和平台判断，不执行资源动作。`allow_once` 在首次成功判断后转为 `consumed`；权限变更与 `permission_changed` 事件同事务提交。`canAsk` 只描述是否允许后续申请，不等于已经创建授权申请流程。
+Checker 只进行完全匹配和平台判断，不执行资源动作。`allow_once` 在首次成功判断后转为 `consumed`；创建、实际变化/消费和撤销分别与 `permission_created`、`permission_changed`、`permission_revoked` 同事务提交。`canAsk` 只描述是否允许后续申请，不等于已经创建授权申请流程。
 
 当前 Security、Confirmation 和 AuditLog 接口：
 
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
 | `GET` | `/api/v1/security/sensitive-data-categories` | 返回五类分类元数据，不返回敏感正文 |
-| `POST` | `/api/v1/users/:userId/security-checks` | 按 Permission、风险和确认返回 `allow`、`confirm` 或 `deny` |
+| `POST` | `/api/v1/users/:userId/security-checks` | 按 Permission → Policy → Confirmation 返回 `allow`、`confirm` 或 `deny` |
+| `GET` / `PATCH` | `/api/v1/users/:userId/security-preferences` | 读取或更新默认等级、高风险策略、自动确认和禁止范围 |
+| `POST` / `GET` | `/api/v1/users/:userId/security-policies` | 创建或筛选用户精确安全策略 |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/users/:userId/security-policies/:policyId` | 查询、更新或软删除安全策略 |
 | `GET` | `/api/v1/users/:userId/confirmations/:confirmationId` | 查询用户范围内的具体操作确认 |
 | `PATCH` | `/api/v1/users/:userId/confirmations/:confirmationId` | 批准或拒绝待确认记录，不执行资源 |
 | `GET` | `/api/v1/users/:userId/audit-logs` | 按主体、操作、资源、风险、结果和数量筛选审计 |
 | `GET` | `/api/v1/users/:userId/audit-logs/:auditLogId` | 查询用户范围内的单条审计 |
 
-安全检查的 `operationType` 当前只允许：`general_access`、`permission_change`、`api_configuration_change`、`privacy_access_request`、`payment_operation`、`device_control`、`sensitive_data_access`、`data_deletion`。
+安全检查的 `operationType` 当前只允许：`general_access`、`permission_change`、`security_policy_change`、`api_configuration_change`、`privacy_access_request`、`payment_operation`、`device_control`、`sensitive_data_access`、`data_deletion`。
 
 确认决定请求体固定为 `{ "decision": "approve" }` 或 `{ "decision": "reject" }`。审计列表查询参数固定为 `subjectId`、`operationType`、`resourceType`、`result`、`riskLevel`、`limit`。
 
-安全检查只接受 `subjectId`、`resourceType`、平台不透明 `resourceId`、`action`、`operationType`、`sensitiveDataCategories` 和可选 `confirmationId`，会拒绝额外字段和任意 payload。资源 ID 校验会启发式拦截常见凭据形态，但不等同于完整 DLP；正式接入资源时必须使用可信服务端资源注册表，不能把敏感值塞入 ID。中风险 `user_defined` 在正式服务端偏好完成前安全默认需要确认。响应包含 Permission 结果、风险原因、确认状态和审计 ID；`preflightPassed` 仅表示预检通过，`executionAllowed` 固定为 `false`，`executionStatus` 固定为 `not_executed`，不会产生支付、设备、私域或外部调用。
+安全检查只接受 `subjectId`、`resourceType`、平台不透明 `resourceId`、`action`、`operationType`、`sensitiveDataCategories`、可选 `confirmationId` 和可选开发期 `securitySessionId`，会拒绝额外字段和任意 payload。资源 ID 校验会启发式拦截常见凭据形态，但不等同于完整 DLP；正式接入资源时必须使用可信服务端资源注册表，不能把敏感值塞入 ID。Security Policy 支持五种规则；用户偏好可抬高默认风险、配置低/中风险自动范围和禁止范围，但不能降低 Permission 或平台高风险底线。响应包含 Permission、策略评估、风险原因、确认状态和审计 ID；`preflightPassed` 仅表示预检通过，`executionAllowed` 固定为 `false`，`executionStatus` 固定为 `not_executed`，不会产生支付、设备、私域或外部调用。
 
-AuditLog 没有客户端写入、更新或删除接口；Confirmation 批准结果绑定 Permission 快照、完整作用域和安全策略指纹，五分钟后过期，并在安全检查中单次消费。错范围、过期和重放尝试返回拒绝并生成最小审计。
+AuditLog 没有客户端写入、更新或删除接口；Confirmation 保存原因、风险说明、用户选择，并绑定 Permission 快照、策略/偏好版本、开发期安全会话、完整作用域和安全策略指纹，五分钟后过期，并在安全检查中单次消费。创建确认生成 `confirmation_required` Event。`session_allow` 只在低/中风险确认消费后建立 30 分钟精确授权；高/极高风险始终逐次确认。错范围、过期和重放尝试返回拒绝并生成最小审计。
 
 - 未登录、主体不匹配或权限不足时不能返回受保护数据。
 - 外部能力不可用时，应明确失败，不伪造成功结果。
