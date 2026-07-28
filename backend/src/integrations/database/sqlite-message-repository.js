@@ -76,6 +76,14 @@ export function createSqliteMessageRepository(connection) {
       AND messages.conversation_id = ?
     ORDER BY messages.sequence_number, messages.message_id
   `);
+  const findRecentStatement = connection.prepare(`
+    ${selection}
+    WHERE messages.user_id = ?
+      AND messages.subject_id = ?
+      AND messages.conversation_id = ?
+    ORDER BY messages.sequence_number DESC, messages.message_id DESC
+    LIMIT ?
+  `);
   const nextSequenceNumberStatement = connection.prepare(`
     SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_sequence_number
     FROM messages
@@ -131,6 +139,12 @@ export function createSqliteMessageRepository(connection) {
     },
     findMany(userId, subjectId, conversationId) {
       return findManyStatement.all(userId, subjectId, conversationId).map(mapMessage);
+    },
+    findRecent(userId, subjectId, conversationId, limit) {
+      return findRecentStatement
+        .all(userId, subjectId, conversationId, limit)
+        .map(mapMessage)
+        .reverse();
     },
     nextSequenceNumber(userId, subjectId, conversationId) {
       return nextSequenceNumberStatement.get(userId, subjectId, conversationId)

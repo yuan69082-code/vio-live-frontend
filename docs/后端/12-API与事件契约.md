@@ -34,7 +34,7 @@
 
 ### 平台后端与模型服务
 
-平台后端负责选择模型、装配上下文、发送本轮内容并接收 `reply` 与 `state_update`。模型服务不直接操作数据库、设备或用户权限。
+平台后端最终负责选择模型、装配上下文、发送本轮内容并接收 `reply` 与 `state_update`。当前只实现规则选择、只读 Context 投影和显式 `state_update` 保存，不发送模型请求。模型服务不直接操作数据库、设备或用户权限。
 
 ### 平台后端与外部能力
 
@@ -102,7 +102,7 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 
 创建消息只接受 `senderType`（`user`、`subject`、`system`）和非空文本 `content`；服务端生成状态、顺序、初始 `original` 版本和时间。PATCH 只允许用户消息，重生成记录只允许主体消息，两者请求体均固定为 `baseVersionId` 与 `content`。`baseVersionId` 必须仍是当前版本，否则返回 `409`。
 
-普通消息列表只投影每个 Message 的当前版本；版本接口显式返回 `versionNumber`、`changeReason`、`parentVersionId` 与 `isCurrent`。主体内容由开发调用方提交，只记录数据，不调用 GPT、Claude、GLM 或其他模型。当前没有删除、分支、重置、附件、上下文装配或流式回复接口。
+普通消息列表只投影每个 Message 的当前版本；版本接口显式返回 `versionNumber`、`changeReason`、`parentVersionId` 与 `isCurrent`。主体内容由开发调用方提交，只记录数据，不调用 GPT、Claude、GLM 或其他模型。当前没有删除、分支、重置、附件或流式回复接口；Context 只读装配接口见下节。
 
 ## 软件事件契约
 
@@ -130,6 +130,24 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 
 对话写入会在同一事务创建对应最小 Event，事件只包含 ID、发送者类型和版本关系，不包含会话标题或消息正文。这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和数据变化仍是规划范围，尚未成为当前接口接受的事件名。
 
+## 摘要、状态与 Context 契约
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/summaries` | 保存或查询不可变会话摘要版本 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/summaries/:summaryId` | 查询摘要及 MessageVersion/Event 来源 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/cross-window-summaries` | 排除当前窗口，读取同一主体其他窗口各自最新摘要 |
+| `POST` / `GET` | `/api/v1/users/:userId/subjects/:subjectId/state-updates` | 保存或查询不可变 SubjectState 版本 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/state-updates/:subjectStateId` | 查询单个状态版本 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/state` | 查询当前状态指针指向的版本 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/context` | 按产品顺序只读装配现有上下文事实 |
+
+摘要必须包含非空 `content` 和 1—100 个去重来源。MessageVersion 来源必须属于摘要所在 Conversation，Event 来源必须属于相同主体；摘要和来源原子提交且不可原地覆盖。
+
+`state_update` 包含 `currentState`、`emotion`、`intensity`、`changeReason`、`unresolvedEventIds`、`continuityConstraints` 和 `source`。来源支持同主体 MessageVersion、Event 或 ConversationSummary；状态、未解决 Event 和当前指针原子提交，旧状态保持不可变。
+
+Context 支持限制近期消息和跨窗口摘要数量，按系统安全位置、主体全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、Memory 位置、本轮用户消息的顺序返回。系统规则内容固定为 `reserved`，Memory 固定为 `not_implemented`，模型、外部 API 和 continuity-engine 固定标记 `not_performed`。接口不生成提示词、不持久化装配结果，也不产生 Token 或外部请求。
+
 ## 每轮模型契约
 
 当前已实现的模型配置与选择接口：
@@ -147,7 +165,7 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 
 Provider 响应只暴露 API Key 的 `not_configured` 状态，不接受或返回真实 Key、Token、Secret 或凭据引用。Router 响应只包含任务类型、选择规则和模型描述，不包含模型回复，也不产生外部请求。
 
-以下每轮模型内容仍为后续真实接入契约：
+Context 数据顺序已形成基础接口；以下模型调用、格式转换与实际返回仍为后续真实接入契约：
 
 上下文装配遵循以下逻辑顺序：系统安全规则、全局设定、主体状态、未解决事件、近期对话、相关长期记忆、用户本轮消息。
 

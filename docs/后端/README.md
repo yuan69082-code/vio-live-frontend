@@ -4,7 +4,7 @@
 
 本目录依据《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》整理，用于描述平台后端的职责、数据边界、接口原则、安全约束和开发顺序。
 
-本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、User/Subject/Dashboard、Conversation/Message/MessageVersion 基础 API、Event、Provider/Model 本地规则路由、Permission 判断以及 Security/Confirmation/AuditLog；前端已建立独立 API 客户端和真实健康握手。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实模型连接、上下文装配、支付、MCP、设备适配或外部执行能力已经完成。
+本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、User/Subject/Dashboard、Conversation/Message/MessageVersion、可追溯 ConversationSummary、SubjectState / `state_update`、跨窗口摘要和只读 Context 装配基础 API，以及 Event、Provider/Model 本地规则路由、Permission 判断和 Security/Confirmation/AuditLog；前端已建立独立 API 客户端和真实健康握手。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实摘要生成、真实模型连接、Memory、continuity-engine、支付、MCP、设备适配或外部执行能力已经完成。
 
 ## 系统边界
 
@@ -26,6 +26,9 @@ Vio Live 由五层协作组成：
 - 后端可以独立启动，并提供统一响应、健康检查、User/Subject/Dashboard、Conversation/Message/MessageVersion、Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 基础接口。
 - 已完成核心逻辑数据模型，并使用开发期 SQLite 实现 `users`、`subjects`、`conversations`、`messages`、`message_versions`、`events`、`api_providers`、`models`、`model_capabilities`、`permissions`、`security_confirmations`、`audit_logs` 和迁移记录。
 - Conversation 当前只支持主体范围的线性文本流；Message 保存稳定顺序和当前版本指针，MessageVersion 保存不可覆盖的原始、编辑和重生成记录。
+- ConversationSummary 按会话不可变追加并引用 MessageVersion/Event 来源；跨窗口只读取同主体其他 Conversation 的最新摘要。
+- SubjectState 按版本保存开发调用方提交的 `state_update`，当前指针与历史分离，未解决 Event 和状态来源均校验用户/主体归属。
+- Context 接口只读装配主体设定、当前状态、未解决事件、近期消息和跨窗口摘要；系统规则正文与 Memory 仍为明确占位，不调用模型或 continuity-engine。
 - Event 当前支持用户/可选主体归属、九种事件类型，以及按用户、主体、发生时间、类型和状态筛选；对话事件不复制标题或消息正文，尚无事件消费者。
 - Model Router 当前只按任务能力从启用 Provider 中返回本地模型描述，不调用真实模型；API Key 字段只预留为空。
 - Permission 当前支持七类资源、五档权限、精确操作判断和权限变化事件；不执行任何真实资源操作。
@@ -33,7 +36,7 @@ Vio Live 由五层协作组成：
 - SensitiveData 只定义五类分类元数据；AuditLog 与 Event 分离且只保存最小脱敏字段。
 - 当前未接入真实认证或正式数据库，基础路由不得直接公开部署。
 - 总规划记录的部分连续性底层框架不等于平台后端已经完成。
-- 分支、消息删除、窗口重置、上下文装配、正式数据库、真实模型、MCP、设备、外部执行和公开运行能力仍处于规划或待接入状态。
+- 分支、消息删除、窗口重置、真实摘要生成、Memory、语义检索、Token 预算、正式数据库、真实模型、continuity-engine、MCP、设备、外部执行和公开运行能力仍处于规划或待接入状态。
 - GitHub 只保存代码和文档，不保存运行数据、用户数据或密钥。
 
 ## 文档目录

@@ -191,6 +191,14 @@
 - 原因：Vio Live 需要保留消息变化历史，同时防止跨归属引用、覆盖式写入、并发陈旧更新及部分提交造成当前内容和事件不一致。稳定 Message 与不可变版本分离后，读取当前内容和追溯历史都有明确来源。
 - 影响：平台自动生成 `conversation_created`、`message_created`、`message_updated`、`message_regenerated` 四类事件，事件数据只保存必要 ID、发送者或版本关系，不保存会话标题或消息内容；加上原五类 Event，当前共九类。`subject` 消息和重生成内容均由开发调用方显式提交，后端只记录版本，不调用 AI。当前未实现分支、删除、重置、上下文装配、连续性引擎、MCP 或 Tool；前端页面和 mock 未修改。路由仍未接入真实认证，复合归属只保证请求范围一致性，不代表调用者身份，因而不得公开部署。
 
+## BE-ADR-024｜摘要与主体状态不可变追加，上下文装配保持只读
+
+- 日期：2026-07-28
+- 状态：已采用，仅限开发期连续性基础
+- 决策：ConversationSummary 在单一 Conversation 内使用单调版本并不可原地修改或直接删除；每个摘要必须在同一事务保存至少一个经过复合归属校验的 MessageVersion 或 Event 来源。跨窗口读取只在相同用户与主体范围内，排除当前 Conversation，并为每个其他 Conversation 返回最新摘要。SubjectState 接收显式 `state_update`，将当前状态、情绪、强度、变化原因、连续性约束、未解决 Event 和 MessageVersion/Event/ConversationSummary 来源保存为不可变版本；独立 `subject_state_heads` 只维护当前指针。Context Service 不持久化新对象，按产品规定顺序只读装配主体设定、当前状态、未解决事件、近期消息和跨窗口摘要，并明确将系统规则与 Memory 标记为保留或未实现。
+- 原因：摘要与状态如果覆盖写入或缺少来源，将无法解释跨窗口连续从何而来；如果 Context Service 在没有模型、Memory、权限筛选和 continuity-engine 的阶段自行生成提示词或推演状态，会把基础数据投影误当成真实连续性能力。不可变记录、强来源引用和独立当前指针可以兼顾历史追溯与快速读取，只读装配则保持模型和连续性边界。
+- 影响：摘要、状态和来源均按用户/主体复合归属隔离，事务故障不会留下无来源摘要、孤立状态或错误当前指针。摘要和 `state_update` 都由开发调用方提交，不代表 AI 已生成或 continuity-engine 已计算；本阶段不新增摘要/状态 Event，避免派生数据形成自动消费回路。Context 响应固定标记模型、外部 API 与 continuity-engine 未调用，Memory 返回 `not_implemented`。真实摘要生成、相关性检索、Token 预算、Memory、权限过滤、分支、删除、重置和生产保留策略仍需后续独立决策。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：

@@ -5,6 +5,7 @@ import { createSqliteAuditLogRepository } from './integrations/database/sqlite-a
 import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
 import { createSqliteConfirmationRepository } from './integrations/database/sqlite-confirmation-repository.js';
 import { createSqliteConversationRepository } from './integrations/database/sqlite-conversation-repository.js';
+import { createSqliteConversationSummaryRepository } from './integrations/database/sqlite-conversation-summary-repository.js';
 import { createSqliteEventRepository } from './integrations/database/sqlite-event-repository.js';
 import { createSqliteMessageRepository } from './integrations/database/sqlite-message-repository.js';
 import { createSqliteMessageVersionRepository } from './integrations/database/sqlite-message-version-repository.js';
@@ -12,11 +13,14 @@ import { createSqliteDatabase } from './integrations/database/sqlite-database.js
 import { createSqliteModelRepository } from './integrations/database/sqlite-model-repository.js';
 import { createSqlitePermissionRepository } from './integrations/database/sqlite-permission-repository.js';
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
+import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
 import { createSqliteUserRepository } from './integrations/database/sqlite-user-repository.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAuditLogService } from './modules/audit-logs/audit-log-service.js';
 import { createConfirmationService } from './modules/confirmations/confirmation-service.js';
+import { createContextService } from './modules/contexts/context-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
+import { createConversationSummaryService } from './modules/conversation-summaries/conversation-summary-service.js';
 import { createDashboardService } from './modules/dashboard/dashboard-service.js';
 import { createEventService } from './modules/events/event-service.js';
 import { createModelRouterService } from './modules/model-router/model-router-service.js';
@@ -28,6 +32,7 @@ import { createPermissionService } from './modules/permissions/permission-servic
 import { createSecurityService } from './modules/security/security-service.js';
 import { createSensitiveDataService } from './modules/sensitive-data/sensitive-data-service.js';
 import { createSubjectService } from './modules/subjects/subject-service.js';
+import { createSubjectStateService } from './modules/subject-states/subject-state-service.js';
 import { createUserService } from './modules/users/user-service.js';
 
 export function createApplication({ config, logger = console }) {
@@ -35,8 +40,12 @@ export function createApplication({ config, logger = console }) {
   const userRepository = createSqliteUserRepository(database.connection);
   const subjectRepository = createSqliteSubjectRepository(database.connection);
   const conversationRepository = createSqliteConversationRepository(database.connection);
+  const conversationSummaryRepository = createSqliteConversationSummaryRepository(
+    database.connection,
+  );
   const messageRepository = createSqliteMessageRepository(database.connection);
   const messageVersionRepository = createSqliteMessageVersionRepository(database.connection);
+  const subjectStateRepository = createSqliteSubjectStateRepository(database.connection);
   const eventRepository = createSqliteEventRepository(database.connection);
   const apiProviderRepository = createSqliteApiProviderRepository(database.connection);
   const modelRepository = createSqliteModelRepository(database.connection);
@@ -78,6 +87,31 @@ export function createApplication({ config, logger = console }) {
     messageVersionRepository,
     eventService,
     runInTransaction: database.runInTransaction,
+  });
+  const conversationSummaryService = createConversationSummaryService({
+    conversationService,
+    conversationSummaryRepository,
+    messageVersionRepository,
+    eventRepository,
+    runInTransaction: database.runInTransaction,
+  });
+  const subjectStateService = createSubjectStateService({
+    subjectService,
+    conversationService,
+    subjectStateRepository,
+    conversationSummaryRepository,
+    messageVersionRepository,
+    eventRepository,
+    runInTransaction: database.runInTransaction,
+  });
+  const contextService = createContextService({
+    userService,
+    subjectService,
+    conversationService,
+    messageRepository,
+    conversationSummaryService,
+    subjectStateService,
+    eventRepository,
   });
   const dashboardService = createDashboardService({ userService, subjectService });
   const auditLogService = createAuditLogService({
@@ -134,6 +168,9 @@ export function createApplication({ config, logger = console }) {
     userService,
     subjectService,
     conversationService,
+    conversationSummaryService,
+    subjectStateService,
+    contextService,
     messageService,
     messageVersionService,
     dashboardService,

@@ -2,13 +2,13 @@
 
 ## 状态与边界
 
-- 当前阶段：平台后端 7｜对话与消息版本基础
-- 后端版本：`0.7.0`
+- 当前阶段：平台后端 4｜上下文、摘要与跨窗口连续
+- 后端版本：`0.8.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
 
-前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。前端页面和 mock 本阶段没有修改，也没有接入 Conversation/Message API；当前真实页面连接仍只包含独立 API 客户端和应用启动健康握手。
+前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。前端页面和 mock 本阶段没有修改，也没有接入 Conversation、Summary、SubjectState 或 Context API；当前真实页面连接仍只包含独立 API 客户端和应用启动健康握手。
 
 ## 统一返回结构
 
@@ -62,6 +62,8 @@
 - ID 是平台不透明字符串；路径参数必须进行 URL 编码。
 - `basicSettings` 当前接受普通 JSON 对象，最大 32 KiB；它是阶段性基础结构，不代表前端 mock 已成为稳定业务模型。
 - Message `content` 必须是非空字符串，统一换行为 `\n`，最多 32768 个字符。
+- ConversationSummary `content` 最多 16384 字符，且必须包含 1—100 个可验证来源引用。
+- `state_update.intensity` 是 `0`—`1` 的有限数字；当前状态和连续性约束只保存调用方提交的数据，不由后端推演。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
 ## 服务接口
@@ -243,7 +245,7 @@ MessageVersion 返回：
 }
 ```
 
-当前只实现 `original`、`edited`、`regenerated`。分支、删除标记、窗口重置、上下文版本、模型生成元数据、上下文装配和连续性状态均未实现。
+当前只实现 `original`、`edited`、`regenerated`。分支、删除标记、窗口重置、上下文修订和模型生成元数据仍未实现；ConversationSummary、SubjectState 与只读 Context 基础见后续章节，它们不改变 MessageVersion 语义。
 
 ### 对话软件事件
 
@@ -260,6 +262,102 @@ Event 类型由五类扩展为九类：
 - `message_regenerated`
 
 Conversation/Message 服务自动生成的四类新增 Event 只保存用户/主体归属及 Conversation、Message、MessageVersion、父版本、序号、发送者或状态等必要引用。自动事件不保存 Conversation `title` 或 Message `content`，也不会触发模型、上下文装配或连续性处理。Event 当前仍没有消费者。
+
+## ConversationSummary API
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/summaries` | 保存带来源引用的不可变会话摘要 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/summaries?limit=50` | 按版本倒序查询该会话摘要 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/summaries/:summaryId` | 查询单个摘要及其来源 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/cross-window-summaries?limit=5` | 查询同一主体其他会话各自的最新摘要 |
+
+创建请求只接受：
+
+```json
+{
+  "content": "上一窗口形成了一个尚未完成的任务。",
+  "sources": [
+    {
+      "type": "message_version",
+      "messageId": "opaque-id",
+      "messageVersionId": "opaque-id"
+    },
+    {
+      "type": "event",
+      "eventId": "opaque-id"
+    }
+  ]
+}
+```
+
+- `message_version` 必须属于当前用户、主体和 Conversation；`event` 必须属于当前用户和主体。
+- 来源不能为空、不能重复；摘要与全部来源在同一事务提交。
+- 服务端生成 `summaryId`、会话内单调 `summaryVersion`、`status=active` 和 `createdAt`。
+- 摘要是开发调用方显式提交的记录；后端不生成、改写或评价摘要，不调用模型。
+- 数据库禁止普通更新和直接删除摘要或来源。正式删除仍需后续保留策略。
+- 跨窗口接口排除当前 Conversation，并为每个其他 Conversation 只返回最新摘要，不加载全部历史消息。
+
+## SubjectState / state_update API
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/state-updates` | 接收并保存新的不可变主体状态版本 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/state-updates?limit=50` | 按版本倒序查询状态历史 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/state-updates/:subjectStateId` | 查询单个状态版本 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/state` | 查询当前状态；没有记录时 `data=null` |
+
+请求体：
+
+```json
+{
+  "currentState": {
+    "focus": "继续未完成任务"
+  },
+  "emotion": "focused",
+  "intensity": 0.72,
+  "changeReason": "来源对话建立了仍需延续的任务。",
+  "unresolvedEventIds": ["opaque-event-id"],
+  "continuityConstraints": ["下一窗口继续保留该任务。"],
+  "source": {
+    "type": "conversation_summary",
+    "conversationId": "opaque-id",
+    "summaryId": "opaque-id"
+  }
+}
+```
+
+`source.type` 支持：
+
+- `message_version`：同时提交 `conversationId`、`messageId`、`messageVersionId`。
+- `event`：提交 `eventId`。
+- `conversation_summary`：同时提交 `conversationId`、`summaryId`。
+
+所有来源和 `unresolvedEventIds` 都必须属于相同用户与主体。SubjectState 使用主体内单调 `stateVersion` 和独立当前指针；创建新版本只切换指针，不覆盖旧状态。写入状态、未解决事件引用和当前指针在同一事务提交。接口只是保存调用方提供的 `state_update`，没有模型响应解析、状态演化算法或 continuity-engine 调用。
+
+## Context API
+
+`GET /api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/context`
+
+可选查询参数：
+
+| 参数 | 默认 | 范围 | 作用 |
+| --- | --- | --- | --- |
+| `recentMessageLimit` | `20` | `1`—`50` | 读取当前 Conversation 最近消息 |
+| `crossWindowSummaryLimit` | `5` | `0`—`20` | 读取同一主体其他 Conversation 的最新摘要；`0` 表示不读取 |
+
+响应按 `assemblyOrder` 明确表达以下层级：
+
+1. `systemSafetyRules`：当前只保留结构位置，`status=reserved`，不伪造提示词。
+2. `subjectGlobalSettings`：Subject 名字、头像引用和基础设定。
+3. `currentSubjectState`：当前 SubjectState；尚无记录时为 `null`。
+4. `unresolvedEvents`：当前状态引用的 Event 最小投影，不包含任意上下文扩展数据。
+5. `recentMessages`：当前窗口最近消息；若最后一条是用户消息，会移到第 8 项避免重复。
+6. `crossWindowSummaries`：其他窗口每个 Conversation 的最新可追溯摘要。
+7. `longTermMemory`：当前固定为 `status=not_implemented`，不读取或伪造 Memory。
+8. `currentUserMessage`：当前窗口最后一条用户消息；不满足时为 `null`。
+
+`execution` 固定标记 `modelCall`、`externalApiCall`、`continuityEngineCall` 为 `not_performed`。该接口不持久化装配结果、不生成模型格式、不消耗 Token，也不触发 Event 或外部请求。
 
 ## Dashboard API
 
@@ -281,7 +379,7 @@ Conversation/Message 服务自动生成的四类新增 Event 只保存用户/主
 ```
 
 - `ready` 只表示当前用户和主体均为 `active`。
-- `continuityStatus=not_available` 明确表示 SubjectState 与连续性引擎尚未接入。
+- `continuityStatus=not_available` 明确表示独立 continuity-engine 尚未接入；本阶段新增的 SubjectState 基础存储不会把 Dashboard 状态冒充为引擎可用。
 - 本接口不会返回工作台 mock、设备状态、待办、提醒或模型结果，也不会调用外部服务。
 
 ## 前端连接

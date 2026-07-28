@@ -40,6 +40,9 @@ export function createRouter({
   userService,
   subjectService,
   conversationService,
+  conversationSummaryService,
+  subjectStateService,
+  contextService,
   messageService,
   messageVersionService,
   dashboardService,
@@ -180,6 +183,68 @@ export function createRouter({
         return;
       }
 
+      const subjectStateRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/state$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'GET' && subjectStateRoute) {
+        sendJson(response, 200, {
+          data: subjectStateService.getCurrentState(
+            subjectStateRoute.userId,
+            subjectStateRoute.subjectId,
+          ),
+        });
+        return;
+      }
+
+      const subjectStateUpdatesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/state-updates$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'POST' && subjectStateUpdatesRoute) {
+        const input = await readJsonBody(request);
+        const state = subjectStateService.createStateUpdate(
+          subjectStateUpdatesRoute.userId,
+          subjectStateUpdatesRoute.subjectId,
+          input,
+        );
+        sendJson(response, 201, { data: state }, {
+          location: `/api/v1/users/${encodeURIComponent(state.userId)}/subjects/${encodeURIComponent(state.subjectId)}/state-updates/${encodeURIComponent(state.subjectStateId)}`,
+        });
+        return;
+      }
+
+      if (request.method === 'GET' && subjectStateUpdatesRoute) {
+        const states = subjectStateService.listStateUpdates(
+          subjectStateUpdatesRoute.userId,
+          subjectStateUpdatesRoute.subjectId,
+          { limit: url.searchParams.get('limit') },
+        );
+        sendJson(response, 200, {
+          data: states,
+          meta: { count: states.length },
+        });
+        return;
+      }
+
+      const subjectStateUpdateRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/state-updates\/([^/]+)$/,
+        ['userId', 'subjectId', 'subjectStateId'],
+      );
+      if (request.method === 'GET' && subjectStateUpdateRoute) {
+        sendJson(response, 200, {
+          data: subjectStateService.getStateUpdate(
+            subjectStateUpdateRoute.userId,
+            subjectStateUpdateRoute.subjectId,
+            subjectStateUpdateRoute.subjectStateId,
+          ),
+        });
+        return;
+      }
+
       const conversationsRoute = routeMatch(
         url.pathname,
         /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations$/,
@@ -221,6 +286,97 @@ export function createRouter({
             conversationRoute.userId,
             conversationRoute.subjectId,
             conversationRoute.conversationId,
+          ),
+        });
+        return;
+      }
+
+      const conversationSummariesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/summaries$/,
+        ['userId', 'subjectId', 'conversationId'],
+      );
+      if (request.method === 'POST' && conversationSummariesRoute) {
+        const input = await readJsonBody(request);
+        const summary = conversationSummaryService.createSummary(
+          conversationSummariesRoute.userId,
+          conversationSummariesRoute.subjectId,
+          conversationSummariesRoute.conversationId,
+          input,
+        );
+        sendJson(response, 201, { data: summary }, {
+          location: `${url.pathname}/${encodeURIComponent(summary.summaryId)}`,
+        });
+        return;
+      }
+
+      if (request.method === 'GET' && conversationSummariesRoute) {
+        const summaries = conversationSummaryService.listSummaries(
+          conversationSummariesRoute.userId,
+          conversationSummariesRoute.subjectId,
+          conversationSummariesRoute.conversationId,
+          { limit: url.searchParams.get('limit') },
+        );
+        sendJson(response, 200, {
+          data: summaries,
+          meta: { count: summaries.length },
+        });
+        return;
+      }
+
+      const conversationSummaryRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/summaries\/([^/]+)$/,
+        ['userId', 'subjectId', 'conversationId', 'summaryId'],
+      );
+      if (request.method === 'GET' && conversationSummaryRoute) {
+        sendJson(response, 200, {
+          data: conversationSummaryService.getSummary(
+            conversationSummaryRoute.userId,
+            conversationSummaryRoute.subjectId,
+            conversationSummaryRoute.conversationId,
+            conversationSummaryRoute.summaryId,
+          ),
+        });
+        return;
+      }
+
+      const crossWindowSummariesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/cross-window-summaries$/,
+        ['userId', 'subjectId', 'conversationId'],
+      );
+      if (request.method === 'GET' && crossWindowSummariesRoute) {
+        const summaries = conversationSummaryService.listCrossWindowSummaries(
+          crossWindowSummariesRoute.userId,
+          crossWindowSummariesRoute.subjectId,
+          crossWindowSummariesRoute.conversationId,
+          { limit: url.searchParams.get('limit') },
+        );
+        sendJson(response, 200, {
+          data: summaries,
+          meta: { count: summaries.length },
+        });
+        return;
+      }
+
+      const contextRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/context$/,
+        ['userId', 'subjectId', 'conversationId'],
+      );
+      if (request.method === 'GET' && contextRoute) {
+        sendJson(response, 200, {
+          data: contextService.assembleContext(
+            contextRoute.userId,
+            contextRoute.subjectId,
+            contextRoute.conversationId,
+            {
+              recentMessageLimit: url.searchParams.get('recentMessageLimit'),
+              crossWindowSummaryLimit: url.searchParams.get(
+                'crossWindowSummaryLimit',
+              ),
+            },
           ),
         });
         return;
