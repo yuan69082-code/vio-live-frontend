@@ -61,6 +61,7 @@ export function createRouter({
   capabilityRegistryService,
   capabilityService,
   toolUsageService,
+  deviceService,
   logger = console,
 }) {
   return async function route(request, response) {
@@ -1042,6 +1043,145 @@ export function createRouter({
             toolUsageRecordRoute.userId,
             toolUsageRecordRoute.subjectId,
             toolUsageRecordRoute.toolUsageId,
+          ),
+        });
+        return;
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/v1/device-adapters') {
+        const adapters = deviceService.listAdapterDescriptors();
+        sendJson(response, 200, {
+          data: adapters,
+          meta: { count: adapters.length },
+        });
+        return;
+      }
+
+      const devicesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/devices$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && devicesRoute) {
+        const input = await readJsonBody(request);
+        const result = deviceService.createDevice(devicesRoute.userId, input);
+        sendJson(response, 201, { data: result }, {
+          location: `/api/v1/users/${encodeURIComponent(devicesRoute.userId)}/devices/${encodeURIComponent(result.device.deviceId)}`,
+        });
+        return;
+      }
+      if (request.method === 'GET' && devicesRoute) {
+        const devices = deviceService.listDevices(devicesRoute.userId, {
+          deviceType: url.searchParams.get('deviceType'),
+          status: url.searchParams.get('status'),
+          brand: url.searchParams.get('brand'),
+        });
+        sendJson(response, 200, {
+          data: devices,
+          meta: { count: devices.length },
+        });
+        return;
+      }
+
+      const deviceStatusRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/devices\/([^/]+)\/status$/,
+        ['userId', 'deviceId'],
+      );
+      if (request.method === 'PATCH' && deviceStatusRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: deviceService.updateDeviceStatus(
+            deviceStatusRoute.userId,
+            deviceStatusRoute.deviceId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const deviceAuthorizationsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/devices\/([^/]+)\/authorizations$/,
+        ['userId', 'deviceId'],
+      );
+      if (request.method === 'POST' && deviceAuthorizationsRoute) {
+        const input = await readJsonBody(request);
+        const result = deviceService.createDeviceAuthorization(
+          deviceAuthorizationsRoute.userId,
+          deviceAuthorizationsRoute.deviceId,
+          input,
+        );
+        sendJson(response, 201, { data: result }, {
+          location: `/api/v1/users/${encodeURIComponent(deviceAuthorizationsRoute.userId)}/permissions/${encodeURIComponent(result.permission.permissionId)}`,
+        });
+        return;
+      }
+
+      const deviceRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/devices\/([^/]+)$/,
+        ['userId', 'deviceId'],
+      );
+      if (request.method === 'GET' && deviceRoute) {
+        sendJson(response, 200, {
+          data: deviceService.getDevice(deviceRoute.userId, deviceRoute.deviceId),
+        });
+        return;
+      }
+
+      const deviceOperationPreparationRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/devices\/([^/]+)\/operation-preparations$/,
+        ['userId', 'subjectId', 'deviceId'],
+      );
+      if (request.method === 'POST' && deviceOperationPreparationRoute) {
+        const input = await readJsonBody(request);
+        const preparation = deviceService.prepareDeviceOperation(
+          deviceOperationPreparationRoute.userId,
+          deviceOperationPreparationRoute.subjectId,
+          deviceOperationPreparationRoute.deviceId,
+          input,
+        );
+        sendJson(response, 201, { data: preparation }, {
+          location: `/api/v1/users/${encodeURIComponent(deviceOperationPreparationRoute.userId)}/subjects/${encodeURIComponent(deviceOperationPreparationRoute.subjectId)}/device-operation-logs/${encodeURIComponent(preparation.operationLog.deviceOperationLogId)}`,
+        });
+        return;
+      }
+
+      const deviceOperationLogsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/device-operation-logs$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'GET' && deviceOperationLogsRoute) {
+        const logs = deviceService.listDeviceOperationLogs(
+          deviceOperationLogsRoute.userId,
+          deviceOperationLogsRoute.subjectId,
+          {
+            deviceId: url.searchParams.get('deviceId'),
+            capability: url.searchParams.get('capability'),
+            limit: url.searchParams.get('limit'),
+          },
+        );
+        sendJson(response, 200, {
+          data: logs,
+          meta: { count: logs.length },
+        });
+        return;
+      }
+
+      const deviceOperationLogRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/device-operation-logs\/([^/]+)$/,
+        ['userId', 'subjectId', 'deviceOperationLogId'],
+      );
+      if (request.method === 'GET' && deviceOperationLogRoute) {
+        sendJson(response, 200, {
+          data: deviceService.getDeviceOperationLog(
+            deviceOperationLogRoute.userId,
+            deviceOperationLogRoute.subjectId,
+            deviceOperationLogRoute.deviceOperationLogId,
           ),
         });
         return;

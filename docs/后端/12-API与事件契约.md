@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、健康检查、User/Subject/Assistant Global Settings/Dashboard、Conversation/Message/MessageVersion、Event、Provider/Model、默认/备用模型路由规则、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、健康检查、User/Subject/Assistant Global Settings/Dashboard、Conversation/Message/MessageVersion、Event、Provider/Model、默认/备用模型路由规则、Tool/MCP/Skill/Plugin Registry、Device Registry/Capability、Permission、Security、Confirmation 和 AuditLog 基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -135,6 +135,27 @@ Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示�
 | `GET` | `/api/v1/users/:userId/events/:eventId` | 查询该用户范围内的单个事件 |
 
 对话写入会在同一事务创建对应最小 Event，事件只包含 ID、发送者类型和版本关系，不包含会话标题或消息正文。这些路由供未来连续性引擎读取和 AI 上下文装配使用，但当前没有连接消费者、连续性引擎或模型。能力变化和数据变化仍是规划范围，尚未成为当前接口接受的事件名。
+
+Device 服务也会在同一事务写入 `device_changed`。其 `changeType` 当前只包括 `connection_registered`、`registry_status_changed`、`authorization_changed` 与 `operation_requested`；这些是平台元数据和请求事实，不是设备在线、实际状态变化或执行成功证明。
+
+## Device Registry、Adapter 与操作准备契约
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/device-adapters` | 查询未来 Adapter 类型和固定未实现状态 |
+| `POST` / `GET` | `/api/v1/users/:userId/devices` | 注册或按设备类型、状态、品牌查询用户设备元数据 |
+| `GET` | `/api/v1/users/:userId/devices/:deviceId` | 查询设备、声明能力和未配置 Adapter 描述 |
+| `PATCH` | `/api/v1/users/:userId/devices/:deviceId/status` | 只更新平台注册项的 `enabled` / `disabled` |
+| `POST` | `/api/v1/users/:userId/devices/:deviceId/authorizations` | 为同用户主体创建设备能力 Permission |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/devices/:deviceId/operation-preparations` | 执行权限、安全和确认准备，不调用设备 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/device-operation-logs` | 查询主体范围的最小未执行设备日志 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/device-operation-logs/:operationLogId` | 查询单条设备操作准备日志 |
+
+设备类型固定为 `phone`、`watch`、`air_conditioner`、`robot_vacuum`、`washing_machine`、`camera`、`appliance`；能力固定为 `view_status`、`power`、`adjust_parameter`、`get_data`。创建请求只接受类型、品牌、名称和能力列表，不接受外部设备 ID、位置、凭据或状态正文。设备默认停用，`connectionStatus=not_connected`、`stateStatus=not_observed`，启用也不改变这两个事实。
+
+Device Adapter 契约为未来 `connect`、`disconnect`、`readStatus` 和 `executeCapability` 预留方法。小米、美的、Apple、Android 与通用 Adapter 当前仅有只读描述，全部返回 `implementationStatus=not_implemented`、`connectionSupported=false`、`controlSupported=false` 和 `externalApiCallsSupported=false`。
+
+授权请求把查看状态/获取数据映射为 `read`，开关/调节参数映射为 `control`，复用现有 Permission。操作准备只接受 `capability` 和可选 `confirmationId`，拒绝实际控制参数；它依次检查设备启用与能力声明、Permission、`device_control` Security 和 Confirmation。所有成功或待确认响应及日志仍固定 `executionStatus=not_executed`、`deviceCall=not_performed`、`vendorApiCall=not_performed`，不连接、读取或控制真实设备。
 
 ## 摘要、状态与 Context 契约
 

@@ -2,8 +2,8 @@
 
 ## 状态与边界
 
-- 当前阶段：MCP、Skill、插件与 Tool 基础系统
-- 后端版本：`0.11.0`
+- 当前阶段：手机、家电与穿戴设备适配层
+- 后端版本：`0.12.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
@@ -67,6 +67,7 @@
 - `expressionStyle` 接受普通 JSON 对象；`longTermRequirements` 和 `prohibitions` 各最多 100 个非空、去重字符串。全局设定不得包含模型密钥或被解释为平台安全规则替代物。
 - Tool 的 `inputDefinition` / `outputDefinition` 只接受 JSON Schema 风格的普通对象，用于描述未来输入输出，不接受实际 Tool 输入、命令、处理器地址或执行结果。
 - MCP `serviceUrl` 只保存注册元数据，必须为 HTTP(S)，不得包含用户名、密码、URL 片段或 Key/Token/Secret 类查询参数；保存不会发起连接。
+- Device Registry 不接受外部设备 ID、位置、凭据、厂商 Token 或真实状态；设备操作准备只接受能力代码与可选 Confirmation ID，不接受温度、开关、摄像头命令或任意控制参数。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
 ## 服务接口
@@ -702,6 +703,169 @@ Tool 注册状态 → Permission → Security 风险与 Confirmation → 使用�
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/tool-usage-records/:toolUsageId` | 查询单条主体范围的使用准备记录 |
 
 记录包含时间、用户、调用主体、Tool、Permission/Security 决策、准备结果、固定未执行摘要、零外部消耗与关联审计 ID，不保存真实调用输入、输出、秘密或第三方响应。
+
+## Device Registry 与 Adapter API
+
+### 未来 Adapter 契约
+
+`GET /api/v1/device-adapters`
+
+返回 `xiaomi`、`midea`、`apple`、`android`、`generic` 五个 Adapter 描述。统一未来方法为：
+
+- `connect`
+- `disconnect`
+- `readStatus`
+- `executeCapability`
+
+当前每个方法都返回 `supported=false`；Adapter 固定 `implementationStatus=not_implemented`、`connectionSupported=false`、`controlSupported=false`、`externalApiCallsSupported=false`。该查询只读取本地常量，不加载 SDK、不发现设备、不访问厂商网络。
+
+### 创建 Device Registry 条目
+
+`POST /api/v1/users/:userId/devices`
+
+```json
+{
+  "deviceType": "air_conditioner",
+  "brand": "midea",
+  "name": "Living room air conditioner",
+  "status": "disabled",
+  "capabilities": ["view_status", "power", "adjust_parameter"]
+}
+```
+
+设备类型严格限定为：
+
+- `phone`：手机
+- `watch`：手表/穿戴设备
+- `air_conditioner`：空调
+- `robot_vacuum`：扫地机器人
+- `washing_machine`：洗衣机
+- `camera`：摄像头
+- `appliance`：通用家电
+
+`brand` 统一保存为小写注册标识；`xiaomi`、`midea`、`apple`、`android` 分派到同名未来 Adapter，其他品牌分派到 `generic`。这只是元数据分派，不表示厂商已支持。
+
+`status` 只支持 `enabled`、`disabled`，默认 `disabled`。Device `enabled` 只允许进入安全准备；响应始终包含：
+
+```json
+{
+  "connectionStatus": "not_connected",
+  "stateStatus": "not_observed",
+  "controlSupport": "not_implemented"
+}
+```
+
+创建与 `device_changed` Event 在同一事务提交。Event 的 `changeType=connection_registered` 只表示设备接入元数据已登记，绝不表示真实连接成功。
+
+### Device Capability
+
+| 能力 | 含义 | Permission action |
+| --- | --- | --- |
+| `view_status` | 未来查看设备状态 | `read` |
+| `power` | 未来开关设备 | `control` |
+| `adjust_parameter` | 未来调节参数 | `control` |
+| `get_data` | 未来获取设备数据 | `read` |
+
+设备至少声明一项能力且不能重复。响应中的 `capabilityDefinitions` 为每项能力返回 Device Permission 要求，资源 ID 固定为当前 `deviceId`；`executionSupport` 固定为 `not_implemented`。
+
+### 查询与启停设备注册
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/devices?deviceType=phone&status=enabled&brand=apple` | 按可选类型、状态与品牌查询设备 |
+| `GET` | `/api/v1/users/:userId/devices/:deviceId` | 按用户归属查询单个设备 |
+| `PATCH` | `/api/v1/users/:userId/devices/:deviceId/status` | 使用 `{ "status": "enabled" }` 或 `disabled` 更新注册状态 |
+
+注册状态实际变化时生成 `device_changed` Event，`changeType=registry_status_changed`。无变化更新不写入事件。更新注册状态不会连接、断开或查询设备。
+
+## Device Permission、操作准备与日志 API
+
+### 创建设备授权
+
+`POST /api/v1/users/:userId/devices/:deviceId/authorizations`
+
+```json
+{
+  "subjectId": "opaque-subject-id",
+  "capability": "view_status",
+  "permissionLevel": "always_allow"
+}
+```
+
+可选 `status` 仍只支持 Permission 的 `active`、`inactive`。服务先验证用户、主体、Device 及能力归属，再使用能力映射出的 `read` 或 `control` 创建精确 `resourceType=device` Permission。Permission、`permission_changed` Event、Permission AuditLog 和 `authorization_changed` Device Event 在同一最外层事务提交。
+
+同一设备的多个能力如果映射到相同 action，会共享同一 Device Permission 范围；当前 Permission 唯一性仍按用户、主体、设备 ID 与 action，而不是按能力名称。
+
+### 设备操作准备
+
+`POST /api/v1/users/:userId/subjects/:subjectId/devices/:deviceId/operation-preparations`
+
+首次请求：
+
+```json
+{
+  "capability": "view_status"
+}
+```
+
+批准现有 Confirmation 后：
+
+```json
+{
+  "capability": "view_status",
+  "confirmationId": "opaque-confirmation-id"
+}
+```
+
+固定流程：
+
+```text
+Device 注册启用
+→ 能力已声明
+→ Device Permission
+→ Security(device_control)
+→ Confirmation
+→ device_changed(operation_requested)
+→ DeviceOperationLog(not_executed)
+```
+
+所有设备能力当前都通过 `operationType=device_control` 进入 Security，因此风险等级为 `critical`，即使已有 `always_allow` 也必须每次确认。Permission 拒绝不能被 Confirmation 绕过。
+
+响应 `preparationStatus` 为 `ready`、`confirmation_required` 或 `denied`。即使 `ready`，以下字段也固定不变：
+
+```json
+{
+  "execution": {
+    "supported": false,
+    "status": "not_executed",
+    "deviceCall": "not_performed",
+    "vendorApiCall": "not_performed",
+    "reason": "device_adapter_not_implemented"
+  }
+}
+```
+
+接口拒绝 `parameters`、`value`、`command`、`payload` 或任何实际设备控制数据。每次准备与 Security AuditLog、`operation_requested` Device Event 和 DeviceOperationLog 同一事务提交，任一步失败全部回滚。
+
+### 设备操作日志
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/device-operation-logs?deviceId=:deviceId&capability=view_status&limit=50` | 按可选设备、能力与数量查询日志 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/device-operation-logs/:deviceOperationLogId` | 查询单条主体范围日志 |
+
+日志记录用户、主体、设备、能力、Permission action、时间、Permission/Security 决策、风险、准备结果、固定未执行摘要，以及 Event/AuditLog 引用。它不保存厂商请求、控制参数、摄像头内容、健康数据、位置、真实设备状态或第三方响应。
+
+### Device Event 范围
+
+当前沿用 `device_changed`，由 Device Service 生成四种最小 `changeType`：
+
+- `connection_registered`：登记设备连接元数据，不代表真实连接。
+- `authorization_changed`：通过设备授权入口创建 Permission。
+- `registry_status_changed`：设备注册启停变化，不代表物理状态变化。
+- `operation_requested`：发生权限/安全准备请求，不代表执行。
+
+所有 Device Event 都明确包含 `connectionStatus=not_connected` 和 `executionStatus=not_executed`，不复制名称、控制参数、设备数据或秘密。
 
 ## 前端连接
 

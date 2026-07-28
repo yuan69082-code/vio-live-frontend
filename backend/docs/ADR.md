@@ -223,6 +223,14 @@
 - 原因：注册或启用只说明平台知道一项能力，不能被误认为外部服务已连接、插件已安装或工具已运行。先固定目录、主体权限视图、安全门槛和可审计记录，可以验证隔离与治理流程，同时避免在缺少执行沙箱、供应链校验、秘密注入、撤销和失败恢复设计时产生真实副作用。
 - 影响：MCP 响应固定 `not_connected`，Plugin 固定 `not_installed`，Skill/Tool 固定 `not_implemented`；Tool 准备结果只能为 `ready`、`confirmation_required` 或 `denied`，即使为 `ready` 也明确未执行。使用记录保存权限/安全决策、最小结果摘要、关联 AuditLog 和零外部调用消耗，不保存输入、输出或秘密。未来真实 MCP 客户端、Plugin 安装器、Skill/Tool 执行器必须使用新的受信适配层和独立 ADR，并重新审查 Plugin 权限、供应链安全、幂等、超时、撤销、审计与用户确认语义；当前不连接设备、第三方服务、模型或 continuity-engine。
 
+## BE-ADR-028｜设备注册、适配契约和设备执行严格分离
+
+- 日期：2026-07-28
+- 状态：已采用，仅限开发期设备适配基础
+- 决策：Device Registry 只保存用户范围的七类设备、品牌、名称、启停状态、Adapter 类型与四种能力关系，不保存厂商设备 ID、位置、凭据或真实状态。Xiaomi、Midea、Apple、Android 与 Generic 只实现统一 Adapter 契约描述，所有连接、状态读取和执行方法均标记不支持。设备能力映射到现有 `device` Permission 的 `read` / `control` action；操作准备固定通过 `Security(device_control)` 与 Confirmation，随后原子追加最小 `device_changed` Event 和 `device_operation_logs`。数据库约束执行状态只能为 `not_executed`。
+- 原因：注册、适配器选择、安全准备和真实设备副作用属于不同信任层。缺少厂商认证、设备身份校验、秘密存储、撤销、超时、幂等、状态可信度及隐私治理时，不能让“已启用”或“确认通过”被误认为设备已连接或已受控。先建立不含执行参数的稳定契约，可以验证用户/主体隔离、权限、极高风险确认、事件和日志一致性，而不触碰真实手机、摄像头、家电或穿戴数据。
+- 影响：Device 创建默认停用；所有响应固定 `not_connected`、`not_observed`、`not_implemented`。`connection_registered` 只表示连接元数据登记，`registry_status_changed` 只表示注册状态变化，`operation_requested` 只表示安全准备请求。设备操作即使返回 `ready` 也不执行，不接收参数，不调用 SDK 或厂商 API。设备授权复用 Permission 表而不建立重复授权表；同一设备映射到相同 action 的能力共享 Permission 范围。未来每个真实厂商 Adapter 必须新增独立 ADR，覆盖设备身份、凭据、数据分类、状态签名、超时/重试/幂等、立即停止、撤销、离线行为、审计和安全测试。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：

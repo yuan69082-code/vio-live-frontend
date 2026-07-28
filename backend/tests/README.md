@@ -9,6 +9,7 @@
 - 摘要来源、跨窗口读取、SubjectState 版本和 Context 装配边界
 - AI Assistant Global Settings 的默认值、读取、更新、Context 投影及与 SubjectState 的边界
 - Tool/MCP/Skill/Plugin 注册、Capability 权限投影和 Tool 未执行使用记录
+- Device Registry、Capability、Adapter 契约、授权、安全确认、事件和未执行操作日志
 - continuity-engine、模型和外部能力边界
 - 导出、删除、备份和恢复范围
 - 错误结果不泄露密钥或其他用户数据
@@ -21,7 +22,7 @@
 pnpm test
 ```
 
-当前测试结果为 27/27 通过，已覆盖服务启动、统一响应 envelope、User 当前开发上下文、Subject 创建/列表/查询/更新、Assistant Global Settings、Dashboard、Subject 更新与 Event 事务回滚、Event、Provider/Model/默认备用路由、009 旧库升级、四类能力注册、Capability 权限投影、Tool 使用准备、Permission CRUD、五档三态判断、Security 四级风险、三种确认要求、确认隔离与防重放、AuditLog、`allow_once` 确认前预览与最终消费、软删除、重启持久化、跨用户/主体隔离和密钥字段拦截。
+当前测试结果为 30/30 通过，已覆盖服务启动、统一响应 envelope、User 当前开发上下文、Subject 创建/列表/查询/更新、Assistant Global Settings、Dashboard、Subject 更新与 Event 事务回滚、Event、Provider/Model/默认备用路由、009 旧库升级、四类能力注册、Capability 权限投影、Tool 使用准备、Device Registry 与操作准备、Permission CRUD、五档三态判断、Security 四级风险、三种确认要求、确认隔离与防重放、AuditLog、`allow_once` 确认前预览与最终消费、软删除、重启持久化、跨用户/主体隔离和密钥字段拦截。
 
 Conversation / Message / MessageVersion 测试覆盖会话与消息创建和查询、会话内 `sequenceNumber`、`currentVersionId` 指针、原始/编辑/重生成版本历史、不可变版本、`baseVersionId` 防陈旧写、发送者限制、复合归属隔离、自动 Event 不含标题或内容，以及 Event 失败时消息/版本/指针/会话活动时间的事务回滚。主体消息和重生成测试内容由调用方显式提交，不调用 AI。所有测试只访问本地测试服务与临时 SQLite，不调用真实模型、支付、设备或外部 API。
 
@@ -32,3 +33,5 @@ Assistant Global Settings 测试覆盖创建主体时的默认设定、七类字
 Model Routing 测试覆盖 Provider 的 Base URL、接口格式、启停与测试状态，Model 的八类能力标签、费用说明与测试状态，六类任务查询，默认/备用规则创建、读取、更新与重启持久化。测试验证默认 Provider 停用时切换到备用模型、显式规则不可用时明确失败、无规则时稳定目录回退、跨用户或能力不匹配引用被拒绝，以及全部路由结果均标记模型和外部 API 未调用。API Key、Token、Secret、凭据引用和含凭据 Base URL 均被拒绝，安全存储端口明确返回 `writeSupported=false`。
 
 Capability 测试覆盖 Tool/MCP/Skill/Plugin 创建、默认停用、启停、查询、持久化、用户内名称唯一和跨用户隔离；统一能力视图覆盖分类、Permission 允许/询问/拒绝、Plugin 纯元数据状态和 Tool 最近使用。Tool 执行准备覆盖低风险直接准备、中风险确认、确认消费、停用阻止和缺少权限拒绝；全部记录固定 `not_executed`、零外部调用和零 Token。执行载荷、含凭据 MCP 地址与跨主体读取均被拒绝，不连接任何外部服务。
+
+Device 测试覆盖七类设备、四类能力、品牌到未配置 Adapter 的映射、默认停用、查询筛选、启停、持久化和跨用户隔离。授权写入复用 Permission 并产生 `permission_changed` 与 `device_changed`；操作准备必须经过 Permission、Security 和 Confirmation，设备控制风险固定为 `critical`，全部结果固定 `not_executed`、`not_connected` 和零厂商调用。测试还覆盖禁用设备、未声明能力、真实控制参数、跨主体访问、日志/审计/Event 关联和事务回滚。

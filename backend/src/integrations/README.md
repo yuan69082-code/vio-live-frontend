@@ -11,4 +11,4 @@
 - 手机、家电与穿戴设备
 - 日志、监控、备份和对象存储
 
-任何集成都必须经过平台身份、主体、权限、风险确认和审计边界。当前只实现开发期 SQLite 数据库适配，包括 Provider/Model、能力 Registry、Tool 未执行使用记录、Permission、Confirmation 和 AuditLog 仓储；没有模型、支付、MCP 客户端、Plugin 安装器、Skill/Tool 执行器、设备或手机适配器，也没有为密钥、外部凭据或敏感正文建立集成写入结构。
+任何集成都必须经过平台身份、主体、权限、风险确认和审计边界。当前只实现开发期 SQLite 数据库适配，包括 Provider/Model、能力 Registry、Tool 未执行使用记录、Device Registry/Capability/未执行操作日志、Permission、Confirmation 和 AuditLog 仓储。设备目录提供小米、美的、Apple、Android 和通用类型的未配置 Adapter 描述，全部固定 `not_implemented` 且没有连接或控制方法实现。当前没有模型、支付、MCP 客户端、Plugin 安装器、Skill/Tool 执行器、真实设备 SDK 或厂商客户端，也没有为密钥、外部设备 ID、外部凭据、实际设备状态或敏感正文建立集成写入结构。

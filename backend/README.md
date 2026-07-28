@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前阶段为“MCP、Skill、插件与 Tool 基础系统”。后端已经可以独立启动，并在既有 Permission 与 Security 基础上建立能力注册、统一查询和 Tool 执行准备闭环：
+当前阶段为“手机、家电与穿戴设备适配层”。后端已经可以独立启动，并在既有 Permission、Security、Confirmation 与 Event 基础上建立设备注册、统一适配契约和设备操作准备闭环：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -12,6 +12,8 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 Provider 配置 → Model 能力目录 → 默认/备用规则 → 本地选择结果
 Tool/MCP/Skill/Plugin 元数据 → 主体能力视图 → Permission 预览
 Tool 执行准备 → Permission 检查 → Security 检查/确认 → 未执行使用记录
+Device Registry → Capability 描述 → 未配置 Adapter 投影
+设备操作准备 → Permission → Security/Confirmation → device_changed Event → 未执行操作日志
 ```
 
 已实现：
@@ -61,12 +63,19 @@ Tool 执行准备 → Permission 检查 → Security 检查/确认 → 未执行
 - Capability Service 按主体统一查询 Tool、MCP、Skill 与 Plugin，返回分类、权限预览、可选状态和 Tool 最近使用记录
 - Tool 执行准备串联 Permission 与 Security；只记录 `ready`、`confirmation_required` 或 `denied`，执行状态固定为 `not_executed`
 - Tool 使用记录保存主体、权限/安全决策、结果摘要和零外部调用消耗信息，不接收工具输入或输出正文
+- Device Registry 保存手机、手表、空调、扫地机器人、洗衣机、摄像头和通用家电七类设备的用户归属、品牌、名称、启停状态与能力列表
+- Device Capability 支持 `view_status`、`power`、`adjust_parameter`、`get_data`，并分别映射 `read` 或 `control` Permission 操作
+- Xiaomi、Midea、Apple、Android 和 Generic Adapter 只提供统一未来契约描述，全部固定为 `not_implemented`、不连接、不控制、不调用厂商 API
+- 设备授权入口创建精确 Device Permission，并同时记录 `permission_changed`、`device_changed` 与最小 AuditLog
+- 设备操作准备按 Device 状态、Permission、Security 与 Confirmation 处理；`device_control` 固定进入极高风险确认，执行状态始终为 `not_executed`
+- Device Event 记录连接注册、授权变化、注册状态变化和操作请求；所有事件均明确 `not_connected` / `not_executed`
+- 设备操作日志保存用户、主体、设备、能力、动作、时间、权限/安全结果、Event 与 AuditLog 引用，不保存控制参数或设备数据
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- `pnpm test` 当前 27/27 通过，覆盖启动、API 契约、模型路由、能力注册、权限/安全执行准备、全局设定、摘要来源、上下文装配、事务回滚、持久化和隔离
+- `pnpm test` 当前 30/30 通过，覆盖启动、API 契约、模型路由、能力注册、设备注册/适配契约、权限/安全执行准备、全局设定、摘要来源、上下文装配、事务回滚、持久化和隔离
 
-本阶段的 `enabled` 只表示注册项可进入能力选择，不表示 MCP 已连接、Skill/Tool 可执行或 Plugin 已安装。Tool 执行准备只完成权限与安全门槛判断并记录结果，不接受真实执行参数，不运行命令、代码或网络调用。模型路由仍只返回本地配置结果；Context、SubjectState、Assistant Global Settings 与能力系统互不改写。本阶段没有实现 MCP 客户端、插件安装器、Skill/Tool 执行器、设备、手机权限、第三方服务、Memory、真实模型或 continuity-engine。前端 `src`、页面与 mock 未修改。
+本阶段的 Device `enabled` 只表示注册项允许进入安全准备，不表示设备已连接、在线或受控。设备响应固定 `connectionStatus=not_connected`、`stateStatus=not_observed`、`controlSupport=not_implemented`；操作准备不接受开关值、温度、摄像头命令或其他参数，也不会访问手机、家电、摄像头、穿戴设备或厂商网络。Tool/MCP/Skill/Plugin 的原有未执行边界保持不变。本阶段没有设备 SDK、手机权限、厂商凭据、真实状态读取、设备控制、第三方请求、真实模型或 continuity-engine。前端 `src`、页面与 mock 未修改。
 
 ## 运行要求
 
@@ -190,6 +199,14 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `POST` | `/api/v1/users/:userId/subjects/:subjectId/tools/:toolId/execution-preparations` | 执行 Permission → Security 准备并记录未执行结果 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/tool-usage-records` | 查询主体的 Tool 使用准备记录 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/tool-usage-records/:toolUsageId` | 查询单条 Tool 使用准备记录 |
+| `GET` | `/api/v1/device-adapters` | 查询 Xiaomi/Midea/Apple/Android/Generic 未来 Adapter 契约；全部未实现 |
+| `POST` / `GET` | `/api/v1/users/:userId/devices` | 创建或按类型、品牌、状态查询 Device Registry |
+| `GET` | `/api/v1/users/:userId/devices/:deviceId` | 按用户归属查询设备、能力与未连接 Adapter 投影 |
+| `PATCH` | `/api/v1/users/:userId/devices/:deviceId/status` | 更新设备注册启停状态，不改变真实连接状态 |
+| `POST` | `/api/v1/users/:userId/devices/:deviceId/authorizations` | 为主体和设备能力创建精确 Permission 并记录设备授权事件 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/devices/:deviceId/operation-preparations` | 执行 Device Permission → Security → Confirmation 准备，不控制设备 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/device-operation-logs` | 查询主体的设备操作准备日志 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/device-operation-logs/:deviceOperationLogId` | 查询单条设备操作准备日志 |
 | `POST` | `/api/v1/users/:userId/permissions` | 创建主体范围的权限规则并记录事件 |
 | `GET` | `/api/v1/users/:userId/permissions` | 按主体、资源、操作或状态查询规则 |
 | `GET` | `/api/v1/users/:userId/permissions/:permissionId` | 按用户归属查询单个规则 |
@@ -237,6 +254,7 @@ backend/
 │  ├─ modules/capability-registries/ # Tool/MCP/Skill/Plugin 注册元数据
 │  ├─ modules/capabilities/  # 主体范围统一能力与权限投影
 │  ├─ modules/tool-usage/    # Tool 安全准备与未执行使用记录
+│  ├─ modules/devices/       # Device Registry、能力、Adapter 契约和操作准备
 │  ├─ modules/permissions/   # 权限规则、五档语义与三态判断
 │  ├─ modules/security/      # 安全编排、风险识别和执行前资格
 │  ├─ modules/sensitive-data/ # 敏感分类元数据，不保存正文
@@ -253,7 +271,7 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_confirmations`、`audit_logs`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry` 和 `tool_usage_records`。
+- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_confirmations`、`audit_logs`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry`、`tool_usage_records`、`device_registry`、`device_capabilities` 和 `device_operation_logs`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
 - `assistant_global_settings` 与 Subject 一对一绑定；名称和头像仍以 `subjects` 为唯一身份来源，人格、表达、关系、长期要求与禁止事项保存在独立设定表。新建 Subject 与默认设定原子提交，设定更新与最小 `subject_updated` Event 原子提交。
@@ -281,6 +299,8 @@ backend/
 - 内部嵌套写入加入同一最外层 SQLite 事务，保证安全确认、单次权限消费和审计结果一致。
 - 四类能力注册表均按用户归属，名称在用户范围内唯一；注册状态默认 `disabled`。Tool、MCP 和 Skill 分别关联现有 Permission 的 `tool`、`mcp`、`skill` 资源类型，Plugin 当前只保存注册元数据，不扩张 Permission 枚举或形成安装权限。
 - `tool_usage_records` 同时复合绑定用户、主体、Tool 和安全审计记录。当前数据库约束只允许 `execution_status=not_executed`，消费信息固定记录零外部调用、零 Token 和无计费结果。
+- `device_registry` 与能力关系按用户归属，名称在用户范围内唯一且创建默认停用；不保存外部设备 ID、位置、凭据或真实状态。`adapter_type` 只是未来适配器分派元数据。
+- `device_operation_logs` 复合绑定用户、主体、Device、AuditLog 和 `device_changed` Event；数据库约束只允许 `execution_status=not_executed`。设备授权当前通过现有 Permission 保存，不建立重复授权表。
 - `basicSettings` 在开发 SQLite 中保存为 JSON 文本，业务层只接收普通 JSON 对象。
 - SQL 和 `node:sqlite` 只存在于 `integrations/database` 与 `migrations`；业务服务只依赖仓储行为。
 - 已执行迁移不得修改，后续结构通过新迁移演进。
@@ -288,6 +308,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`。当前 Context Service 只按固定产品顺序投影已有全局设定、状态、事件、消息和跨窗口摘要；它不生成提示词、不筛选长期 Memory、不调用模型，也不执行连续性算法。Dashboard 的 `continuityStatus` 仍表示独立引擎不可用。全局设定中的长期要求和禁止事项不能削弱平台最低安全规则。Capability Service 只投影注册与权限事实；Security 和 Tool Usage 只完成前置资格、确认与记录，不连接 MCP、不加载插件、不执行 Skill/Tool，也不访问支付、手机、设备或 AI 私域。分支、删除和窗口重置仍未实现。
+平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`。当前 Context Service 只按固定产品顺序投影已有全局设定、状态、事件、消息和跨窗口摘要；它不生成提示词、不筛选长期 Memory、不调用模型，也不执行连续性算法。Dashboard 的 `continuityStatus` 仍表示独立引擎不可用。全局设定中的长期要求和禁止事项不能削弱平台最低安全规则。Capability Service 与 Device Service 只投影本地注册、能力、权限和安全准备事实；它们不连接 MCP、不加载插件、不执行 Skill/Tool、不获取手机权限、不读取或控制设备，也不访问支付或 AI 私域。分支、删除和窗口重置仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

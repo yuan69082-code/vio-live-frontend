@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 
 import { createRouter } from './http/router.js';
+import { createUnconfiguredDeviceAdapterRegistry } from './integrations/devices/unconfigured-device-adapter-registry.js';
 import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
 import { createSqliteAssistantGlobalSettingsRepository } from './integrations/database/sqlite-assistant-global-settings-repository.js';
 import { createSqliteAuditLogRepository } from './integrations/database/sqlite-audit-log-repository.js';
@@ -8,6 +9,7 @@ import { createSqliteCapabilityRegistryRepository } from './integrations/databas
 import { createSqliteConfirmationRepository } from './integrations/database/sqlite-confirmation-repository.js';
 import { createSqliteConversationRepository } from './integrations/database/sqlite-conversation-repository.js';
 import { createSqliteConversationSummaryRepository } from './integrations/database/sqlite-conversation-summary-repository.js';
+import { createSqliteDeviceRepository } from './integrations/database/sqlite-device-repository.js';
 import { createSqliteEventRepository } from './integrations/database/sqlite-event-repository.js';
 import { createSqliteMessageRepository } from './integrations/database/sqlite-message-repository.js';
 import { createSqliteMessageVersionRepository } from './integrations/database/sqlite-message-version-repository.js';
@@ -29,6 +31,7 @@ import { createContextService } from './modules/contexts/context-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
 import { createConversationSummaryService } from './modules/conversation-summaries/conversation-summary-service.js';
 import { createDashboardService } from './modules/dashboard/dashboard-service.js';
+import { createDeviceService } from './modules/devices/device-service.js';
 import { createEventService } from './modules/events/event-service.js';
 import { createModelRouterService } from './modules/model-router/model-router-service.js';
 import { createModelRoutingRuleService } from './modules/model-routing-rules/model-routing-rule-service.js';
@@ -68,8 +71,10 @@ export function createApplication({ config, logger = console }) {
   const capabilityRegistryRepository = createSqliteCapabilityRegistryRepository(
     database.connection,
   );
+  const deviceRepository = createSqliteDeviceRepository(database.connection);
   const confirmationRepository = createSqliteConfirmationRepository(database.connection);
   const credentialStore = createUnconfiguredApiCredentialStore();
+  const deviceAdapterRegistry = createUnconfiguredDeviceAdapterRegistry();
   const userService = createUserService({ userRepository });
   const eventService = createEventService({
     eventRepository,
@@ -214,6 +219,16 @@ export function createApplication({ config, logger = console }) {
     subjectRepository,
     runInTransaction: database.runInTransaction,
   });
+  const deviceService = createDeviceService({
+    deviceRepository,
+    deviceAdapterRegistry,
+    userRepository,
+    subjectRepository,
+    permissionService,
+    securityService,
+    eventService,
+    runInTransaction: database.runInTransaction,
+  });
   const router = createRouter({
     config,
     database,
@@ -241,6 +256,7 @@ export function createApplication({ config, logger = console }) {
     capabilityRegistryService,
     capabilityService,
     toolUsageService,
+    deviceService,
     logger,
   });
   const server = createServer((request, response) => {

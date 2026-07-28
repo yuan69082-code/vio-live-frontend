@@ -11,7 +11,7 @@
 7. 模型与扩展能力管理
 8. 设备、AI 私域、生活模块和数据治理
 
-模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现 User、Subject、Assistant Global Settings、Dashboard、Conversation、Message、MessageVersion、ConversationSummary、SubjectState、Context、Event、APIProvider、Model、Model Routing Rule、Model Router、Tool/MCP/Skill/Plugin Registry、Capability、Tool Usage、Permission、Security、SensitiveData 分类、Confirmation 与 AuditLog。Dashboard 只聚合已有 User/Subject 状态，不猜测连续性或设备数据；Security 只返回安全资格并标记未执行；Permission Checker 不执行资源操作，Router 也不调用真实模型。
+模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现 User、Subject、Assistant Global Settings、Dashboard、Conversation、Message、MessageVersion、ConversationSummary、SubjectState、Context、Event、APIProvider、Model、Model Routing Rule、Model Router、Tool/MCP/Skill/Plugin Registry、Capability、Tool Usage、Device Registry、Device Capability、Device Operation、Permission、Security、SensitiveData 分类、Confirmation 与 AuditLog。Dashboard 只聚合已有 User/Subject 状态，不猜测连续性或设备数据；Security 只返回安全资格并标记未执行；Permission Checker 不执行资源操作，Router 也不调用真实模型。
 
 助手全局设定模块把 Subject 中的名称/头像与一对一长期设定投影为单一 API 对象；扩展设定包括人格、表达方式、关系、长期要求和禁止事项。它不保存情绪、未解决事件或动态状态，不会写入 SubjectState。会话模块保持用户—主体—会话复合归属。Message 是稳定逻辑消息，使用会话内 `sequenceNumber` 排序并以 `currentVersionId` 指向当前内容；MessageVersion 只追加 `original`、`edited` 或 `regenerated` 版本，不原地覆盖。ConversationSummary 只追加摘要版本并保存强来源引用，SubjectState 只追加 `state_update` 并由独立当前指针选择。Context 按固定顺序只读装配，不持久化结果、不生成提示词、不调用 AI 或 continuity-engine。当前不实现 Memory、分支、删除或重置。
 
@@ -20,3 +20,5 @@
 模型配置模块保持以下边界：APIProvider 保存服务来源、Base URL、接口格式与启停元数据；Model 保存名称、类型、能力、费用说明与测试状态；Model Routing Rule 按用户和任务保存默认/备用模型；Router 只执行确定性本地选择。测试状态当前固定为 `not_tested`，API Key 只通过未配置的安全存储端口描述状态，任何模块都不保存密钥或调用供应商。
 
 扩展能力模块保持以下边界：Registry 只保存用户范围元数据；Capability 按主体预览 Permission，不消费 `allow_once`；Tool Usage 只执行 Security/Confirmation 前置判断并记录 `not_executed`。MCP 未连接，Plugin 未安装，Skill/Tool 没有执行器，任何模块都不接收真实执行输入或调用第三方服务。
+
+设备模块保持以下边界：Device Registry 只保存用户范围的设备类型、品牌、名称、启停和能力声明；主体授权复用 `resource_type=device` 的 Permission。操作准备固定经过 Permission、Security 和 Confirmation，并记录 `device_changed`、AuditLog 和 `not_executed` 操作日志。注册或启用不表示设备已连接，设备状态固定未观测；统一 Adapter 端口和小米、美的、Apple、Android 描述均为 `not_implemented`，不接收控制参数、不加载 SDK、不调用厂商 API。
