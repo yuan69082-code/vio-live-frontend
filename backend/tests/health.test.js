@@ -19,7 +19,7 @@ test('service starts and reports a healthy development database', async () => {
     assert.ok(!Number.isNaN(Date.parse(rootResult.body.timestamp)));
     assert.deepEqual(rootResult.body.data, {
       service: 'vio-live-backend',
-      version: '0.10.0',
+      version: '0.11.0',
       status: 'running',
     });
 
@@ -31,7 +31,7 @@ test('service starts and reports a healthy development database', async () => {
     assert.deepEqual(healthResult.body.data, {
       status: 'ok',
       service: 'vio-live-backend',
-      version: '0.10.0',
+      version: '0.11.0',
       database: 'ok',
     });
   } finally {

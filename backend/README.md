@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 6｜模型与 API 路由”。后端已经可以独立启动，并在既有本地模型目录基础上建立显式默认/备用路由配置闭环：
+当前阶段为“MCP、Skill、插件与 Tool 基础系统”。后端已经可以独立启动，并在既有 Permission 与 Security 基础上建立能力注册、统一查询和 Tool 执行准备闭环：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -10,6 +10,8 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 对话事实 → 可追溯摘要 → 跨窗口读取 → 当前主体状态 → 只读上下文投影
 主体身份 → 长期全局设定 → 跨窗口读取/更新 → Context 只读投影
 Provider 配置 → Model 能力目录 → 默认/备用规则 → 本地选择结果
+Tool/MCP/Skill/Plugin 元数据 → 主体能力视图 → Permission 预览
+Tool 执行准备 → Permission 检查 → Security 检查/确认 → 未执行使用记录
 ```
 
 已实现：
@@ -53,12 +55,18 @@ Provider 配置 → Model 能力目录 → 默认/备用规则 → 本地选择�
 - 只追加、最小脱敏、与 Event 分离的 AuditLog
 - Permission/APIProvider 变更审计及用户范围内的审计只读查询
 - 安全预检不提前消费 `allow_once`，确认满足后才完成单次消费
+- Tool Registry 保存名称、说明、类型、输入/输出定义、启停状态和 Permission 操作要求
+- MCP Registry 保存服务地址与能力说明，但连接状态固定为 `not_connected`，不创建 MCP 客户端
+- Skill Registry 保存说明、适用场景与版本；Plugin Registry 保存版本和依赖，但不安装、更新或加载插件代码
+- Capability Service 按主体统一查询 Tool、MCP、Skill 与 Plugin，返回分类、权限预览、可选状态和 Tool 最近使用记录
+- Tool 执行准备串联 Permission 与 Security；只记录 `ready`、`confirmation_required` 或 `denied`，执行状态固定为 `not_executed`
+- Tool 使用记录保存主体、权限/安全决策、结果摘要和零外部调用消耗信息，不接收工具输入或输出正文
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
-- `pnpm test` 当前 24/24 通过，覆盖启动、API 契约、模型路由、009 升级迁移、全局设定、摘要来源、上下文装配、事务回滚、持久化和隔离
+- `pnpm test` 当前 27/27 通过，覆盖启动、API 契约、模型路由、能力注册、权限/安全执行准备、全局设定、摘要来源、上下文装配、事务回滚、持久化和隔离
 
-模型路由只返回本地配置结果，绝不调用模型或供应商 API。它不读取或改写 Context、SubjectState、Assistant Global Settings，也不会装配提示词、生成内容或产生 Token。助手设定、主体消息、摘要和 `state_update` 仍由开发调用方显式提交。本阶段没有实现真实模型测试、密钥写入、模型调用、平台后端 7、MCP/Skill/Tool、设备、Memory 或 continuity-engine。前端 `src`、页面与 mock 未修改。
+本阶段的 `enabled` 只表示注册项可进入能力选择，不表示 MCP 已连接、Skill/Tool 可执行或 Plugin 已安装。Tool 执行准备只完成权限与安全门槛判断并记录结果，不接受真实执行参数，不运行命令、代码或网络调用。模型路由仍只返回本地配置结果；Context、SubjectState、Assistant Global Settings 与能力系统互不改写。本阶段没有实现 MCP 客户端、插件安装器、Skill/Tool 执行器、设备、手机权限、第三方服务、Memory、真实模型或 continuity-engine。前端 `src`、页面与 mock 未修改。
 
 ## 运行要求
 
@@ -166,6 +174,22 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `GET` | `/api/v1/users/:userId/model-routing-rules/:taskType` | 查询指定任务规则 |
 | `PATCH` | `/api/v1/users/:userId/model-routing-rules/:taskType` | 更新规则模型或启停状态 |
 | `POST` | `/api/v1/users/:userId/model-router/select` | 按任务类型返回规则匹配模型，不执行调用 |
+| `POST` / `GET` | `/api/v1/users/:userId/tools` | 创建或查询 Tool Registry 条目 |
+| `GET` | `/api/v1/users/:userId/tools/:toolId` | 按用户归属查询 Tool 条目 |
+| `PATCH` | `/api/v1/users/:userId/tools/:toolId/status` | 更新 Tool 注册启停状态，不执行 Tool |
+| `POST` / `GET` | `/api/v1/users/:userId/mcp-registrations` | 创建或查询 MCP Registry 条目 |
+| `GET` | `/api/v1/users/:userId/mcp-registrations/:mcpId` | 按用户归属查询 MCP 条目；连接状态固定未连接 |
+| `PATCH` | `/api/v1/users/:userId/mcp-registrations/:mcpId/status` | 更新 MCP 注册启停状态，不建立连接 |
+| `POST` / `GET` | `/api/v1/users/:userId/skills` | 创建或查询 Skill Registry 条目 |
+| `GET` | `/api/v1/users/:userId/skills/:skillId` | 按用户归属查询 Skill 条目 |
+| `PATCH` | `/api/v1/users/:userId/skills/:skillId/status` | 更新 Skill 注册启停状态，不执行 Skill |
+| `POST` / `GET` | `/api/v1/users/:userId/plugins` | 创建或查询 Plugin Registry 元数据 |
+| `GET` | `/api/v1/users/:userId/plugins/:pluginId` | 按用户归属查询 Plugin 条目；安装状态固定未安装 |
+| `PATCH` | `/api/v1/users/:userId/plugins/:pluginId/status` | 更新 Plugin 注册启停状态，不安装或加载插件 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/capabilities` | 按主体统一查询能力、分类、Permission 状态与最近使用 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/tools/:toolId/execution-preparations` | 执行 Permission → Security 准备并记录未执行结果 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/tool-usage-records` | 查询主体的 Tool 使用准备记录 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/tool-usage-records/:toolUsageId` | 查询单条 Tool 使用准备记录 |
 | `POST` | `/api/v1/users/:userId/permissions` | 创建主体范围的权限规则并记录事件 |
 | `GET` | `/api/v1/users/:userId/permissions` | 按主体、资源、操作或状态查询规则 |
 | `GET` | `/api/v1/users/:userId/permissions/:permissionId` | 按用户归属查询单个规则 |
@@ -210,6 +234,9 @@ backend/
 │  ├─ modules/models/        # Model 目录与能力标签
 │  ├─ modules/model-routing-rules/ # 默认/备用模型路由规则
 │  ├─ modules/model-router/  # 本地规则匹配，不调用模型
+│  ├─ modules/capability-registries/ # Tool/MCP/Skill/Plugin 注册元数据
+│  ├─ modules/capabilities/  # 主体范围统一能力与权限投影
+│  ├─ modules/tool-usage/    # Tool 安全准备与未执行使用记录
 │  ├─ modules/permissions/   # 权限规则、五档语义与三态判断
 │  ├─ modules/security/      # 安全编排、风险识别和执行前资格
 │  ├─ modules/sensitive-data/ # 敏感分类元数据，不保存正文
@@ -226,7 +253,7 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_confirmations` 和 `audit_logs`。
+- 当前物理结构包括 `schema_migrations`、`users`、`subjects`、`assistant_global_settings`、`conversations`、`messages`、`message_versions`、`conversation_summaries`、`conversation_summary_sources`、`subject_states`、`subject_state_heads`、`subject_state_unresolved_events`、`events`、`api_providers`、`models`、`model_capabilities`、`model_routing_rules`、`permissions`、`security_confirmations`、`audit_logs`、`tool_registry`、`mcp_registry`、`skill_registry`、`plugin_registry` 和 `tool_usage_records`。
 - `Subject` 使用外键绑定所属 `User`，查询时仍显式同时校验 `owner_user_id` 与 `subject_id`。
 - Subject 基础信息实际变化时与 `subject_updated` Event 同一 SQLite 事务提交；无变化更新不写库或发事件。
 - `assistant_global_settings` 与 Subject 一对一绑定；名称和头像仍以 `subjects` 为唯一身份来源，人格、表达、关系、长期要求与禁止事项保存在独立设定表。新建 Subject 与默认设定原子提交，设定更新与最小 `subject_updated` Event 原子提交。
@@ -252,6 +279,8 @@ backend/
 - AuditLog 没有任意 payload、正文或详情 JSON 字段，也不提供客户端创建、更新或删除路由；资源引用必须使用平台不透明 ID，当前凭据形态拦截只是启发式规则，不是完整 DLP。
 - Event 与 AuditLog 分离：前者记录软件变化，后者记录安全治理事实。
 - 内部嵌套写入加入同一最外层 SQLite 事务，保证安全确认、单次权限消费和审计结果一致。
+- 四类能力注册表均按用户归属，名称在用户范围内唯一；注册状态默认 `disabled`。Tool、MCP 和 Skill 分别关联现有 Permission 的 `tool`、`mcp`、`skill` 资源类型，Plugin 当前只保存注册元数据，不扩张 Permission 枚举或形成安装权限。
+- `tool_usage_records` 同时复合绑定用户、主体、Tool 和安全审计记录。当前数据库约束只允许 `execution_status=not_executed`，消费信息固定记录零外部调用、零 Token 和无计费结果。
 - `basicSettings` 在开发 SQLite 中保存为 JSON 文本，业务层只接收普通 JSON 对象。
 - SQL 和 `node:sqlite` 只存在于 `integrations/database` 与 `migrations`；业务服务只依赖仓储行为。
 - 已执行迁移不得修改，后续结构通过新迁移演进。
@@ -259,6 +288,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`。当前 Context Service 只按固定产品顺序投影已有全局设定、状态、事件、消息和跨窗口摘要；它不生成提示词、不筛选长期 Memory、不调用模型，也不执行连续性算法。Dashboard 的 `continuityStatus` 仍表示独立引擎不可用。全局设定中的长期要求和禁止事项不能削弱平台最低安全规则。Security 仍只返回执行资格，不连接支付、手机权限、MCP、Skill、Tool、设备或 AI 私域。分支、删除和窗口重置仍未实现。
+平台后端与 continuity-engine 保持平行。AI Assistant Global Settings 保存用户明确配置的长期身份与行为偏好；SubjectState 单独保存调用方提交且带来源的动态 `state_update`。当前 Context Service 只按固定产品顺序投影已有全局设定、状态、事件、消息和跨窗口摘要；它不生成提示词、不筛选长期 Memory、不调用模型，也不执行连续性算法。Dashboard 的 `continuityStatus` 仍表示独立引擎不可用。全局设定中的长期要求和禁止事项不能削弱平台最低安全规则。Capability Service 只投影注册与权限事实；Security 和 Tool Usage 只完成前置资格、确认与记录，不连接 MCP、不加载插件、不执行 Skill/Tool，也不访问支付、手机、设备或 AI 私域。分支、删除和窗口重置仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

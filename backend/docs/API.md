@@ -2,8 +2,8 @@
 
 ## 状态与边界
 
-- 当前阶段：平台后端 6｜模型与 API 路由
-- 后端版本：`0.10.0`
+- 当前阶段：MCP、Skill、插件与 Tool 基础系统
+- 后端版本：`0.11.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
@@ -65,6 +65,8 @@
 - ConversationSummary `content` 最多 16384 字符，且必须包含 1—100 个可验证来源引用。
 - `state_update.intensity` 是 `0`—`1` 的有限数字；当前状态和连续性约束只保存调用方提交的数据，不由后端推演。
 - `expressionStyle` 接受普通 JSON 对象；`longTermRequirements` 和 `prohibitions` 各最多 100 个非空、去重字符串。全局设定不得包含模型密钥或被解释为平台安全规则替代物。
+- Tool 的 `inputDefinition` / `outputDefinition` 只接受 JSON Schema 风格的普通对象，用于描述未来输入输出，不接受实际 Tool 输入、命令、处理器地址或执行结果。
+- MCP `serviceUrl` 只保存注册元数据，必须为 HTTP(S)，不得包含用户名、密码、URL 片段或 Key/Token/Secret 类查询参数；保存不会发起连接。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
 ## 服务接口
@@ -533,6 +535,174 @@ Conversation/Message 服务自动生成的四类新增 Event 只保存用户/主
 
 Router 的 `execution` 始终返回 `modelCall=not_performed` 与 `externalApiCall=not_performed`。测试状态只是保留元数据，不被当成真实服务可用性证明。本模块不读取 Context，不装配提示词，不读取或修改 SubjectState、Assistant Global Settings，也不触发模型、MCP、Tool 或 continuity-engine。
 
+## Tool、MCP、Skill 与 Plugin Registry API
+
+四类 Registry 都属于用户范围，`status` 只支持 `enabled`、`disabled`，创建时默认 `disabled`。`enabled` 仅表示注册项可进入能力选择，不表示 MCP 已连接、Plugin 已安装或 Skill/Tool 可执行。同一用户内同类注册项名称唯一；所有读取和更新都校验用户归属。
+
+### Tool Registry
+
+`POST /api/v1/users/:userId/tools`
+
+```json
+{
+  "name": "Local notes reader",
+  "description": "未来只读笔记能力的注册定义。",
+  "toolType": "read_only",
+  "inputDefinition": {
+    "type": "object",
+    "properties": {
+      "noteId": { "type": "string" }
+    }
+  },
+  "outputDefinition": {
+    "type": "object",
+    "properties": {
+      "content": { "type": "string" }
+    }
+  },
+  "permissionAction": "read"
+}
+```
+
+- `toolType` 是小写注册分类标识，只允许字母、数字、下划线和连字符。
+- `permissionAction` 支持 Permission 的八种操作，默认 `execute`。
+- 响应返回 `permissionRequirement`，资源类型固定为 `tool`，资源 ID 为当前 `toolId`。
+- `executionSupport` 固定为 `not_implemented`。
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/tools?status=enabled` | 按可选状态查询 Tool 条目 |
+| `GET` | `/api/v1/users/:userId/tools/:toolId` | 查询单个 Tool 条目 |
+| `PATCH` | `/api/v1/users/:userId/tools/:toolId/status` | 使用 `{ "status": "enabled" }` 或 `disabled` 更新注册状态 |
+
+### MCP Registry
+
+`POST /api/v1/users/:userId/mcp-registrations`
+
+```json
+{
+  "name": "Example MCP registry",
+  "serviceUrl": "https://mcp.example.test/v1",
+  "capabilityDescription": "未来 MCP 能力说明。",
+  "permissionAction": "connect"
+}
+```
+
+- `permissionAction` 默认 `connect`；响应内 `permissionConfiguration.resourceType=mcp`。
+- `connectionStatus` 固定为 `not_connected`，`connectionSupport` 固定为 `not_implemented`。
+- 接口不执行 DNS、HTTP、握手、能力发现、认证或任何 MCP 协议行为。
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/mcp-registrations?status=enabled` | 按可选状态查询 MCP 条目 |
+| `GET` | `/api/v1/users/:userId/mcp-registrations/:mcpId` | 查询单个 MCP 条目 |
+| `PATCH` | `/api/v1/users/:userId/mcp-registrations/:mcpId/status` | 更新注册状态，不建立或断开连接 |
+
+### Skill Registry
+
+`POST /api/v1/users/:userId/skills`
+
+```json
+{
+  "name": "Meeting outline skill",
+  "description": "未来可复用流程说明。",
+  "applicableScenarios": ["meeting preparation", "agenda drafting"],
+  "version": "0.1.0",
+  "permissionAction": "execute"
+}
+```
+
+- 场景列表最多 50 项且不能重复；本阶段只保存说明，不保存或运行流程代码。
+- `permissionAction` 默认 `execute`；响应内 `permissionRequirement.resourceType=skill`。
+- `executionSupport` 固定为 `not_implemented`。
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/skills?status=enabled` | 按可选状态查询 Skill 条目 |
+| `GET` | `/api/v1/users/:userId/skills/:skillId` | 查询单个 Skill 条目 |
+| `PATCH` | `/api/v1/users/:userId/skills/:skillId/status` | 更新注册状态，不执行 Skill |
+
+### Plugin Registry
+
+`POST /api/v1/users/:userId/plugins`
+
+```json
+{
+  "name": "Calendar bridge metadata",
+  "description": "未来插件的注册信息。",
+  "version": "0.1.0",
+  "dependencies": ["calendar-contract@1"]
+}
+```
+
+- 依赖列表最多 50 项且不能重复，只作为普通元数据保存。
+- `installationStatus` 固定为 `not_installed`，`installationSupport` 固定为 `not_implemented`。
+- Plugin 当前不属于 Permission 可执行资源；响应明确返回 `permissionRequirement.required=false` 和 `reason=registry_metadata_only`。后续安装/加载阶段必须另行设计权限和供应链安全，不能从当前 `enabled` 推导为已安装。
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/plugins?status=enabled` | 按可选状态查询 Plugin 条目 |
+| `GET` | `/api/v1/users/:userId/plugins/:pluginId` | 查询单个 Plugin 条目 |
+| `PATCH` | `/api/v1/users/:userId/plugins/:pluginId/status` | 更新注册状态，不安装、卸载或加载代码 |
+
+## Capability 与 Tool 执行准备 API
+
+### 统一能力查询
+
+`GET /api/v1/users/:userId/subjects/:subjectId/capabilities`
+
+可选查询参数：
+
+| 参数 | 允许值 | 作用 |
+| --- | --- | --- |
+| `category` | `tool`、`mcp`、`skill`、`plugin` | 只返回一个能力分类 |
+| `status` | `enabled`、`disabled` | 只返回一个注册状态 |
+
+每项能力返回注册配置、分类、Permission 预览、可选状态和最近使用记录。Permission 预览使用主体、资源和操作精确匹配，不消费 `allow_once`。Tool 返回最近一条使用准备记录；其他分类当前返回 `recentUsage=null`。
+
+`availability.state` 可能为：
+
+- `disabled`：注册项停用。
+- `blocked_by_permission`：Permission 返回拒绝。
+- `confirmation_required`：Permission 要求询问。
+- `registered_only`：注册启用且 Permission 允许，可供后续选择，但 `executionAvailable` 仍为 `false`。
+- `registry_only`：Plugin 只有元数据，不可安装或执行。
+
+### Tool 执行准备
+
+`POST /api/v1/users/:userId/subjects/:subjectId/tools/:toolId/execution-preparations`
+
+请求体只能为空对象，或在批准现有 Confirmation 后提交：
+
+```json
+{
+  "confirmationId": "opaque-confirmation-id"
+}
+```
+
+执行顺序固定为：
+
+```text
+Tool 注册状态 → Permission → Security 风险与 Confirmation → 使用记录
+```
+
+响应中的 `preparationStatus` 为：
+
+- `ready`：权限和安全门槛已满足；仍未执行 Tool。
+- `confirmation_required`：需要按现有 Confirmation API 确认；仍未执行 Tool。
+- `denied`：Permission 或 Security 拒绝；仍未执行 Tool。
+
+每次准备都会保存 Tool 使用记录，并关联 Security 生成的 AuditLog。`execution.supported=false`、`execution.status=not_executed`、`externalCalls=not_performed` 固定不变；消耗记录固定为 0 毫秒计费时长、0 次外部调用、0 Token、无账单金额。接口拒绝 `input`、`arguments`、`command`、URL 或其他实际执行载荷。
+
+### Tool 使用记录
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/tool-usage-records?toolId=:toolId&limit=50` | 按可选 Tool 和数量查询主体使用准备记录 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/tool-usage-records/:toolUsageId` | 查询单条主体范围的使用准备记录 |
+
+记录包含时间、用户、调用主体、Tool、Permission/Security 决策、准备结果、固定未执行摘要、零外部消耗与关联审计 ID，不保存真实调用输入、输出、秘密或第三方响应。
+
 ## 前端连接
 
 - API 客户端位于 `src/api/`，页面组件不直接散落 `fetch`。
@@ -540,4 +710,4 @@ Router 的 `execution` 始终返回 `modelCall=not_performed` 与 `externalApiCa
 - 应用入口启动时非阻塞访问 `/health`；后端不可用不会改变或阻断当前 mock 页面。
 - 当前页面仍未将登录、首次设置、工作台或对话展示替换为真实数据，mock 文件全部保留。
 
-完整实际路由清单见 [`../README.md`](../README.md)；Event、Provider/Model、Permission、Security、Confirmation 和 AuditLog 的稳定规划契约见 [`../../docs/后端/12-API与事件契约.md`](../../docs/后端/12-API与事件契约.md)。
+完整实际路由清单见 [`../README.md`](../README.md)；Event、Provider/Model、Permission、Security、Confirmation、AuditLog 与扩展能力的稳定规划契约见 [`../../docs/后端/12-API与事件契约.md`](../../docs/后端/12-API与事件契约.md) 和 [`../../docs/后端/07-扩展能力与设备适配.md`](../../docs/后端/07-扩展能力与设备适配.md)。

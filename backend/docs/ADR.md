@@ -215,6 +215,14 @@
 - 原因：默认和备用选择是用户配置事实，不能依赖目录插入顺序隐式表达；但当前又禁止接入真实供应商，因此“选择配置”不能被误认为“调用模型”或“测试成功”。把目录、规则、选择和未来执行适配分开，可以验证调度与隔离，同时避免网络、费用、Token 或数据外传。
 - 影响：`vision` 与 `embedding` 保留为目录能力标签，但不属于本阶段六类可路由任务。Provider/Model `test_status` 目前只能为 `not_tested`，不得由客户端伪造；真实探测、故障重试、动态健康检查、费用计算和模型调用必须由后续受信适配器与独立 ADR 实现。API Key 仍由拒绝写入的安全存储端口占位，数据库引用保持 `NULL`。Router 不读取或改写 Context、SubjectState、Assistant Global Settings，也不接入 MCP、Tool 或 continuity-engine。
 
+## BE-ADR-027｜扩展能力注册、权限投影与真实执行分层
+
+- 日期：2026-07-28
+- 状态：已采用，仅限开发期能力扩展管理基础
+- 决策：Tool、MCP、Skill 和 Plugin 分别使用用户范围注册表保存最小元数据，创建时安全默认停用。Tool、MCP 与 Skill 以现有 Permission 的 `tool`、`mcp`、`skill` 资源类型声明所需操作；Capability Service 按主体只读预览 Permission，不消费 `allow_once`。Plugin 当前只登记版本与依赖，不扩张 Permission 资源枚举，也不实现安装或代码加载。Tool 的“执行准备”只串联注册状态、Permission、Security 与 Confirmation，并追加 `tool_usage_records`；数据库约束执行状态只能为 `not_executed`，接口不接收实际执行参数。
+- 原因：注册或启用只说明平台知道一项能力，不能被误认为外部服务已连接、插件已安装或工具已运行。先固定目录、主体权限视图、安全门槛和可审计记录，可以验证隔离与治理流程，同时避免在缺少执行沙箱、供应链校验、秘密注入、撤销和失败恢复设计时产生真实副作用。
+- 影响：MCP 响应固定 `not_connected`，Plugin 固定 `not_installed`，Skill/Tool 固定 `not_implemented`；Tool 准备结果只能为 `ready`、`confirmation_required` 或 `denied`，即使为 `ready` 也明确未执行。使用记录保存权限/安全决策、最小结果摘要、关联 AuditLog 和零外部调用消耗，不保存输入、输出或秘密。未来真实 MCP 客户端、Plugin 安装器、Skill/Tool 执行器必须使用新的受信适配层和独立 ADR，并重新审查 Plugin 权限、供应链安全、幂等、超时、撤销、审计与用户确认语义；当前不连接设备、第三方服务、模型或 continuity-engine。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：

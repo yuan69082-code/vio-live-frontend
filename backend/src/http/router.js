@@ -58,6 +58,9 @@ export function createRouter({
   sensitiveDataService,
   auditLogService,
   confirmationService,
+  capabilityRegistryService,
+  capabilityService,
+  toolUsageService,
   logger = console,
 }) {
   return async function route(request, response) {
@@ -741,6 +744,305 @@ export function createRouter({
         const input = await readJsonBody(request);
         sendJson(response, 200, {
           data: modelRouterService.selectModel(modelRouterRoute.userId, input.taskType),
+        });
+        return;
+      }
+
+      const toolsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/tools$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && toolsRoute) {
+        const input = await readJsonBody(request);
+        const tool = capabilityRegistryService.createTool(toolsRoute.userId, input);
+        sendJson(response, 201, { data: tool }, {
+          location: `/api/v1/users/${encodeURIComponent(toolsRoute.userId)}/tools/${encodeURIComponent(tool.toolId)}`,
+        });
+        return;
+      }
+      if (request.method === 'GET' && toolsRoute) {
+        const tools = capabilityRegistryService.listTools(toolsRoute.userId, {
+          status: url.searchParams.get('status'),
+        });
+        sendJson(response, 200, { data: tools, meta: { count: tools.length } });
+        return;
+      }
+
+      const toolStatusRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/tools\/([^/]+)\/status$/,
+        ['userId', 'toolId'],
+      );
+      if (request.method === 'PATCH' && toolStatusRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: capabilityRegistryService.updateToolStatus(
+            toolStatusRoute.userId,
+            toolStatusRoute.toolId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const toolRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/tools\/([^/]+)$/,
+        ['userId', 'toolId'],
+      );
+      if (request.method === 'GET' && toolRoute) {
+        sendJson(response, 200, {
+          data: capabilityRegistryService.getTool(
+            toolRoute.userId,
+            toolRoute.toolId,
+          ),
+        });
+        return;
+      }
+
+      const mcpRegistrationsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/mcp-registrations$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && mcpRegistrationsRoute) {
+        const input = await readJsonBody(request);
+        const mcp = capabilityRegistryService.createMcp(
+          mcpRegistrationsRoute.userId,
+          input,
+        );
+        sendJson(response, 201, { data: mcp }, {
+          location: `/api/v1/users/${encodeURIComponent(mcpRegistrationsRoute.userId)}/mcp-registrations/${encodeURIComponent(mcp.mcpId)}`,
+        });
+        return;
+      }
+      if (request.method === 'GET' && mcpRegistrationsRoute) {
+        const registrations = capabilityRegistryService.listMcps(
+          mcpRegistrationsRoute.userId,
+          { status: url.searchParams.get('status') },
+        );
+        sendJson(response, 200, {
+          data: registrations,
+          meta: { count: registrations.length },
+        });
+        return;
+      }
+
+      const mcpStatusRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/mcp-registrations\/([^/]+)\/status$/,
+        ['userId', 'mcpId'],
+      );
+      if (request.method === 'PATCH' && mcpStatusRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: capabilityRegistryService.updateMcpStatus(
+            mcpStatusRoute.userId,
+            mcpStatusRoute.mcpId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const mcpRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/mcp-registrations\/([^/]+)$/,
+        ['userId', 'mcpId'],
+      );
+      if (request.method === 'GET' && mcpRoute) {
+        sendJson(response, 200, {
+          data: capabilityRegistryService.getMcp(mcpRoute.userId, mcpRoute.mcpId),
+        });
+        return;
+      }
+
+      const skillsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/skills$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && skillsRoute) {
+        const input = await readJsonBody(request);
+        const skill = capabilityRegistryService.createSkill(skillsRoute.userId, input);
+        sendJson(response, 201, { data: skill }, {
+          location: `/api/v1/users/${encodeURIComponent(skillsRoute.userId)}/skills/${encodeURIComponent(skill.skillId)}`,
+        });
+        return;
+      }
+      if (request.method === 'GET' && skillsRoute) {
+        const skills = capabilityRegistryService.listSkills(skillsRoute.userId, {
+          status: url.searchParams.get('status'),
+        });
+        sendJson(response, 200, { data: skills, meta: { count: skills.length } });
+        return;
+      }
+
+      const skillStatusRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/skills\/([^/]+)\/status$/,
+        ['userId', 'skillId'],
+      );
+      if (request.method === 'PATCH' && skillStatusRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: capabilityRegistryService.updateSkillStatus(
+            skillStatusRoute.userId,
+            skillStatusRoute.skillId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const skillRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/skills\/([^/]+)$/,
+        ['userId', 'skillId'],
+      );
+      if (request.method === 'GET' && skillRoute) {
+        sendJson(response, 200, {
+          data: capabilityRegistryService.getSkill(
+            skillRoute.userId,
+            skillRoute.skillId,
+          ),
+        });
+        return;
+      }
+
+      const pluginsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/plugins$/,
+        ['userId'],
+      );
+      if (request.method === 'POST' && pluginsRoute) {
+        const input = await readJsonBody(request);
+        const plugin = capabilityRegistryService.createPlugin(
+          pluginsRoute.userId,
+          input,
+        );
+        sendJson(response, 201, { data: plugin }, {
+          location: `/api/v1/users/${encodeURIComponent(pluginsRoute.userId)}/plugins/${encodeURIComponent(plugin.pluginId)}`,
+        });
+        return;
+      }
+      if (request.method === 'GET' && pluginsRoute) {
+        const plugins = capabilityRegistryService.listPlugins(pluginsRoute.userId, {
+          status: url.searchParams.get('status'),
+        });
+        sendJson(response, 200, {
+          data: plugins,
+          meta: { count: plugins.length },
+        });
+        return;
+      }
+
+      const pluginStatusRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/plugins\/([^/]+)\/status$/,
+        ['userId', 'pluginId'],
+      );
+      if (request.method === 'PATCH' && pluginStatusRoute) {
+        const input = await readJsonBody(request);
+        sendJson(response, 200, {
+          data: capabilityRegistryService.updatePluginStatus(
+            pluginStatusRoute.userId,
+            pluginStatusRoute.pluginId,
+            input,
+          ),
+        });
+        return;
+      }
+
+      const pluginRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/plugins\/([^/]+)$/,
+        ['userId', 'pluginId'],
+      );
+      if (request.method === 'GET' && pluginRoute) {
+        sendJson(response, 200, {
+          data: capabilityRegistryService.getPlugin(
+            pluginRoute.userId,
+            pluginRoute.pluginId,
+          ),
+        });
+        return;
+      }
+
+      const capabilitiesRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/capabilities$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'GET' && capabilitiesRoute) {
+        const capabilities = capabilityService.listCapabilities(
+          capabilitiesRoute.userId,
+          capabilitiesRoute.subjectId,
+          {
+            category: url.searchParams.get('category'),
+            status: url.searchParams.get('status'),
+          },
+        );
+        sendJson(response, 200, {
+          data: capabilities,
+          meta: { count: capabilities.length },
+        });
+        return;
+      }
+
+      const toolExecutionPreparationRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/tools\/([^/]+)\/execution-preparations$/,
+        ['userId', 'subjectId', 'toolId'],
+      );
+      if (request.method === 'POST' && toolExecutionPreparationRoute) {
+        const input = await readJsonBody(request);
+        const preparation = toolUsageService.prepareToolExecution(
+          toolExecutionPreparationRoute.userId,
+          toolExecutionPreparationRoute.subjectId,
+          toolExecutionPreparationRoute.toolId,
+          input,
+        );
+        sendJson(response, 201, { data: preparation }, {
+          location: `/api/v1/users/${encodeURIComponent(toolExecutionPreparationRoute.userId)}/subjects/${encodeURIComponent(toolExecutionPreparationRoute.subjectId)}/tool-usage-records/${encodeURIComponent(preparation.usageRecord.toolUsageId)}`,
+        });
+        return;
+      }
+
+      const toolUsageRecordsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/tool-usage-records$/,
+        ['userId', 'subjectId'],
+      );
+      if (request.method === 'GET' && toolUsageRecordsRoute) {
+        const records = toolUsageService.listToolUsage(
+          toolUsageRecordsRoute.userId,
+          toolUsageRecordsRoute.subjectId,
+          {
+            toolId: url.searchParams.get('toolId'),
+            limit: url.searchParams.get('limit'),
+          },
+        );
+        sendJson(response, 200, {
+          data: records,
+          meta: { count: records.length },
+        });
+        return;
+      }
+
+      const toolUsageRecordRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/tool-usage-records\/([^/]+)$/,
+        ['userId', 'subjectId', 'toolUsageId'],
+      );
+      if (request.method === 'GET' && toolUsageRecordRoute) {
+        sendJson(response, 200, {
+          data: toolUsageService.getToolUsage(
+            toolUsageRecordRoute.userId,
+            toolUsageRecordRoute.subjectId,
+            toolUsageRecordRoute.toolUsageId,
+          ),
         });
         return;
       }

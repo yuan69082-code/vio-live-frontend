@@ -1,9 +1,10 @@
 import { createServer } from 'node:http';
 
 import { createRouter } from './http/router.js';
+import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
 import { createSqliteAssistantGlobalSettingsRepository } from './integrations/database/sqlite-assistant-global-settings-repository.js';
 import { createSqliteAuditLogRepository } from './integrations/database/sqlite-audit-log-repository.js';
-import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
+import { createSqliteCapabilityRegistryRepository } from './integrations/database/sqlite-capability-registry-repository.js';
 import { createSqliteConfirmationRepository } from './integrations/database/sqlite-confirmation-repository.js';
 import { createSqliteConversationRepository } from './integrations/database/sqlite-conversation-repository.js';
 import { createSqliteConversationSummaryRepository } from './integrations/database/sqlite-conversation-summary-repository.js';
@@ -21,6 +22,8 @@ import { createUnconfiguredApiCredentialStore } from './integrations/secrets/unc
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAssistantGlobalSettingsService } from './modules/assistant-global-settings/assistant-global-settings-service.js';
 import { createAuditLogService } from './modules/audit-logs/audit-log-service.js';
+import { createCapabilityRegistryService } from './modules/capability-registries/capability-registry-service.js';
+import { createCapabilityService } from './modules/capabilities/capability-service.js';
 import { createConfirmationService } from './modules/confirmations/confirmation-service.js';
 import { createContextService } from './modules/contexts/context-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
@@ -38,6 +41,7 @@ import { createSecurityService } from './modules/security/security-service.js';
 import { createSensitiveDataService } from './modules/sensitive-data/sensitive-data-service.js';
 import { createSubjectService } from './modules/subjects/subject-service.js';
 import { createSubjectStateService } from './modules/subject-states/subject-state-service.js';
+import { createToolUsageService } from './modules/tool-usage/tool-usage-service.js';
 import { createUserService } from './modules/users/user-service.js';
 
 export function createApplication({ config, logger = console }) {
@@ -61,6 +65,9 @@ export function createApplication({ config, logger = console }) {
   );
   const permissionRepository = createSqlitePermissionRepository(database.connection);
   const auditLogRepository = createSqliteAuditLogRepository(database.connection);
+  const capabilityRegistryRepository = createSqliteCapabilityRegistryRepository(
+    database.connection,
+  );
   const confirmationRepository = createSqliteConfirmationRepository(database.connection);
   const credentialStore = createUnconfiguredApiCredentialStore();
   const userService = createUserService({ userRepository });
@@ -188,6 +195,25 @@ export function createApplication({ config, logger = console }) {
     runInTransaction: database.runInTransaction,
   });
   const sensitiveDataService = createSensitiveDataService();
+  const capabilityRegistryService = createCapabilityRegistryService({
+    capabilityRegistryRepository,
+    userRepository,
+  });
+  const capabilityService = createCapabilityService({
+    capabilityRegistryService,
+    capabilityRegistryRepository,
+    permissionChecker,
+    userRepository,
+    subjectRepository,
+  });
+  const toolUsageService = createToolUsageService({
+    capabilityRegistryService,
+    capabilityRegistryRepository,
+    securityService,
+    userRepository,
+    subjectRepository,
+    runInTransaction: database.runInTransaction,
+  });
   const router = createRouter({
     config,
     database,
@@ -212,6 +238,9 @@ export function createApplication({ config, logger = console }) {
     sensitiveDataService,
     auditLogService,
     confirmationService,
+    capabilityRegistryService,
+    capabilityService,
+    toolUsageService,
     logger,
   });
   const server = createServer((request, response) => {

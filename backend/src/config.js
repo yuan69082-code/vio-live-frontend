@@ -32,6 +32,6 @@ export function loadConfig(environment = process.env) {
     databasePath: readDatabasePath(environment.VIO_BACKEND_DB_PATH),
     migrationsPath: join(backendRoot, 'migrations'),
     serviceName: 'vio-live-backend',
-    serviceVersion: '0.10.0',
+    serviceVersion: '0.11.0',
   });
 }
