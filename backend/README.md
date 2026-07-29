@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前阶段为“continuity-engine 与 Vio 后端连接设计（第一阶段）”。`Continuity Integration Contract v1` 已完成架构设计，**尚未开始实际接入**；后端运行版本仍为 `0.18.0`，现有平台功能与数据库结构没有在本阶段改变：
+Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成；双方最终只读复核已经通过，正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。当前准备共同制定该提示词，但尚未共同制定；第一轮代码施工、共享测试和运行时连接仍未开始。长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受；后端运行版本仍为 `0.18.0`，现有平台功能与数据库结构没有在本阶段改变：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -23,10 +23,10 @@ Wake/主动提示准备 → 用户授权/后台限制 → Permission → Securit
 Token 请求 → 日/会话预算 → 超额策略 → 可选高风险确认 → 固定不调用模型
 Export Schema → 用户/主体归属与字段/外键预检 → data_export Permission → Security/Confirmation → ready 记录
 迁移契约准备 → Schema 兼容检查 → 未配置载体描述 → 固定不连接、不传输、不执行
-Vio 平台事实包（拟新增） → Observation（拟新增） → continuity-engine（待确认） → 权威状态投影（拟新增）
+Vio 平台事实包（契约已确认，运行时未实现） → PlatformObservation（契约已确认，运行时未实现） → continuity-engine → 权威状态投影（契约已确认，运行时未实现）
 ```
 
-连接设计的权威入口是 [`../docs/后端/14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)。设计固定以下边界：
+当前连接设计的权威入口是 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，最终接受证据见 [`14c`](../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。契约固定以下边界：
 
 - continuity-engine 是 SubjectState 唯一权威源；Vio 只保存投影、快照、缓存和审计记录。
 - Vio Event 只能转换为不含状态修改的 Observation，由引擎决定是否影响主体。
@@ -34,6 +34,8 @@ Vio 平台事实包（拟新增） → Observation（拟新增） → continuity
 - AI Private Space 只能按本次目的通过安全链读取最小投影，不得整库进入引擎或模型。
 - 前端只能连接 Vio 后端；两边数据库不合并。
 - 现有开发 `state_update` 写入口与目标边界冲突，后续必须收口；本阶段没有改接口、业务代码或迁移。
+- v1.1 正式接受只表示契约闭合；PlatformObservation、严格 Schema validator、SubjectBinding/hash 运行时验证、ContractTestAdapter、持久化账本、投影接收器、实际连接和第一轮共享测试均未实现。
+- Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成；双方最终只读复核已经通过，正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。当前准备共同制定该提示词，但尚未共同制定；第一轮代码施工、共享测试和运行时连接仍未开始。
 
 已实现：
 
@@ -429,4 +431,4 @@ backend/
 
 平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context 和唯一权威 SubjectState。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、SubjectState 投影、AI Private Space 与 User Space 生活数据保持独立语义和存储边界；切换当前助手不会复制或重写这些记录。通用平台事实投影不自动读取私域或本地记忆。数据导出只形成版本化范围、完整性预检、安全准备和未来载体契约，不返回正文、不生成文件、不连接存储/机器人、不执行迁移。主动交互也不判断唤醒音频、不生成提示正文、不运行后台任务或调用模型。真实登录、系统语音、模型、外部存储、机器人、支付/银行、健康设备和 continuity-engine 实际接入仍未实现。
 
-稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，连接设计见 [`../docs/后端/14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。
+稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

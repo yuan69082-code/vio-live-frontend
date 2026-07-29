@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-- 当前阶段：continuity-engine 与 Vio 后端连接设计（第一阶段）；**连接设计完成，尚未开始实际接入**
+- 当前阶段：Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成；双方最终只读复核已经通过，正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。当前准备共同制定该提示词，但尚未共同制定；第一轮代码施工、共享测试和运行时连接仍未开始
 - 后端版本：`0.18.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
@@ -76,86 +76,33 @@
 - Data Export 创建只接受 `exportType` 和预定义 `scopes`；不接受正文、文件名、外部地址、机器人参数、密钥或迁移执行载荷。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
-## Continuity Integration Contract v1（设计，未实现）
+## Continuity Integration Contract v1.1（已接受，运行时未实现）
 
-完整契约见 [`../../docs/后端/14-continuity-engine连接契约v1.md`](../../docs/后端/14-continuity-engine连接契约v1.md)。本节只记录 API 边界；下列“拟新增”和“待引擎确认”均不是当前路由。
+权威机器契约、完整 conformance vector、固定 Binding fixture 和第一轮测试边界见 [`../../docs/后端/14-continuity-engine连接契约v1.1.md`](../../docs/后端/14-continuity-engine连接契约v1.1.md)。Continuity Engine 的最终接受证据见 [`14c`](../../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。本节只同步 API 状态，不重复定义可能漂移的第二份机器 Schema。
 
-### 接口状态
+### 当前接口状态
 
 | 状态 | 接口/能力 | 说明 |
 | --- | --- | --- |
-| **已实现** | Vio User/Subject/Conversation/Message/Version、ConversationSummary、Event、Private Space 安全投影、Permission/Security/Token 接口 | 可作为连接的数据与安全基础，但没有调用引擎 |
-| **已实现但需收口** | `POST /api/v1/users/:userId/subjects/:subjectId/state-updates` | 当前接受开发调用方状态；真实接入后不能继续作为权威写入口 |
+| **已实现** | Vio User/Subject/Conversation/Message/Version、ConversationSummary、Event、AI Private Space 当前安全投影、Permission/Security/Token 接口 | 可作为未来连接的数据与安全基础，但当前没有调用引擎 |
+| **已实现但需收口** | `POST /api/v1/users/:userId/subjects/:subjectId/state-updates` | 当前接受开发调用方状态；不能成为未来权威写入口，历史数据须按 `legacy/unverified` 处理 |
 | **已实现但仅为事实来源** | `GET .../conversations/:conversationId/context` | 当前是只读平台事实投影，不是最终认知 Context |
-| **拟新增（Vio 内部）** | continuity request/status、平台事实包、Observation 投递、引擎结果/状态投影接收 | 后续实现时不得对前端暴露引擎地址或凭据 |
-| **待引擎确认** | interaction、Observation、request status、SubjectState snapshot/projection、能力调用往返 | continuity-engine 当前没有面向 Vio 的生产 HTTP 契约 |
+| **契约已确认、运行时未实现** | PlatformObservation、严格 Schema validator、固定 SubjectBinding 与 hash 验证、ContractTestAdapter、request/operation/result 持久化、跨重启结果重放、Vio 状态投影接收和 revision 冲突隔离 | v1.1 已固定第一轮语义，但仓库当前没有对应路由、模型、表或测试 |
+| **第一轮明确排除** | CapabilityRequest/CapabilityResult、真实模型、Tool、MCP、设备和三层数据空间跨系统读写 | 三个确定性 test double 均位于 Continuity Engine 进程内，Vio 不实现 capability stub |
+| **未来生产待共同决定** | 正式传输、服务鉴权、多租户、部署、通用重绑定、异步/流式、完整 Outbox 运维参数 | 不属于第一轮已确认机器 Profile，也不是当前 API |
 
-### 逻辑请求
+### 第一轮已确认的机器边界
 
-拟议的 `ContinuityInteractionRequest` 最小结构：
+- 三份 Draft 2020-12 Schema 使用三个唯一绝对 URN `$id`；两个 `$ref` 可唯一解析，不允许相对路径、网络回退或自定义别名。
+- 顶层及嵌套对象严格拒绝未知字段；`facts`、`observations` 各恰好一项；时间只接受带 `Z` 的 RFC 3339 UTC，并启用 `format: date-time` 断言。
+- `ContinuityInteractionRequest.observations` 是 PlatformObservation 唯一承载位置；消息正文只存在于 `platformFactPackage.facts[0].content`。
+- 三处 identity 必须包含并一致匹配 `userId`、`assistantId`、`subjectId`、`bindingId`、`bindingVersion`；conversation/message/version 与引用必须一致。
+- `requestId` 是永久幂等键；相同 ID、不同 hash 的唯一第一轮错误是 `IDEMPOTENCY_KEY_REUSED / never`。
+- 任意方向的 `expectedEngineRevision != currentEngineRevision` 都是 `REVISION_CONFLICT / reassemble`；只有完整 Binding 验证通过后才可返回当前 revision。
+- 无状态变化时 `changed=false`、revision 不变、`engineUpdateId=null`；有状态变化时 revision 只增加一次，`engineUpdateId=StateUpdateRecord.update_id`。第一轮只用最小 snapshot，不用 delta。
+- 第一轮摄取入口只能是 Continuity Engine 内独立、test-only 的 `ContractTestAdapter`；现有 `APIService.submit_message`、本地 HTTP、`UserInteractionService` 和 Vio 公共 API 均不是该入口。
 
-```json
-{
-  "contractVersion": "continuity-integration/v1",
-  "requestId": "opaque-request-id",
-  "requestType": "user_message",
-  "identity": {
-    "userId": "vio-user-id",
-    "assistantId": "vio-assistant-id",
-    "subjectId": "engine-subject-id",
-    "bindingVersion": 1
-  },
-  "conversation": {
-    "conversationId": "vio-conversation-id",
-    "messageId": "vio-message-id",
-    "messageVersionId": "vio-message-version-id"
-  },
-  "expectedEngineRevision": 12,
-  "platformFacts": {},
-  "observations": [],
-  "constraints": {
-    "purpose": "reply_to_user_message",
-    "tokenBudgetDecisionId": "opaque-decision-id"
-  },
-  "createdAt": "2026-07-29T00:00:00.000Z"
-}
-```
-
-`platformFacts` 只能包含本次目的已授权且有来源/版本/分类的平台事实：本轮消息、有限近期消息、有限可追溯摘要、全局设定必要字段、脱敏 Observation、明确参与 Context 的本地记忆，以及另行通过 `private_domain` 安全链批准的最小私域投影。它明确不包含整库用户数据、整库私域、秘密、跨助手数据、Vio 推演状态、最终 prompt 或最终认知 Context。
-
-Vio Event 投影为 Observation 时保留 `sourceEventId`、稳定 `observationId`、类型、发生/记录时间、最小白名单事实和授权依据，并固定 `stateMutationAllowed=false`。Observation 不包含引擎 `impact_scope` 或 `StateMutation`；只有引擎能决定是否形成自己的 Event 并通过 Evolution 改变状态。
-
-### 逻辑结果
-
-拟议的最小返回语义：
-
-```json
-{
-  "contractVersion": "continuity-integration/v1",
-  "requestId": "opaque-request-id",
-  "status": "completed",
-  "subjectId": "engine-subject-id",
-  "response": {
-    "responseId": "engine-response-id",
-    "role": "subject",
-    "content": "reply text"
-  },
-  "stateProjection": {
-    "schemaVersion": "engine-subject-state/v1",
-    "engineUpdateId": "engine-update-id",
-    "previousRevision": 12,
-    "revision": 13,
-    "snapshot": {}
-  },
-  "consumedObservationIds": [],
-  "usage": {},
-  "completedAt": "2026-07-29T00:00:01.000Z"
-}
-```
-
-回复、状态和 Observation 回执必须分别可幂等。Vio 以后使用 `requestId + payload hash` 防重复请求、`observationId` 防重复事件、`responseId` 防重复回复、`engineUpdateId + revision` 防重复/乱序状态投影。精确端点、同步/异步方式、错误码、超时、状态查询、取消、鉴权、状态用完整快照还是增量，全部待引擎确认。
-
-前端仍只调用 Vio 公共 API。服务间调用必须使用独立契约版本和生产服务身份，不能使用开发期 `x-vio-user-id`。引擎不可用时 Vio 可以保存用户消息、平台 Event、待投递 Observation 和请求状态，但不能生成并冒充 AI 回复、推进 SubjectState、另组最终 Context 调用模型或自动写私域。
+这些规则已经获得 Continuity Engine 正式确认，但相应运行时能力、第一轮共享测试和实际连接尚未实现。Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成；双方最终只读复核已经通过，正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。当前准备共同制定该提示词，但尚未共同制定；第一轮代码施工、共享测试和运行时连接仍未开始。前端仍只调用 Vio 公共 API，不直接连接引擎。
 
 ## 服务接口
 

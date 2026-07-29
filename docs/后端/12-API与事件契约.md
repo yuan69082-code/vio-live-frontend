@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、账号/数据隔离、对话/平台事实投影、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；`Continuity Integration Contract v1` 已完成设计但尚未实际接入；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、账号/数据隔离、对话/平台事实投影、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；`Continuity Integration Contract v1.1` 已获 Continuity Engine 正式接受，但运行时连接能力和第一轮共享测试尚未实现；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -40,17 +40,20 @@ continuity-engine 决定何时需要模型并组织最终认知 Context；Vio �
 
 平台后端负责适配、授权、调用和日志。MCP、Tool 和设备不能绕过平台权限层直接被前端或模型执行。
 
-## Continuity Integration Contract v1
+## Continuity Integration Contract v1.1
 
-本阶段只完成架构和连接契约设计，详细文档见 [14-continuity-engine连接契约v1.md](14-continuity-engine连接契约v1.md)。接口状态必须严格区分：
+长期架构和第一轮机器契约已经闭合并获 Continuity Engine 正式接受，详细文档见 [14-continuity-engine连接契约v1.1.md](14-continuity-engine连接契约v1.1.md)，接受证据见 [14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md](14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。接口状态必须严格区分：
 
 | 状态 | 内容 |
 | --- | --- |
-| 已实现 | Vio 的 User/Subject/Conversation/Message/Version、Summary、Event、现有状态历史/只读事实投影、Private Space 安全投影、Permission/Security/Token；引擎内部 SubjectState revision、Event/Evolution、Wake/Perception/Thinking/Action/Learning |
-| 拟新增 | Vio 助手—引擎主体绑定、continuity 请求/回执、平台事实包、Observation 投递、状态投影、幂等、重试/对账和服务间安全 |
-| 待引擎确认 | 引擎生产端点、传输/鉴权、外部 Observation、请求状态、能力调用往返、状态快照/增量和错误/重试契约 |
+| 已实现 | Vio 的 User/Subject/Conversation/Message/Version、Summary、Event、现有状态历史/只读事实投影、当前 Private Space 安全投影、Permission/Security/Token；引擎内部 SubjectState revision、Event/Evolution、Wake/Perception/Thinking/Action/Learning |
+| 契约已确认、运行时未实现 | 第一轮 PlatformObservation、严格 Schema validator、固定 SubjectBinding/hash、ContractTestAdapter、双方持久化幂等账本、Vio 状态投影接收和 revision 冲突隔离 |
+| 第一轮明确排除 | CapabilityRequest/CapabilityResult、真实模型/Tool/MCP/设备、三层数据空间实际跨系统读写、生产认证/多租户/部署 |
+| 未来生产待共同决定 | 正式传输/鉴权、异步/流式、通用重绑定、完整 Outbox 运维参数、生产投影扩展和 Capability 往返 |
 
 现有 Vio `POST .../state-updates` 是接入前开发调用方写入口，不是引擎权威投影接口；现有 Context API 是平台事实只读投影，不是最终认知 Context。二者都不能用来宣称连接已经完成。
+
+第一轮机器契约只在 v1.1 第 19 节定义：三份严格 Draft 2020-12 Schema、正式 conformance vector、固定 SubjectBinding fixture、`requestHash`/`bindingFixtureHash`、`IDEMPOTENCY_KEY_REUSED / never`、revision 全不等冲突、最小 snapshot 和独立进程内 ContractTestAdapter 均已获确认。当前仓库尚无对应运行时模型、validator、Adapter、表、投影接收器或共享测试；档案同步完成后，下一步才是双方共同制定施工提示词。
 
 ## 契约中的通用信息
 
@@ -276,7 +279,7 @@ Provider 响应只暴露 API Key 的 `not_configured`、`secure_store_required`�
 
 Context 数据顺序已形成基础接口，但只代表平台事实投影。真实接入时 Vio 先按系统安全位置、全局设定、当前状态投影元数据、未解决事件、近期对话、相关授权记忆和本轮消息筛选平台事实；continuity-engine 再结合自己的权威 SubjectState、Memory、Wake/Perception 与学习历史组织最终认知 Context。
 
-引擎交互结果逻辑上包含给用户的回复，以及明确“无状态变化”或带 engine revision/update ID 的权威状态投影。Vio 不再接收普通模型直接提交的权威 `state_update`，也不得从回复正文推演情绪、强度、原因、未解决事件或连续性约束。精确字段与端点仍为待引擎确认。
+引擎交互结果逻辑上包含给用户的回复，以及明确“无状态变化”或带 engine revision/update ID 的权威状态投影。Vio 不再接收普通模型直接提交的权威 `state_update`，也不得从回复正文推演情绪、强度、原因、未解决事件或连续性约束。第一轮精确结果字段、revision 和投影语义已由 v1.1 第 19.6 节确认；生产端点和第一轮之外的扩展仍待未来共同决定。
 
 ## 权限与错误原则
 
