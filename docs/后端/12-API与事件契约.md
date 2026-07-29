@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、账号/数据隔离、对话/Context、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、账号/数据隔离、对话/平台事实投影、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；`Continuity Integration Contract v1` 已完成设计但尚未实际接入；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -28,17 +28,29 @@
 
 ### 平台后端与连续性引擎
 
-平台后端传递主体、事件、消息、授权记忆和状态更新；连续性引擎返回当前状态、连续性约束和允许读取的相关内容。
+平台后端传递身份绑定、消息、来源、经权限筛选的平台事实包，以及由 Vio Event 转换且不含状态修改的 Observation；continuity-engine 负责最终认知 Context，返回回复、Observation 回执和唯一权威 SubjectState 的 revision/投影。
 
-平台接口不暴露连续性引擎内部算法或存储结构。
+平台接口不暴露连续性引擎内部算法或存储结构。Vio 前端不得直连引擎，两边数据库不得合并。
 
 ### 平台后端与模型服务
 
-平台后端最终负责选择模型、装配上下文、发送本轮内容并接收 `reply` 与 `state_update`。当前只实现规则选择、只读 Context 投影和显式 `state_update` 保存，不发送模型请求。模型服务不直接操作数据库、设备或用户权限。
+continuity-engine 决定何时需要模型并组织最终认知 Context；Vio 平台后端负责用户 Token/权限/安全门槛、模型路由与安全调用通道，并把结果返回引擎继续判断。当前只实现规则选择、平台事实只读投影和开发调用方显式 `state_update` 保存，不发送模型请求。模型服务不直接操作数据库、设备、用户权限或 SubjectState。
 
 ### 平台后端与外部能力
 
 平台后端负责适配、授权、调用和日志。MCP、Tool 和设备不能绕过平台权限层直接被前端或模型执行。
+
+## Continuity Integration Contract v1
+
+本阶段只完成架构和连接契约设计，详细文档见 [14-continuity-engine连接契约v1.md](14-continuity-engine连接契约v1.md)。接口状态必须严格区分：
+
+| 状态 | 内容 |
+| --- | --- |
+| 已实现 | Vio 的 User/Subject/Conversation/Message/Version、Summary、Event、现有状态历史/只读事实投影、Private Space 安全投影、Permission/Security/Token；引擎内部 SubjectState revision、Event/Evolution、Wake/Perception/Thinking/Action/Learning |
+| 拟新增 | Vio 助手—引擎主体绑定、continuity 请求/回执、平台事实包、Observation 投递、状态投影、幂等、重试/对账和服务间安全 |
+| 待引擎确认 | 引擎生产端点、传输/鉴权、外部 Observation、请求状态、能力调用往返、状态快照/增量和错误/重试契约 |
+
+现有 Vio `POST .../state-updates` 是接入前开发调用方写入口，不是引擎权威投影接口；现有 Context API 是平台事实只读投影，不是最终认知 Context。二者都不能用来宣称连接已经完成。
 
 ## 契约中的通用信息
 
@@ -262,16 +274,9 @@ Provider 保存 Base URL、接口格式、启停与测试状态；Model 保存�
 
 Provider 响应只暴露 API Key 的 `not_configured`、`secure_store_required`、`writeSupported=false` 状态，不接受或返回真实 Key、Token、Secret 或凭据引用。Provider/Model 测试状态当前固定为 `not_tested`，没有真实连接测试接口。Router 响应包含任务类型、选择规则、来源、Model 描述及 `modelCall`/`externalApiCall=not_performed`，不包含模型回复，也不产生外部请求。Router 与 Context、SubjectState、Assistant Global Settings 保持数据与执行边界。
 
-Context 数据顺序已形成基础接口；以下模型调用、格式转换与实际返回仍为后续真实接入契约：
+Context 数据顺序已形成基础接口，但只代表平台事实投影。真实接入时 Vio 先按系统安全位置、全局设定、当前状态投影元数据、未解决事件、近期对话、相关授权记忆和本轮消息筛选平台事实；continuity-engine 再结合自己的权威 SubjectState、Memory、Wake/Perception 与学习历史组织最终认知 Context。
 
-上下文装配遵循以下逻辑顺序：系统安全规则、全局设定、主体状态、未解决事件、近期对话、相关长期记忆、用户本轮消息。
-
-模型返回逻辑上包含：
-
-- 给用户的回复
-- 状态更新
-
-状态更新至少覆盖当前情绪、强度、变化原因、未解决事件和下一轮连续性约束。
+引擎交互结果逻辑上包含给用户的回复，以及明确“无状态变化”或带 engine revision/update ID 的权威状态投影。Vio 不再接收普通模型直接提交的权威 `state_update`，也不得从回复正文推演情绪、强度、原因、未解决事件或连续性约束。精确字段与端点仍为待引擎确认。
 
 ## 权限与错误原则
 

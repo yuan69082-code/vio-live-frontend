@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-- 当前阶段：平台后端 14｜数据导出与未来迁移
+- 当前阶段：continuity-engine 与 Vio 后端连接设计（第一阶段）；**连接设计完成，尚未开始实际接入**
 - 后端版本：`0.18.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
@@ -75,6 +75,87 @@
 - Token 使用记录是调用方显式上报的计量元数据，不是平台模型调用证明；响应固定标记 `not_performed_by_platform` / `not_billed`。
 - Data Export 创建只接受 `exportType` 和预定义 `scopes`；不接受正文、文件名、外部地址、机器人参数、密钥或迁移执行载荷。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
+
+## Continuity Integration Contract v1（设计，未实现）
+
+完整契约见 [`../../docs/后端/14-continuity-engine连接契约v1.md`](../../docs/后端/14-continuity-engine连接契约v1.md)。本节只记录 API 边界；下列“拟新增”和“待引擎确认”均不是当前路由。
+
+### 接口状态
+
+| 状态 | 接口/能力 | 说明 |
+| --- | --- | --- |
+| **已实现** | Vio User/Subject/Conversation/Message/Version、ConversationSummary、Event、Private Space 安全投影、Permission/Security/Token 接口 | 可作为连接的数据与安全基础，但没有调用引擎 |
+| **已实现但需收口** | `POST /api/v1/users/:userId/subjects/:subjectId/state-updates` | 当前接受开发调用方状态；真实接入后不能继续作为权威写入口 |
+| **已实现但仅为事实来源** | `GET .../conversations/:conversationId/context` | 当前是只读平台事实投影，不是最终认知 Context |
+| **拟新增（Vio 内部）** | continuity request/status、平台事实包、Observation 投递、引擎结果/状态投影接收 | 后续实现时不得对前端暴露引擎地址或凭据 |
+| **待引擎确认** | interaction、Observation、request status、SubjectState snapshot/projection、能力调用往返 | continuity-engine 当前没有面向 Vio 的生产 HTTP 契约 |
+
+### 逻辑请求
+
+拟议的 `ContinuityInteractionRequest` 最小结构：
+
+```json
+{
+  "contractVersion": "continuity-integration/v1",
+  "requestId": "opaque-request-id",
+  "requestType": "user_message",
+  "identity": {
+    "userId": "vio-user-id",
+    "assistantId": "vio-assistant-id",
+    "subjectId": "engine-subject-id",
+    "bindingVersion": 1
+  },
+  "conversation": {
+    "conversationId": "vio-conversation-id",
+    "messageId": "vio-message-id",
+    "messageVersionId": "vio-message-version-id"
+  },
+  "expectedEngineRevision": 12,
+  "platformFacts": {},
+  "observations": [],
+  "constraints": {
+    "purpose": "reply_to_user_message",
+    "tokenBudgetDecisionId": "opaque-decision-id"
+  },
+  "createdAt": "2026-07-29T00:00:00.000Z"
+}
+```
+
+`platformFacts` 只能包含本次目的已授权且有来源/版本/分类的平台事实：本轮消息、有限近期消息、有限可追溯摘要、全局设定必要字段、脱敏 Observation、明确参与 Context 的本地记忆，以及另行通过 `private_domain` 安全链批准的最小私域投影。它明确不包含整库用户数据、整库私域、秘密、跨助手数据、Vio 推演状态、最终 prompt 或最终认知 Context。
+
+Vio Event 投影为 Observation 时保留 `sourceEventId`、稳定 `observationId`、类型、发生/记录时间、最小白名单事实和授权依据，并固定 `stateMutationAllowed=false`。Observation 不包含引擎 `impact_scope` 或 `StateMutation`；只有引擎能决定是否形成自己的 Event 并通过 Evolution 改变状态。
+
+### 逻辑结果
+
+拟议的最小返回语义：
+
+```json
+{
+  "contractVersion": "continuity-integration/v1",
+  "requestId": "opaque-request-id",
+  "status": "completed",
+  "subjectId": "engine-subject-id",
+  "response": {
+    "responseId": "engine-response-id",
+    "role": "subject",
+    "content": "reply text"
+  },
+  "stateProjection": {
+    "schemaVersion": "engine-subject-state/v1",
+    "engineUpdateId": "engine-update-id",
+    "previousRevision": 12,
+    "revision": 13,
+    "snapshot": {}
+  },
+  "consumedObservationIds": [],
+  "usage": {},
+  "completedAt": "2026-07-29T00:00:01.000Z"
+}
+```
+
+回复、状态和 Observation 回执必须分别可幂等。Vio 以后使用 `requestId + payload hash` 防重复请求、`observationId` 防重复事件、`responseId` 防重复回复、`engineUpdateId + revision` 防重复/乱序状态投影。精确端点、同步/异步方式、错误码、超时、状态查询、取消、鉴权、状态用完整快照还是增量，全部待引擎确认。
+
+前端仍只调用 Vio 公共 API。服务间调用必须使用独立契约版本和生产服务身份，不能使用开发期 `x-vio-user-id`。引擎不可用时 Vio 可以保存用户消息、平台 Event、待投递 Observation 和请求状态，但不能生成并冒充 AI 回复、推进 SubjectState、另组最终 Context 调用模型或自动写私域。
 
 ## 服务接口
 
@@ -530,6 +611,8 @@ Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归
 
 所有来源和 `unresolvedEventIds` 都必须属于相同用户与主体。SubjectState 使用主体内单调 `stateVersion` 和独立当前指针；创建新版本只切换指针，不覆盖旧状态。写入状态、未解决事件引用和当前指针在同一事务提交。接口只是保存调用方提供的 `state_update`，没有模型响应解析、状态演化算法或 continuity-engine 调用。
 
+连接设计已决定 continuity-engine 是 SubjectState 唯一权威源。因此这个 POST 是**已实现但需收口的接入前开发接口**，不能作为未来引擎投影入口原样使用，也不能与引擎各自推进一套当前状态。后续需要服务身份、助手—引擎主体绑定、engine schema/revision/update ID、内容哈希、幂等和乱序对账；本轮没有修改接口或数据库。
+
 ## Context API
 
 `GET /api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/context`
@@ -541,7 +624,7 @@ Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归
 | `recentMessageLimit` | `20` | `1`—`50` | 读取当前 Conversation 最近消息 |
 | `crossWindowSummaryLimit` | `5` | `0`—`20` | 读取同一主体其他 Conversation 的最新摘要；`0` 表示不读取 |
 
-响应按 `assemblyOrder` 明确表达以下层级：
+响应按 `assemblyOrder` 明确表达以下平台事实层级：
 
 1. `systemSafetyRules`：当前只保留结构位置，`status=reserved`，不伪造提示词。
 2. `subjectGlobalSettings`：Subject 名字、头像引用和基础设定。
@@ -552,7 +635,7 @@ Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归
 7. `longTermMemory`：当前固定为 `status=not_implemented`，不读取或伪造 Memory。
 8. `currentUserMessage`：当前窗口最后一条用户消息；不满足时为 `null`。
 
-`execution` 固定标记 `modelCall`、`externalApiCall`、`continuityEngineCall` 为 `not_performed`。该接口不持久化装配结果、不生成模型格式、不消耗 Token，也不触发 Event 或外部请求。
+`execution` 固定标记 `modelCall`、`externalApiCall`、`continuityEngineCall` 为 `not_performed`。该接口不持久化装配结果、不生成模型格式、不消耗 Token，也不触发 Event 或外部请求。真实接入后，它只能作为 `PlatformFactPackage` 的数据来源之一；continuity-engine 结合权威 SubjectState、引擎 Memory、Wake/Perception 和学习历史组织唯一的最终认知 Context，Vio 不再另组最终 Context。
 
 ## AI Private Space API
 

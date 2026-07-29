@@ -279,6 +279,18 @@
 - 原因：导出既是用户数据权利，也是高敏感、跨模块读取操作。若在生成资源 ID 前直接读取数据，权限无法精确绑定；若把 `ready` 当成文件或迁移已完成，会把安全资格误表示为外部副作用。版本化 Schema 和只含计数/关系检查的记录能先稳定兼容边界，同时避免把消息、摘要、状态、私域或生活正文复制到审计与导出历史。
 - 影响：新增迁移 `017_create_data_export_and_migration_foundation.sql`、Export Schema/记录仓储与 API，Permission/Security 增加 `data_export`。机器人与其他载体仅提供未配置契约，接口不接受地址、凭据、设备 ID、控制参数或业务数据；迁移准备不持久化授权、不连接、不传输、不执行，未来真实生成/下载/外部存储/恢复/载体迁移必须新增独立执行适配器、重新安全检查并形成 ADR。前端 `src` 不变。
 
+## BE-ADR-035｜continuity-engine 是 SubjectState 唯一权威源，Vio 只保存受控投影
+
+- 日期：2026-07-29
+- 状态：已采用，仅完成连接设计，尚未开始实际接入
+- 决策：continuity-engine 是 AI `SubjectState` 的唯一权威来源。状态只能由引擎在 Wake、Perception、Thinking、Action、Learning 和 Evolution 约束下，以引擎 Event、`expected_revision` 和可审计差异推进。Vio 现有 SubjectState 数据层在接入后只保存带引擎 `subjectId`、schema、revision、update ID、请求/来源和内容哈希的受控投影、快照、缓存或审计历史；Vio 不自行推演状态，也不把 Vio Event 直接转换为状态修改。状态不一致时以引擎为准，Vio 的历史 `state_update` 不能回灌覆盖引擎。现有开发调用方状态写入口属于接入前遗留能力，后续必须改为内部受信投影入口或停用，历史记录需单独迁移标记。
+- 前端边界：Vio 前端只能连接 Vio 平台后端。Vio 负责用户身份、复合归属、Permission、Security Policy、Confirmation、Token、会话落库和安全能力通道；若前端直连引擎，将绕过这些平台控制，也会把引擎地址、错误和内部状态暴露成不稳定的产品接口。
+- Context 边界：Vio Context Service 只提供经过权限筛选、带来源和分类的平台事实包，不组织最终认知 Context。continuity-engine 结合权威状态、引擎 Memory、Wake/Perception 和学习历史组织唯一的最终认知 Context。两边各自组装最终 Context 会造成事实选择、安全规则、Token 计算和状态因果分叉，因此禁止双重装配；AI Private Space 只能以本次目的获批的最小投影进入事实包，不能整库注入。
+- 引擎不可用：Vio 可以保存用户消息、平台 Event、待投递 Observation、请求状态和最后确认的状态快照，也可以把快照标为陈旧后只读展示；不能自行生成并冒充 AI 回复、推进 SubjectState revision、把 Vio Event 当作状态变化、用旧快照另组最终 Context 调用模型，或自动写入引擎派生的 AI 私域内容。
+- 原因：引擎源码已把状态变化收口到 Event → StateMutation → Evolution，并用 revision 和重复 Event 检查保护因果链；Vio 当前 SubjectState 只保存调用方提交的版本，没有引擎 revision、update ID 或演化约束。若两个系统同时拥有写权威，会产生两套人格/情绪/意图真相，且无法可靠处理乱序、重试、回滚和学习。平台事实与认知解释也属于不同信任边界：Vio最了解用户授权和数据归属，引擎最了解状态演化和认知选择。
+- 影响：后续数据库设计需要助手—引擎主体绑定、continuity 请求/回执、Observation 投递、权威状态投影和幂等唯一性；接口需要服务间鉴权、契约版本、请求/事件/回复/状态去重、超时重试和状态对账；测试需要覆盖重复请求、重复 Event、重复回复、重复/乱序 revision、引擎断线、跨用户/跨助手隔离、私域最小披露和 Context 单一装配。上述均未在本轮实现或迁移，必须在引擎确认生产输入输出契约后另行开发。
+- 契约：稳定设计见 `docs/后端/14-continuity-engine连接契约v1.md`。其中“拟新增”和“待引擎确认”不属于现有 API，也不得对外宣称引擎已经接通。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：

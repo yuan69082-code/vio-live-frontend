@@ -4,7 +4,7 @@
 
 本目录依据《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》整理，用于描述平台后端的职责、数据边界、接口原则、安全约束和开发顺序。
 
-本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、账号与数据隔离、对话/Context、Event、模型路由、Permission/Security、扩展/设备/私域/生活数据、主动交互/Token 控制，以及版本化数据导出准备基础；前端已建立独立 API 客户端和真实健康握手。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实语音/系统唤醒、后台调度、消息投递、导出文件/外部存储/真实迁移、模型连接/测试、API Key、continuity-engine 或真实外部执行已经完成。
+本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、账号与数据隔离、对话/平台事实投影、Event、模型路由、Permission/Security、扩展/设备/私域/生活数据、主动交互/Token 控制，以及版本化数据导出准备基础；前端已建立独立 API 客户端和真实健康握手。`Continuity Integration Contract v1` 已完成连接设计，但尚未开始实际接入。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实语音/系统唤醒、后台调度、消息投递、导出文件/外部存储/真实迁移、模型连接/测试、API Key、continuity-engine 连接或真实外部执行已经完成。
 
 ## 系统边界
 
@@ -31,9 +31,9 @@ Vio Live 由五层协作组成：
 - 统一数据隔离检查覆盖用户、AI、设备、生活和事件五类资源，先执行数据库复合归属过滤，再对私域/设备/生活资源执行 Permission 与 Security Policy；所有结果固定未执行。
 - Conversation 当前只支持主体范围的线性文本流；Message 保存稳定顺序和当前版本指针，MessageVersion 保存不可覆盖的原始、编辑和重生成记录。
 - ConversationSummary 按会话不可变追加并引用 MessageVersion/Event 来源；跨窗口只读取同主体其他 Conversation 的最新摘要。
-- SubjectState 按版本保存开发调用方提交的 `state_update`，当前指针与历史分离，未解决 Event 和状态来源均校验用户/主体归属。
+- SubjectState 当前按版本保存开发调用方提交的 `state_update`，当前指针与历史分离，未解决 Event 和状态来源均校验用户/主体归属。连接设计要求 continuity-engine 成为唯一权威源；现有写入口后续必须收口，Vio 只能保存引擎投影、快照、缓存或审计记录。
 - AI Assistant Global Settings 一对一绑定 Subject，支持长期身份与偏好读取/更新；它不会创建、覆盖或切换动态 SubjectState。
-- Context 接口只读装配主体设定、当前状态、未解决事件、近期消息和跨窗口摘要；系统规则正文与 Memory 仍为明确占位，不调用模型或 continuity-engine。
+- Context 接口只读投影主体设定、当前状态记录、未解决事件、近期消息和跨窗口摘要；系统规则正文与 Memory 仍为明确占位，不调用模型或 continuity-engine。接入后它只作为经过权限筛选的平台事实来源，最终认知 Context 由 continuity-engine 唯一组织。
 - AI Private Space 使用专用表和不可变内容版本，支持五类显式输入、受控 Context 投影和导出清单预留；通用 Context 不自动读取私域。
 - 生活管理使用独立生活数据表保存财务、预算、四类月历、身体指标/目标和本地记忆，并由 User Space 作为用户归属根；所有敏感访问经过 `life_data` Permission 与 Security Policy。
 - Event 当前支持用户/可选主体归属、二十四种事件类型，以及按用户、主体、发生时间、类型和状态筛选；对话、安全、私域、生活和主动交互事件不复制正文、音频或敏感操作数据，尚无事件消费者。
@@ -66,6 +66,7 @@ Vio Live 由五层协作组成：
 - [11-数据导出备份与迁移.md](11-数据导出备份与迁移.md)
 - [12-API与事件契约.md](12-API与事件契约.md)
 - [13-部署运维测试与路线图.md](13-部署运维测试与路线图.md)
+- [14-continuity-engine连接契约v1.md](14-continuity-engine连接契约v1.md)
 
 ## 维护规则
 

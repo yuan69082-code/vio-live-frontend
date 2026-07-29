@@ -2,12 +2,12 @@
 
 ## 当前状态
 
-当前阶段为“平台后端 14｜数据导出与未来迁移”。后端已经可以独立启动，并在既有数据隔离与安全体系上建立版本化导出准备框架：
+当前阶段为“continuity-engine 与 Vio 后端连接设计（第一阶段）”。`Continuity Integration Contract v1` 已完成架构设计，**尚未开始实际接入**；后端运行版本仍为 `0.18.0`，现有平台功能与数据库结构没有在本阶段改变：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
 API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一响应
-对话事实 → 可追溯摘要 → 跨窗口读取 → 当前主体状态 → 只读上下文投影
+对话事实 → 可追溯摘要 → 跨窗口读取 → 当前主体状态记录 → 只读平台事实投影
 主体身份 → 长期全局设定 → 跨窗口读取/更新 → Context 只读投影
 Provider 配置 → Model 能力目录 → 默认/备用规则 → 本地选择结果
 Tool/MCP/Skill/Plugin 元数据 → 主体能力视图 → Permission 预览
@@ -23,7 +23,17 @@ Wake/主动提示准备 → 用户授权/后台限制 → Permission → Securit
 Token 请求 → 日/会话预算 → 超额策略 → 可选高风险确认 → 固定不调用模型
 Export Schema → 用户/主体归属与字段/外键预检 → data_export Permission → Security/Confirmation → ready 记录
 迁移契约准备 → Schema 兼容检查 → 未配置载体描述 → 固定不连接、不传输、不执行
+Vio 平台事实包（拟新增） → Observation（拟新增） → continuity-engine（待确认） → 权威状态投影（拟新增）
 ```
+
+连接设计的权威入口是 [`../docs/后端/14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)。设计固定以下边界：
+
+- continuity-engine 是 SubjectState 唯一权威源；Vio 只保存投影、快照、缓存和审计记录。
+- Vio Event 只能转换为不含状态修改的 Observation，由引擎决定是否影响主体。
+- Vio Context Service 只提供经过权限筛选的平台事实，不组织最终认知 Context。
+- AI Private Space 只能按本次目的通过安全链读取最小投影，不得整库进入引擎或模型。
+- 前端只能连接 Vio 后端；两边数据库不合并。
+- 现有开发 `state_update` 写入口与目标边界冲突，后续必须收口；本阶段没有改接口、业务代码或迁移。
 
 已实现：
 
@@ -49,7 +59,7 @@ Export Schema → 用户/主体归属与字段/外键预检 → data_export Perm
 - ConversationSummary 不可变追加、会话内单调版本及 MessageVersion/Event 来源引用
 - 从当前 Conversation 读取同一主体其他窗口的最新摘要
 - `state_update` 接收、不可变 SubjectState 历史、当前状态指针和未解决 Event 引用
-- 按安全规则占位、完整助手全局设定、当前状态、未解决事件、近期消息、跨窗口摘要、记忆占位和本轮用户消息顺序装配上下文
+- 按安全规则占位、完整助手全局设定、当前状态记录、未解决事件、近期消息、跨窗口摘要、记忆占位和本轮用户消息顺序生成只读平台事实投影；不是最终认知 Context
 - 上下文接口明确返回模型、外部 API 与 continuity-engine 均未调用
 - Event 创建、单项查询及按用户、主体、时间、类型和状态筛选
 - 二十四类基础软件事件和事件数据秘密字段拦截
@@ -338,7 +348,7 @@ backend/
 │  ├─ modules/message-versions/ # 编辑/重生成的不可覆盖版本链
 │  ├─ modules/conversation-summaries/ # 可追溯、不可变会话摘要
 │  ├─ modules/subject-states/ # state_update 与当前状态指针
-│  ├─ modules/contexts/       # 跨窗口只读上下文装配
+│  ├─ modules/contexts/       # 跨窗口只读平台事实投影
 │  ├─ modules/events/        # Event 类型、记录和查询规则
 │  ├─ modules/api-providers/ # Provider 配置与安全边界
 │  ├─ modules/models/        # Model 目录与能力标签
@@ -386,7 +396,7 @@ backend/
 - Conversation/Message/Version 写入、当前指针切换、最近活动时间和对应 Event 在同一事务提交。平台自动生成的四类对话事件只保存 ID、版本、发送者或状态等最小字段，不包含 Conversation `title` 或 Message `content`。
 - ConversationSummary 使用会话内单调版本并禁止原地修改或直接删除；每个摘要至少引用一个同会话 MessageVersion 或同主体 Event，来源与摘要在同一事务提交。
 - 跨窗口查询只返回同一用户与主体下、排除当前 Conversation 后每个其他 Conversation 的最新活动摘要，不扫描或复制全部历史消息。
-- SubjectState 通过不可变版本和独立 `subject_state_heads` 当前指针保存；`state_update` 来源必须是同主体 MessageVersion、Event 或 ConversationSummary，未解决 Event 也使用复合外键约束。
+- SubjectState 当前通过不可变版本和独立 `subject_state_heads` 指针保存开发调用方 `state_update`；来源必须是同主体 MessageVersion、Event 或 ConversationSummary，未解决 Event 也使用复合外键约束。该结构尚无引擎 subject 绑定、engine revision/update ID 或投影接收状态，不能作为双重状态权威；真实接入前必须通过新迁移和内部接口演进，本阶段未修改数据库。
 - 主体事件使用 `(user_id, subject_id)` 组合外键，数据库层同时保证用户和主体归属。
 - 事件按发生时间保存为 UTC ISO-8601，并为用户、主体、类型和状态查询建立索引。
 - Provider 归属于用户并保存 Base URL、接口格式、启停状态和测试状态；Model 同时保存用户和 Provider 归属、费用说明与测试状态，能力标签使用独立关系表。
@@ -417,6 +427,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、SubjectState、AI Private Space 与 User Space 生活数据保持独立语义和存储边界；切换当前助手不会复制或重写这些记录。通用 Context 不自动读取私域或本地记忆。数据导出只形成版本化范围、完整性预检、安全准备和未来载体契约，不返回正文、不生成文件、不连接存储/机器人、不执行迁移。主动交互也不判断唤醒音频、不生成提示正文、不运行后台任务或调用模型。真实登录、系统语音、模型、外部存储、机器人、支付/银行、健康设备和 continuity-engine 仍未实现。
+平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context 和唯一权威 SubjectState。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、SubjectState 投影、AI Private Space 与 User Space 生活数据保持独立语义和存储边界；切换当前助手不会复制或重写这些记录。通用平台事实投影不自动读取私域或本地记忆。数据导出只形成版本化范围、完整性预检、安全准备和未来载体契约，不返回正文、不生成文件、不连接存储/机器人、不执行迁移。主动交互也不判断唤醒音频、不生成提示正文、不运行后台任务或调用模型。真实登录、系统语音、模型、外部存储、机器人、支付/银行、健康设备和 continuity-engine 实际接入仍未实现。
 
-稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。
+稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，连接设计见 [`../docs/后端/14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。
