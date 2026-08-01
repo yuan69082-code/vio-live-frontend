@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、账号/数据隔离、对话/平台事实投影、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；`Continuity Integration Contract v1.1` 已获 Continuity Engine 正式接受，但运行时连接能力和第一轮共享测试尚未实现；前端独立 API 客户端已完成首次健康连接，完整平台 API 未建立
+- 实现状态：已建立统一响应、账号/数据隔离、对话/平台事实投影、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；Vio V1 已实现第一轮严格机器请求的本地构造、验证和持久化，但不提供连接 API、不发送；第一轮共享测试和运行时连接尚未实现
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -47,13 +47,15 @@ continuity-engine 决定何时需要模型并组织最终认知 Context；Vio �
 | 状态 | 内容 |
 | --- | --- |
 | 已实现 | Vio 的 User/Subject/Conversation/Message/Version、Summary、Event、现有状态历史/只读事实投影、当前 Private Space 安全投影、Permission/Security/Token；引擎内部 SubjectState revision、Event/Evolution、Wake/Perception/Thinking/Action/Learning |
-| 契约已确认、运行时未实现 | 第一轮 PlatformObservation、严格 Schema validator、固定 SubjectBinding/hash、ContractTestAdapter、双方持久化幂等账本、Vio 状态投影接收和 revision 冲突隔离 |
+| Vio V1 已实现 | 第一轮 PlatformObservation/fact/request 严格本地 Schema/validator、RFC 8785/hash、固定 SubjectBinding 测试装载、未发送请求构造与输入跨重启恢复 |
+| Engine E1/E2/E3 已实现 | 引擎侧 test-only ContractTestAdapter、成功/错误 envelope、结果账本、确定性 Action Gate/Evolution 与跨重启恢复 |
+| 尚未实现 | Vio 到 Engine 调用、Vio operation/response/stateProjection 幂等保存、revision 冲突隔离、双方共享测试和生产连接 |
 | 第一轮明确排除 | CapabilityRequest/CapabilityResult、真实模型/Tool/MCP/设备、三层数据空间实际跨系统读写、生产认证/多租户/部署 |
 | 未来生产待共同决定 | 正式传输/鉴权、异步/流式、通用重绑定、完整 Outbox 运维参数、生产投影扩展和 Capability 往返 |
 
 现有 Vio `POST .../state-updates` 是接入前开发调用方写入口，不是引擎权威投影接口；现有 Context API 是平台事实只读投影，不是最终认知 Context。二者都不能用来宣称连接已经完成。
 
-第一轮机器契约只在 v1.1 第 19 节定义：三份严格 Draft 2020-12 Schema、正式 conformance vector、固定 SubjectBinding fixture、`requestHash`/`bindingFixtureHash`、`IDEMPOTENCY_KEY_REUSED / never`、revision 全不等冲突、最小 snapshot 和独立进程内 ContractTestAdapter 均已获确认。当前仓库尚无对应运行时模型、validator、Adapter、表、投影接收器或共享测试；档案同步完成后，下一步才是双方共同制定施工提示词。
+第一轮机器契约只在 v1.1 第 19 节定义：三份严格 Draft 2020-12 Schema、正式 conformance vector、固定 SubjectBinding fixture、`requestHash`/`bindingFixtureHash`、`IDEMPOTENCY_KEY_REUSED / never`、revision 全不等冲突、最小 snapshot 和独立进程内 ContractTestAdapter 均已获确认。Vio 当前只实现请求侧内部模型、validator、固定测试 Binding、输入表和构造测试；没有新增公共 API 或 Adapter。投影接收、共享测试和实际连接仍待 Vio V2/后续阶段。
 
 ## 契约中的通用信息
 

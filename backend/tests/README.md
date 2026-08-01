@@ -27,7 +27,9 @@
 pnpm test
 ```
 
-当前测试结果为 49/49 通过，已覆盖服务启动、统一响应 envelope、数据导出/迁移准备、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+当前测试结果为 57/57 通过，已覆盖服务启动、统一响应 envelope、数据导出/迁移准备、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+
+Continuity Vio V1 测试另外覆盖三份严格本地 Schema/引用、所有对象的未知字段拒绝、禁止状态写字段、正文唯一位置、跨结构 ID/identity 一致性、RFC 8785 与三项固定 hash、固定 Binding 全字段防漂移、Vio 归属与 Event 来源核对、requestId 重试、跨重启恢复，以及零 Engine/模型/MCP/Tool/设备/网络调用和零 SubjectState 推进。
 
 Data Export 测试覆盖迁移 `017` 对既有 Permission、Security Policy、Confirmation 与 AuditLog 的保留和外键完整性，三类 Export Schema、十二类范围、归属/字段/关系预检、缺失字段阻止、`data_export` Permission、高风险逐次确认、导出记录持久化和跨用户/主体隔离。机器人/其他载体契约固定未实现、未连接、未执行，接口拒绝服务地址等连接载荷，所有结果均不包含业务数据、不创建文件、不连接外部存储。
 

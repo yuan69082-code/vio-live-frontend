@@ -4,7 +4,7 @@
 
 本目录依据《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》整理，用于描述平台后端的职责、数据边界、接口原则、安全约束和开发顺序。
 
-本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、账号与数据隔离、对话/平台事实投影、Event、模型路由、Permission/Security、扩展/设备/私域/生活数据、主动交互/Token 控制，以及版本化数据导出准备基础；前端已建立独立 API 客户端和真实健康握手。`Continuity Integration Contract v1.1` 已由 Continuity Engine 正式接受，长期架构和第一轮机器契约语义已经闭合，但尚未开始实际接入。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实语音/系统唤醒、后台调度、消息投递、导出文件/外部存储/真实迁移、模型连接/测试、API Key、continuity-engine 连接或真实外部执行已经完成。
+本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、账号与数据隔离、对话/平台事实投影、Event、模型路由、Permission/Security、扩展/设备/私域/生活数据、主动交互/Token 控制，以及版本化数据导出准备基础；前端已建立独立 API 客户端和真实健康握手。`Continuity Integration Contract v1.1` 已由 Continuity Engine 正式接受，Engine E1/E2/E3 和 Vio V1 分别完成各自第一轮本地基础。Vio V1 只构造、验证并持久化未发送逻辑请求，尚未实际连接 Engine。这不代表真实认证、页面数据迁移、正式数据库、事件消费、真实语音/系统唤醒、后台调度、消息投递、导出文件/外部存储/真实迁移、模型连接/测试、API Key、continuity-engine 连接或真实外部执行已经完成。
 
 ## 系统边界
 
@@ -47,9 +47,10 @@ Vio Live 由五层协作组成：
 - 当前未接入真实认证或正式数据库，基础路由不得直接公开部署。
 - 总规划记录的部分连续性底层框架不等于平台后端已经完成。
 - 已完成：Vio 与 Continuity Engine 长期架构、SubjectState 权威、Observation/内部 Event 边界，以及第一轮 Schema、固定 SubjectBinding、幂等、revision、错误、投影和 ContractTestAdapter 入口的契约对齐；Continuity Engine 已正式接受 v1.1。
-- 当前阶段：Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成；双方最终只读复核已经通过，正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。
-- 下一阶段：当前准备共同制定第一轮最小连接施工提示词，但尚未共同制定。第一轮代码施工、共享测试和运行时连接仍未开始。
-- 尚未实现：PlatformObservation 与严格 Schema validator、SubjectBinding/hash 运行时验证、ContractTestAdapter、双方持久化幂等账本、Vio 投影接收器、revision 冲突运行时隔离、实际连接和第一轮共享测试。
+- Engine 当前基线：E1/E2/E3 已在提交 `c732f35` 完成，具备引擎侧 test-only ContractTestAdapter、严格验证、确定性闭环、结果账本和跨重启恢复；完整基线为 203 项测试。
+- Vio 当前阶段：Vio V1 已实现三份严格本地 Schema/validator、RFC 8785/hash、固定 Binding 测试装载、平台事实/Observation 请求构造和请求输入跨重启持久化；逻辑请求只保存、不发送。
+- 下一阶段：Vio V2 才实现 Engine 调用及 operation/response/stateProjection 的幂等接收与恢复；其后才能进行双方共享测试。须另行授权。
+- 尚未实现：Vio 投影接收器、revision 冲突运行时隔离、双方共享测试、网络连接、生产 Integration Adapter、鉴权和多租户。
 - 分支、消息删除、窗口重置、真实摘要生成、语义检索、供应商 Token 计量/计费、私域披露/删除、真实导出文件/下载/外部存储、备份恢复、生活记录删除、自动提醒、支付/银行、健康设备、真实语音/系统唤醒、后台调度、消息投递、正式数据库、真实模型、continuity-engine、真实 MCP、插件安装、Skill/Tool 执行、真实设备/机器人连接控制、载体迁移、厂商 API、外部执行和公开运行能力仍处于规划或待接入状态。
 - GitHub 只保存代码和文档，不保存运行数据、用户数据或密钥。
 

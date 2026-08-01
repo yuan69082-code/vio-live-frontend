@@ -20,5 +20,6 @@
 - `015_create_user_spaces_and_data_isolation.sql` 新建每用户唯一的 User Space，保存开发期身份模式和当前助手复合外键；为既有用户回填空间，并稳定选择最早活动 Subject 作为当前助手。
 - `016_create_proactive_interaction_and_token_controls.sql` 新建 Wake、主动提示规则/准备记录、Token Budget/Usage 和助手后台策略；扩展 `proactive_interaction` Permission/Security 范围，并把 Event 扩展为二十四类。
 - `017_create_data_export_and_migration_foundation.sql` 新建版本化 Export Schema、十二类范围定义与导出记录；扩展 `data_export` Permission/Security 范围，导出结果固定不生成载荷/文件、不连接外部存储、不执行迁移。
+- `018_create_continuity_v1_contract_foundation.sql` 新建不可变的第一轮固定 SubjectBinding fixture 和未发送逻辑请求输入记录；复合外键绑定 Vio 用户、助手、会话、MessageVersion 与来源 Event，保存 request/hash/revision/引用/规范化请求并支持跨重启读取。该迁移不保存引擎 operation、response 或 stateProjection。
 
-`017` 只建立导出/迁移准备元数据，不复制用户正文或秘密，不生成可下载包；`016` 的语音与后台字段只保存平台配置，运行状态固定未连接/未执行。因 SQLite 需要重建已被其他表引用的父表，相关迁移首行使用 `-- vio-migration: foreign-keys-off` 显式声明；迁移运行器只对这种声明临时关闭外键，并在记录和提交前强制执行 `PRAGMA foreign_key_check`，任何悬空引用都会整体回滚。已执行迁移不得为适配新阶段而原地修改。
+`018` 只服务于 v1.1 第一轮固定测试 Profile，不提供 Binding CRUD/解绑/重绑定或生产绑定能力；`017` 只建立导出/迁移准备元数据，不复制用户正文或秘密，不生成可下载包；`016` 的语音与后台字段只保存平台配置，运行状态固定未连接/未执行。因 SQLite 需要重建已被其他表引用的父表，相关迁移首行使用 `-- vio-migration: foreign-keys-off` 显式声明；迁移运行器只对这种声明临时关闭外键，并在记录和提交前强制执行 `PRAGMA foreign_key_check`，任何悬空引用都会整体回滚。已执行迁移不得为适配新阶段而原地修改。

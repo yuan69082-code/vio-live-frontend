@@ -5,11 +5,18 @@
 - 日期：2026-07-30
 - 对齐输入：Continuity Integration Contract v1、Engine Integration Contract Response v1
 - 对齐输出：[Continuity Integration Contract v1.1](14-continuity-engine连接契约v1.1.md)
-- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成；双方最终只读复核已经通过，正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。当前准备共同制定该提示词，但尚未共同制定；第一轮代码施工、共享测试和运行时连接仍未开始**
+- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。Engine E1/E2/E3 与 Vio V1 已分别实现各自的第一轮本地基础，但双方尚未连接、尚未运行共享测试**
 - 最终接受依据：Engine Contract Final Read-Only Short Confirmation v1（归档见 [14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md](14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)）
 - 证据原则：源码、迁移和测试高于规划文字
 
 Engine Integration Contract Response v1 当前来自 continuity-engine 审核窗口的完整回复，未在两个仓库中发现同名落盘文件。本说明不把引擎建议误写为已经实现的接口。
+
+### 1.1 2026-08-02 实现状态附注
+
+- Engine E1/E2/E3 已在提交 `c732f35` 完成：引擎侧严格 Schema/hash、固定 Binding、test-only ContractTestAdapter、确定性 Action Gate/Evolution、成功/错误 envelope、持久化结果账本和跨重启恢复。
+- Vio V1 已完成：请求侧三份严格本地 Schema/validator、RFC 8785/hash、固定 Binding 测试装载、经 Vio 归属与来源验证的逻辑请求构造，以及请求输入跨重启恢复。
+- 尚未完成：Vio 调用 Engine、Vio operation/response/stateProjection 幂等接收、双方共享测试、网络连接和生产 Integration Adapter。
+- 本附注只更新施工状态，不改变下文保存的第二次审核历史、v1.1 规范内容或长期待决策项。
 
 ## 2. 总体处理结论
 
@@ -24,9 +31,9 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - **引擎第二次审核意见：** observations 与 platformFactPackage 存在双承载可能；PlatformObservation 缺少 bindingId；message_created 没有精确 schema；消息正文位置不唯一；禁止字段没有固定错误。
 - **v1.1 修改位置：** 第 6.1、7.2、19.1、19.7 节。
 - **修改后的正式决定：** ContinuityInteractionRequest.observations 是唯一承载位置；PlatformFactPackage 只能在 observationRefs 中引用 observationId。第一轮只允许一个严格 message_created Observation 和一个严格 message_version fact。Observation 只含事件身份、sourceEventId、时间、完整绑定和 MessageVersion 引用；正文只在 fact.content。所有对象 additionalProperties=false；未知、禁止状态字段、重复正文或引用不一致统一 SCHEMA_INVALID / never。
-- **当前已有能力：** Vio 已有 Event、MessageVersion、正文和来源 ID；引擎当前没有 PlatformObservation/PlatformFactPackage。
-- **第一轮需要新增的最小能力：** Vio 生成精确请求/fact；引擎 ContractTestAdapter 执行严格 schema 与交叉引用校验。
-- **是否仍阻塞第一轮：** 不再构成契约阻塞，已获引擎正式确认；运行时 schema 和构造能力尚未实现，第一轮施工尚未开始。
+- **当前已有能力：** Vio V1 已实现精确请求/fact/Observation 构造和严格本地校验；Engine E1/E2/E3 已实现摄取侧严格校验。
+- **第一轮需要新增的最小能力：** 双方共享测试中验证同一请求向量；Vio 尚需 V2 结果接收。
+- **是否仍阻塞第一轮：** 契约与单边实现均不再阻塞；双方尚未连接验证。
 - **未来实现责任：** 双方；Vio 负责构造，引擎负责验证和安全摄取。
 
 ### 3.2 固定 SubjectBinding 创建与装载
@@ -34,9 +41,9 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - **引擎第二次审核意见：** 第一轮 subjectId、bindingId、fixture 生成方、双方装载方式和统一拒绝语义没有固定。
 - **v1.1 修改位置：** 第 19.3 节；PlatformObservation/fact 的 identity 同步由第 19.1 节固定。
 - **修改后的正式决定：** 引擎先创建全新 subjectId 和 revision 0；Vio生成固定 bindingId；测试准备程序形成 bindingVersion=1、status=active 的不可变 fixture，Vio 与 ContractTestAdapter 装载相同 fixture/hash。第一轮没有绑定 CRUD/重绑定 API。任一字段/status 错配统一 SUBJECT_BINDING_MISMATCH / never，且不泄露主体存在性。
-- **当前已有能力：** Vio 有 user/assistant 归属；引擎能创建并持久化 revision 0 SubjectState；双方都没有 SubjectBinding。
-- **第一轮需要新增的最小能力：** 固定 fixture 存储/装载、fixture hash 和 ContractTestAdapter 绑定校验。
-- **是否仍阻塞第一轮：** 不再构成契约阻塞，已获引擎正式确认；最小装载能力尚未实现。
+- **当前已有能力：** Vio V1 和 Engine E1/E2/E3 已分别实现固定 fixture/hash 的持久化装载与校验。
+- **第一轮需要新增的最小能力：** 在共享测试准备中确认双方装载同一不可变 fixture。
+- **是否仍阻塞第一轮：** 不再构成契约或单边实现阻塞；尚未进行双方共享验证。
 - **未来实现责任：** 双方；引擎创建 subject，Vio生成 bindingId，ContractTestAdapter 校验。
 
 ### 3.3 确定性 Provider 所在层级
@@ -74,9 +81,9 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - **引擎第二次审核意见：** APIService.submit_message → UserInteractionService 会先创建 interaction Event 并可能推进 temporal revision，不能作为 PlatformObservation 摄取入口。
 - **v1.1 修改位置：** 第 4.3、17.1、19.8、20.2 节；已清除全部旧入口表述。
 - **修改后的正式决定：** 第一轮使用独立进程内 ContractTestAdapter，按固定顺序验证 schema、requestHash、binding、持久化幂等、expectedEngineRevision，再组装核心输入。禁止调用 APIService.submit_message/UserInteractionService，禁止 Observation 直转内部 Event。APIService 只可复用只读查询或核心辅助能力。
-- **当前已有能力：** 引擎有核心服务和调试入口，但没有 ContractTestAdapter。
-- **第一轮需要新增的最小能力：** test-only ContractTestAdapter；本轮只定义，不写代码。
-- **是否仍阻塞第一轮：** 不再构成契约阻塞，已获引擎正式确认；Adapter 实现仍是第一轮施工前置能力。
+- **当前已有能力：** Engine E3 已实现独立、test-only、进程内 ContractTestAdapter；Vio V1 明确没有把任何现有公共 API 作为摄取入口。
+- **第一轮需要新增的最小能力：** 后续共享测试连接 Vio 构造结果与该 Adapter；本轮不连接。
+- **是否仍阻塞第一轮：** Adapter 单边能力不再阻塞；共享连接尚未实现。
 - **未来实现责任：** continuity-engine。
 
 ### 3.7 跨重启持久化完整幂等结果
@@ -84,9 +91,9 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - **引擎第二次审核意见：** 内部 Event 去重不足以返回第一次完整 operation/response/projection；requestId 幂等必须跨双方重启恢复。
 - **v1.1 修改位置：** 第 11.3、19.5、19.6、19.8 节。
 - **修改后的正式决定：** requestId 是永久幂等键；requestHash 为逻辑请求去除 requestHash 后按 RFC 8785 规范化、再计算 SHA-256。传输尝试/重试时间不入 hash。相同 ID/hash 返回第一次完整持久化结果且不重跑 Thinking/Event/revision；在 schema、hash 和完整 Binding 验证通过后，同 ID 不同 hash 返回 IDEMPOTENCY_KEY_REUSED / never。双方重启后仍成立。
-- **当前已有能力：** 引擎有内部 Event/StateUpdate 去重和状态重启恢复；Vio 有本地事务，但双方都没有完整 operation/result 账本。
-- **第一轮需要新增的最小能力：** 引擎和 Vio 各自的 request/operation/result 持久化与重放。
-- **是否仍阻塞第一轮：** 不再构成契约阻塞，已获引擎正式确认；持久化实现尚不存在。
+- **当前已有能力：** Engine E1/E2/E3 已有完整 operation/response/projection 结果账本与重启恢复；Vio V1 已有 request 输入账本与重启恢复。
+- **第一轮需要新增的最小能力：** Vio V2 保存并重放 Engine operation/response/stateProjection，且与现有 request 输入账本关联。
+- **是否仍阻塞第一轮：** 不阻塞当前 Vio V1；在双方共享结果测试前仍需完成 Vio V2。
 - **未来实现责任：** 双方各自负责本地账本与重启恢复。
 
 ### 3.8 第 9.1—9.9 节准确文本落点
@@ -109,9 +116,9 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 
 | 最终确认意见 | v1.1 修改位置 | 本轮固定结果 | 实现状态 |
 | --- | --- | --- | --- |
-| 缺少顶层严格 Schema | 19.1.1—19.1.3 | 建立三份 Draft 2020-12 Schema 的显式 registry；使用唯一绝对 URN `$id` 和精确 `$ref`；所有对象拒绝未知字段；实际启用 date-time format 断言并用正则限制 RFC 3339 UTC `Z` | 仅文档固定，运行时 validator 未实现 |
-| 空数组示例不是有效向量 | 19.1.1 | 写入 facts/observations 各一项的完整 conformance vector；交叉字段、Observation 引用和 `hello` contentHash 已校验；最终 requestHash 为 `sha256:ec07ad9ba66d1ffcdfa9177cd61bec1b880ad6ee99a6ec6449e732c1b86002d0` | 仅文档向量，连接测试未实现 |
-| Binding fixture/hash 不唯一 | 19.3 | 固定全部 ID、状态和时间；双方装载同一 fixture；bindingFixtureHash 为 `sha256:c75b72194c0158a549f3fb30f04a5147ea11a4e777cb1a9cc1a54da6b93359f6` | 仅文档 fixture，装载与校验代码未实现 |
+| 缺少顶层严格 Schema | 19.1.1—19.1.3 | 建立三份 Draft 2020-12 Schema 的显式 registry；使用唯一绝对 URN `$id` 和精确 `$ref`；所有对象拒绝未知字段；实际启用 date-time format 断言并用正则限制 RFC 3339 UTC `Z` | Engine E1 与 Vio V1 已分别实现；共享测试未运行 |
+| 空数组示例不是有效向量 | 19.1.1 | 写入 facts/observations 各一项的完整 conformance vector；交叉字段、Observation 引用和 `hello` contentHash 已校验；最终 requestHash 为 `sha256:ec07ad9ba66d1ffcdfa9177cd61bec1b880ad6ee99a6ec6449e732c1b86002d0` | Engine 与 Vio 单边测试已通过；共享测试未运行 |
+| Binding fixture/hash 不唯一 | 19.3 | 固定全部 ID、状态和时间；双方装载同一 fixture；bindingFixtureHash 为 `sha256:c75b72194c0158a549f3fb30f04a5147ea11a4e777cb1a9cc1a54da6b93359f6` | Engine 与 Vio 已分别实现装载/校验；尚未共同装载测试 |
 | 第一轮幂等错误码不统一 | 19.5、19.7、19.8 | 第一轮唯一使用 IDEMPOTENCY_KEY_REUSED / never，不接受旧码别名；第二次审核原文中的旧码只保留为被明确取代的历史引用 | 仅文档规则，错误映射未实现 |
 
 同时完成的校准：expectedEngineRevision != currentEngineRevision 一律 REVISION_CONFLICT / reassemble，且 currentEngineRevision 只能在完整 Binding 验证后返回；第一轮投影内容、request 关联和非 null engineUpdateId 的唯一性分别固定；第 18.4 节仅保留第一轮之外的未来生产接口待定项。
@@ -260,7 +267,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - **Vio 拟新增：** 私有服务客户端、服务发现、认证、重放保护、限流和审计。
 - **引擎拟新增：** 独立版本化 Integration Adapter、正式传输层、认证和生产健康语义。
 - **长期规划：** 引擎保持独立私有服务，前端始终只连接 Vio。
-- **是否阻塞第一轮最小测试：** 第一轮必须新增 ContractTestAdapter；该 Adapter 不复用 APIService.submit_message、不调用 UserInteractionService、不使用本地 HTTP，也不把 PlatformObservation、Vio Event 或摄取回执直接构造成内部 Event。当前这些能力尚未实现。
+- **是否阻塞第一轮最小测试：** Engine E3 已新增 ContractTestAdapter；该 Adapter 不复用 APIService.submit_message、不调用 UserInteractionService、不使用本地 HTTP，也不把 PlatformObservation、Vio Event 或摄取回执直接构造成内部 Event。Vio 尚未连接该 Adapter，双方共享测试也未开始。
 
 ## 5. 三层数据空间差异
 
@@ -303,7 +310,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 
 ## 7. 是否阻塞第一轮最小连接测试
 
-第二次审核指出下列内容必须在测试前固定；第三轮已将它们全部写入 v1.1 第 19 节，并已通过引擎最终只读短确认，但尚未实现对应运行时能力：
+第二次审核指出下列内容必须在测试前固定；第三轮已将它们全部写入 v1.1 第 19 节，并已通过引擎最终只读短确认。Engine E1/E2/E3 与 Vio V1 已分别实现单边基础，但尚未完成 Vio V2 和双方共享测试：
 
 - 一个显式 SubjectBinding。
 - 顶层请求、PlatformObservation 和 fact 组成的严格 Draft 2020-12 schema registry，以及完整有效一致性向量。
@@ -312,9 +319,9 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - 引擎 responseId、engineUpdateId/revision 的测试返回语义。
 - Vio 对回复和投影的幂等保存。
 
-因此，上述七项已经不再构成契约阻塞，Continuity Engine 也已确认不存在会使双方采取不同第一轮实现的规则。ContractTestAdapter、严格 schema、双方持久化账本和 Vio 投影接收仍是必须在后续施工中实现的测试前置能力。Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成；双方最终只读复核已经通过，正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。当前准备共同制定该提示词，但尚未共同制定；第一轮代码施工、共享测试和运行时连接仍未开始，不能把“文本闭合”写成“测试已经可运行”。
+因此，上述七项已经不再构成契约阻塞，Continuity Engine 也已确认不存在会使双方采取不同第一轮实现的规则。Engine 侧 Adapter/结果账本和 Vio 侧严格请求构造/输入账本已经分别实现；Vio 投影接收与双方共享测试仍是下一阶段前置能力。不能把“单边 V1 完成”写成“双方连接完成”。
 
-本轮机器契约校准只闭合文档精度：顶层 Schema、有效向量、固定 Binding fixture/hash、幂等错误码、revision 全不等冲突和投影唯一性均已固定。PlatformObservation 运行时模型、Schema validator、ContractTestAdapter、Binding、hash 计算、持久化账本和投影接收器仍未实现，第一轮测试当前仍不能运行。
+机器契约校准已闭合文档精度；随后 Engine E1/E2/E3 和 Vio V1 分别实现了各自侧的严格 Schema、Binding/hash 与持久化基础。Vio 投影接收器、跨系统调用和第一轮双方共享测试仍不能运行。
 
 不阻塞第一轮但阻塞生产的事项：
 
@@ -335,7 +342,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - revision 冲突盲重试：明确禁止。
 - AI 私域与用户私密混用：已拆成三层空间。
 - 调试接口冒充生产：明确禁止。
-- 将设计写成已实现：所有运行时新增项均标记尚未实现；v1.1 正式接受只代表契约状态。
+- 将设计写成已实现：只把 Engine E1/E2/E3 和 Vio V1 的源码/迁移/测试能力标为已实现；投影接收、共享测试和实际连接仍标记未实现。
 
 ## 9. 本轮边界
 

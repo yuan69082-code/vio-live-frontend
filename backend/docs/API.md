@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-- 当前阶段：Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成；双方最终只读复核已经通过，正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。当前准备共同制定该提示词，但尚未共同制定；第一轮代码施工、共享测试和运行时连接仍未开始
+- 当前阶段：Engine E1/E2/E3 已完成；Vio V1 已完成第一轮严格机器契约构造与固定 Binding 基础。当前没有 Engine 网络连接、投影接收、共享测试或生产 Adapter
 - 后端版本：`0.18.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
@@ -76,7 +76,7 @@
 - Data Export 创建只接受 `exportType` 和预定义 `scopes`；不接受正文、文件名、外部地址、机器人参数、密钥或迁移执行载荷。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
-## Continuity Integration Contract v1.1（已接受，运行时未实现）
+## Continuity Integration Contract v1.1（已接受；Vio V1 已实现，未连接 Engine）
 
 权威机器契约、完整 conformance vector、固定 Binding fixture 和第一轮测试边界见 [`../../docs/后端/14-continuity-engine连接契约v1.1.md`](../../docs/后端/14-continuity-engine连接契约v1.1.md)。Continuity Engine 的最终接受证据见 [`14c`](../../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。本节只同步 API 状态，不重复定义可能漂移的第二份机器 Schema。
 
@@ -87,7 +87,9 @@
 | **已实现** | Vio User/Subject/Conversation/Message/Version、ConversationSummary、Event、AI Private Space 当前安全投影、Permission/Security/Token 接口 | 可作为未来连接的数据与安全基础，但当前没有调用引擎 |
 | **已实现但需收口** | `POST /api/v1/users/:userId/subjects/:subjectId/state-updates` | 当前接受开发调用方状态；不能成为未来权威写入口，历史数据须按 `legacy/unverified` 处理 |
 | **已实现但仅为事实来源** | `GET .../conversations/:conversationId/context` | 当前是只读平台事实投影，不是最终认知 Context |
-| **契约已确认、运行时未实现** | PlatformObservation、严格 Schema validator、固定 SubjectBinding 与 hash 验证、ContractTestAdapter、request/operation/result 持久化、跨重启结果重放、Vio 状态投影接收和 revision 冲突隔离 | v1.1 已固定第一轮语义，但仓库当前没有对应路由、模型、表或测试 |
+| **Vio V1 已实现（仅进程内、未发送）** | 三份严格 Schema/本地 validator、RFC 8785/hash、固定 SubjectBinding 测试装载、PlatformObservation/fact/request 构造、请求输入持久化与跨重启读取 | 没有公共路由；不保存 operation/response/stateProjection，不调用 Engine |
+| **Engine E1/E2/E3 已实现** | test-only ContractTestAdapter、严格验证、确定性领域闭环、成功/错误 envelope、持久化结果账本和跨重启恢复 | 引擎提交 `c732f35`；尚未与 Vio 连接或运行双方共享测试 |
+| **Vio V2 / 连接阶段未实现** | Engine 调用、operation/response/stateProjection 幂等保存、revision 冲突隔离与对账、双方共享测试 | 不属于本阶段，不存在 HTTP 或生产连接入口 |
 | **第一轮明确排除** | CapabilityRequest/CapabilityResult、真实模型、Tool、MCP、设备和三层数据空间跨系统读写 | 三个确定性 test double 均位于 Continuity Engine 进程内，Vio 不实现 capability stub |
 | **未来生产待共同决定** | 正式传输、服务鉴权、多租户、部署、通用重绑定、异步/流式、完整 Outbox 运维参数 | 不属于第一轮已确认机器 Profile，也不是当前 API |
 
@@ -102,7 +104,7 @@
 - 无状态变化时 `changed=false`、revision 不变、`engineUpdateId=null`；有状态变化时 revision 只增加一次，`engineUpdateId=StateUpdateRecord.update_id`。第一轮只用最小 snapshot，不用 delta。
 - 第一轮摄取入口只能是 Continuity Engine 内独立、test-only 的 `ContractTestAdapter`；现有 `APIService.submit_message`、本地 HTTP、`UserInteractionService` 和 Vio 公共 API 均不是该入口。
 
-这些规则已经获得 Continuity Engine 正式确认，但相应运行时能力、第一轮共享测试和实际连接尚未实现。Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成；双方最终只读复核已经通过，正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。当前准备共同制定该提示词，但尚未共同制定；第一轮代码施工、共享测试和运行时连接仍未开始。前端仍只调用 Vio 公共 API，不直接连接引擎。
+这些规则已经获得 Continuity Engine 正式确认。Vio V1 现已在内部模块落实严格 Schema、哈希、固定 Binding 和未发送请求的构造/持久化；它不是公共 API，也不是 Engine 摄取入口。Vio 投影接收、双方共享测试、网络连接和生产 Adapter 仍未实现。前端仍只调用 Vio 公共 API，不直接连接引擎。
 
 ## 服务接口
 

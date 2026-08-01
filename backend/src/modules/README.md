@@ -13,6 +13,8 @@
 
 模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现账号/User Space/主体、数据隔离、设定/私域、对话/Context、事件、模型/扩展/设备、生活管理、主动交互与 Token 控制、数据导出准备、Permission/Security/Confirmation/AuditLog。Dashboard 只聚合已有事实；Security 只返回安全资格并标记外部执行未发生；Permission Checker 不执行资源操作，Router 也不调用真实模型。
 
+`continuity-integration/` 是第一轮 test-only 机器契约基础：只包含三份固定 Schema 的封闭本地 registry、严格验证、RFC 8785/hash、固定 SubjectBinding fixture 和未发送逻辑请求构造。它复用现有 User/Subject/Conversation/MessageVersion/Event 仓储核对归属与来源，不注册 HTTP 路由、不调用 continuity-engine，也不创建引擎 Event、StateMutation 或 Vio SubjectState。结果接收、投影和对账属于 Vio V2。
+
 User Space 是账号的一对一数据根，只保存开发期身份状态、空间状态和当前助手指针。当前助手是用户导航选择，不是 Subject 状态；切换不会修改 Global Settings、Private Space、SubjectState、对话、事件或生活数据。数据隔离模块只接收预定义资源类型和不透明 ID，先通过仓储复合过滤验证归属，再对私域、设备和生活资源调用既有 Permission/Security 链。它不读取资源正文、不接受任意 SQL/表名，也不执行资源操作。
 
 AI 私域模块只保存调用方显式提交的五类 JSON 记录，Space 与内容版本使用专用表；每次更新追加不可变版本。空 Space 创建用于生成精确 Permission 的资源 ID，其后读取、写入、管理、Context 投影和导出准备都必须经过 Permission → Security Policy → Confirmation。该模块不实现意识、自主行为、内容开放判断、模型生成、机器人或外部连接。

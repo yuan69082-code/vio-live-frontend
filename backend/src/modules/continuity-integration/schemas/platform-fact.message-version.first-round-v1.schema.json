@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:vio-live:continuity-integration:schema:platform-fact:message-version:first-round-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "factId",
+    "factType",
+    "identity",
+    "conversationId",
+    "messageId",
+    "messageVersionId",
+    "senderType",
+    "content",
+    "contentHash",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vio-platform-fact/message-version-first-round-v1"
+    },
+    "factId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "factType": { "const": "message_version" },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "userId",
+        "assistantId",
+        "subjectId",
+        "bindingId",
+        "bindingVersion"
+      ],
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "assistantId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "subjectId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "bindingId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "bindingVersion": { "const": 1 }
+      }
+    },
+    "conversationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "messageId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "messageVersionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "senderType": { "const": "user" },
+    "content": { "type": "string", "minLength": 1, "maxLength": 32768 },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]+)?Z$"
+    }
+  }
+}
