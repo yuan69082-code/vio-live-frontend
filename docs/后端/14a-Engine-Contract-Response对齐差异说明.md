@@ -5,7 +5,7 @@
 - 日期：2026-07-30
 - 对齐输入：Continuity Integration Contract v1、Engine Integration Contract Response v1
 - 对齐输出：[Continuity Integration Contract v1.1](14-continuity-engine连接契约v1.1.md)
-- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。Engine E1/E2/E3 与 Vio V1 已分别实现各自的第一轮本地基础，但双方尚未连接、尚未运行共享测试**
+- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。Engine E1/E2/E3、Vio V1 与 Vio V2 已分别实现各自的第一轮本地基础，但双方尚未连接、尚未运行共享测试**
 - 最终接受依据：Engine Contract Final Read-Only Short Confirmation v1（归档见 [14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md](14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)）
 - 证据原则：源码、迁移和测试高于规划文字
 
@@ -15,7 +15,8 @@ Engine Integration Contract Response v1 当前来自 continuity-engine 审核窗
 
 - Engine E1/E2/E3 已在提交 `c732f35` 完成：引擎侧严格 Schema/hash、固定 Binding、test-only ContractTestAdapter、确定性 Action Gate/Evolution、成功/错误 envelope、持久化结果账本和跨重启恢复。
 - Vio V1 已完成：请求侧三份严格本地 Schema/validator、RFC 8785/hash、固定 Binding 测试装载、经 Vio 归属与来源验证的逻辑请求构造，以及请求输入跨重启恢复。
-- 尚未完成：Vio 调用 Engine、Vio operation/response/stateProjection 幂等接收、双方共享测试、网络连接和生产 Integration Adapter。
+- Vio V2 已完成：严格 success/error envelope 校验、operation/response/stateProjection 幂等账本、独立投影版本/回执/指针、revision 隔离和跨重启恢复；只使用 test-only fixture，不调用 Engine。
+- 尚未完成：Vio 调用 Engine、双方共享测试、网络连接和生产 Integration Adapter。
 - 本附注只更新施工状态，不改变下文保存的第二次审核历史、v1.1 规范内容或长期待决策项。
 
 ## 2. 总体处理结论
@@ -32,7 +33,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - **v1.1 修改位置：** 第 6.1、7.2、19.1、19.7 节。
 - **修改后的正式决定：** ContinuityInteractionRequest.observations 是唯一承载位置；PlatformFactPackage 只能在 observationRefs 中引用 observationId。第一轮只允许一个严格 message_created Observation 和一个严格 message_version fact。Observation 只含事件身份、sourceEventId、时间、完整绑定和 MessageVersion 引用；正文只在 fact.content。所有对象 additionalProperties=false；未知、禁止状态字段、重复正文或引用不一致统一 SCHEMA_INVALID / never。
 - **当前已有能力：** Vio V1 已实现精确请求/fact/Observation 构造和严格本地校验；Engine E1/E2/E3 已实现摄取侧严格校验。
-- **第一轮需要新增的最小能力：** 双方共享测试中验证同一请求向量；Vio 尚需 V2 结果接收。
+- **第一轮需要新增的最小能力：** Vio V2 结果接收已完成；双方共享测试中仍需验证同一请求向量和真实 Engine envelope。
 - **是否仍阻塞第一轮：** 契约与单边实现均不再阻塞；双方尚未连接验证。
 - **未来实现责任：** 双方；Vio 负责构造，引擎负责验证和安全摄取。
 
@@ -61,7 +62,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - **引擎第二次审核意见：** revision/currentRevision 命名不一，无变化 engineUpdateId 未决，snapshot/delta 未定，缺少第一轮精确结果。
 - **v1.1 修改位置：** 第 11.1—11.2、19.6 节。
 - **修改后的正式决定：** 第一轮统一 previousRevision/currentRevision。无变化 changed=false、currentRevision=previousRevision、engineUpdateId=null；有变化 changed=true、currentRevision=previousRevision+1、engineUpdateId=StateUpdateRecord.update_id。只用精确最小 snapshot，不用 delta；成功 envelope 固定 operationId、responseId、projection、consumedObservationIds 和 hash。投影内容唯一键固定为 subjectId+currentRevision，request 关联唯一键为 requestId，engineUpdateId 只在非 null 时唯一；同一 revision 不得出现第二份不同内容/hash 的投影。
-- **当前已有能力：** 引擎已有 revision、StateUpdateRecord.update_id 和重启恢复；Vio 没有正式投影接收/去重。
+- **当前已有能力：** 引擎已有 revision、StateUpdateRecord.update_id 和重启恢复；Vio V2 已有 test-only 投影接收、内容唯一性、revision CAS、隔离和恢复。
 - **第一轮需要新增的最小能力：** 引擎结果 envelope 与持久化；Vio 按 subjectId+currentRevision、engineUpdateId、requestId 保存并处理 reconciling。
 - **是否仍阻塞第一轮：** 不再构成契约阻塞，已获引擎正式确认；双方持久化能力尚未实现。
 - **未来实现责任：** 引擎定义/返回；Vio验证、保存、隔离和对账。
@@ -91,9 +92,9 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - **引擎第二次审核意见：** 内部 Event 去重不足以返回第一次完整 operation/response/projection；requestId 幂等必须跨双方重启恢复。
 - **v1.1 修改位置：** 第 11.3、19.5、19.6、19.8 节。
 - **修改后的正式决定：** requestId 是永久幂等键；requestHash 为逻辑请求去除 requestHash 后按 RFC 8785 规范化、再计算 SHA-256。传输尝试/重试时间不入 hash。相同 ID/hash 返回第一次完整持久化结果且不重跑 Thinking/Event/revision；在 schema、hash 和完整 Binding 验证通过后，同 ID 不同 hash 返回 IDEMPOTENCY_KEY_REUSED / never。双方重启后仍成立。
-- **当前已有能力：** Engine E1/E2/E3 已有完整 operation/response/projection 结果账本与重启恢复；Vio V1 已有 request 输入账本与重启恢复。
-- **第一轮需要新增的最小能力：** Vio V2 保存并重放 Engine operation/response/stateProjection，且与现有 request 输入账本关联。
-- **是否仍阻塞第一轮：** 不阻塞当前 Vio V1；在双方共享结果测试前仍需完成 Vio V2。
+- **当前已有能力：** Engine E1/E2/E3 已有完整 operation/response/projection 结果账本与重启恢复；Vio V1 有 request 输入账本，Vio V2 已有完整结果/投影账本与重启恢复。
+- **第一轮需要新增的最小能力：** 在双方共享验收中验证同一 requestId 的两侧持久化重放与恢复结果。
+- **是否仍阻塞第一轮：** 单边 V2 前置已完成；只剩尚未获本阶段授权的双方共享验收。
 - **未来实现责任：** 双方各自负责本地账本与重启恢复。
 
 ### 3.8 第 9.1—9.9 节准确文本落点
@@ -168,7 +169,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - **Vio 回应：** 完全接受。Vio 投影永不回灌；状态不一致以引擎为准。
 - **契约修改位置：** v1.1 第 11.2 节、第 15 节。
 - **当前已有能力：** Vio 有不可变状态版本和当前指针，但不具备引擎元数据、幂等或乱序隔离。
-- **Vio 拟新增：** 投影接收、revision CAS、quarantine/reconciling、快照修复和幂等唯一性。
+- **Vio 实现状态：** Vio V2 已新增投影接收、revision CAS、quarantine/reconciling 和幂等唯一性；自动快照修复未实现，也不属于 V2，冲突只隔离并等待对账。
 - **引擎拟新增：** 第一轮按第 19.6 节实现固定最小 snapshot；未来生产协议再设计扩展投影 schema、snapshot/delta 选择、更新查询和 update replay。
 - **长期规划：** 建立可审计的投影延迟、对账和灾难恢复。
 - **是否阻塞第一轮最小测试：** **阻塞**；至少完成单主体回复/投影幂等保存和冲突拒绝。
@@ -310,7 +311,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 
 ## 7. 是否阻塞第一轮最小连接测试
 
-第二次审核指出下列内容必须在测试前固定；第三轮已将它们全部写入 v1.1 第 19 节，并已通过引擎最终只读短确认。Engine E1/E2/E3 与 Vio V1 已分别实现单边基础，但尚未完成 Vio V2 和双方共享测试：
+第二次审核指出下列内容必须在测试前固定；第三轮已将它们全部写入 v1.1 第 19 节，并已通过引擎最终只读短确认。Engine E1/E2/E3、Vio V1 和 Vio V2 已分别实现单边基础，但尚未完成双方共享测试：
 
 - 一个显式 SubjectBinding。
 - 顶层请求、PlatformObservation 和 fact 组成的严格 Draft 2020-12 schema registry，以及完整有效一致性向量。
@@ -319,9 +320,9 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - 引擎 responseId、engineUpdateId/revision 的测试返回语义。
 - Vio 对回复和投影的幂等保存。
 
-因此，上述七项已经不再构成契约阻塞，Continuity Engine 也已确认不存在会使双方采取不同第一轮实现的规则。Engine 侧 Adapter/结果账本和 Vio 侧严格请求构造/输入账本已经分别实现；Vio 投影接收与双方共享测试仍是下一阶段前置能力。不能把“单边 V1 完成”写成“双方连接完成”。
+因此，上述七项已经不再构成契约阻塞，Continuity Engine 也已确认不存在会使双方采取不同第一轮实现的规则。Engine 侧 Adapter/结果账本和 Vio 侧请求/结果/投影账本已经分别实现；双方共享验收仍是下一阶段。不能把“单边 V1/V2 完成”写成“双方连接完成”。
 
-机器契约校准已闭合文档精度；随后 Engine E1/E2/E3 和 Vio V1 分别实现了各自侧的严格 Schema、Binding/hash 与持久化基础。Vio 投影接收器、跨系统调用和第一轮双方共享测试仍不能运行。
+机器契约校准已闭合文档精度；随后 Engine E1/E2/E3、Vio V1 和 Vio V2 分别实现了各自侧的严格 Schema、Binding/hash、结果与持久化基础。跨系统调用和第一轮双方共享测试仍未运行。
 
 不阻塞第一轮但阻塞生产的事项：
 
@@ -342,7 +343,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - revision 冲突盲重试：明确禁止。
 - AI 私域与用户私密混用：已拆成三层空间。
 - 调试接口冒充生产：明确禁止。
-- 将设计写成已实现：只把 Engine E1/E2/E3 和 Vio V1 的源码/迁移/测试能力标为已实现；投影接收、共享测试和实际连接仍标记未实现。
+- 将设计写成已实现：只把 Engine E1/E2/E3、Vio V1 和 Vio V2 已有源码/迁移/测试能力标为已实现；共享测试和实际连接仍标记未实现。
 
 ## 9. 本轮边界
 

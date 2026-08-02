@@ -1535,6 +1535,6 @@ Continuity Engine 已确认这些内容不再保留两种可选说法。双方�
 
 1. Continuity Engine 已通过《Engine Contract Final Read-Only Short Confirmation v1》正式接受 v1.1。
 2. 最终确认复核了上轮阻塞项、第 19 节修订、14a 对齐文字及相关引擎源码边界，没有重新讨论或推翻长期架构。
-3. Vio 与 Continuity Engine 双方工程档案同步及最终只读复核已经完成；随后 Engine E1/E2/E3 与 Vio V1 分别完成单边施工。
-4. Engine 已实现 test-only ContractTestAdapter、确定性领域闭环和结果账本；Vio 已实现严格 Schema/validator、固定 Binding/hash、未发送请求构造与请求输入持久化。Vio 投影接收、跨系统调用、第一轮共享测试、网络和生产连接均尚未实现。
-5. v1.1 接受和双方单边基础完成都不表示双方已经连接、第一轮共享测试已经完成或生产集成已经完成。
+3. Vio 与 Continuity Engine 双方工程档案同步及最终只读复核已经完成；随后 Engine E1/E2/E3、Vio V1 和 Vio V2 分别完成单边施工。
+4. Engine 已实现 test-only ContractTestAdapter、确定性领域闭环和结果账本；Vio V1 已实现严格请求基础，Vio V2 已实现 fixture 结果的严格 envelope 校验、幂等结果账本、独立投影/revision 隔离和跨重启恢复。V2 默认 transport 仍未配置，跨系统调用、第一轮共享测试、网络和生产连接均尚未实现。
+5. v1.1 接受和双方单边基础完成都不表示双方已经连接、第一轮共享测试已经完成或生产集成已经完成；下一阶段仅是在新授权下进行双方共享验收。

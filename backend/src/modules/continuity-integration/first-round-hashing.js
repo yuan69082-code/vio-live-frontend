@@ -84,6 +84,31 @@ export function calculateRequestHash(request) {
   return sha256Hash(canonicalizeJson(logicalRequest));
 }
 
+export function calculateStateHash(authoritativeState) {
+  if (
+    authoritativeState === null
+    || typeof authoritativeState !== 'object'
+    || Array.isArray(authoritativeState)
+  ) {
+    throw new ValidationError('SubjectState hash input must be an object.');
+  }
+  return sha256Hash(canonicalizeJson(authoritativeState));
+}
+
+export function calculateProjectionContentHash(snapshot) {
+  if (snapshot === null || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+    throw new ValidationError('state projection snapshot hash input must be an object.');
+  }
+  return sha256Hash(canonicalizeJson(snapshot));
+}
+
+export function calculateEnvelopeHash(envelope) {
+  if (envelope === null || typeof envelope !== 'object' || Array.isArray(envelope)) {
+    throw new ValidationError('Engine envelope hash input must be an object.');
+  }
+  return sha256Hash(canonicalizeJson(envelope));
+}
+
 function withoutHashFields(value) {
   if (Array.isArray(value)) return value.map(withoutHashFields);
   if (value === null || typeof value !== 'object') return value;
