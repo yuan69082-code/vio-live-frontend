@@ -29,6 +29,14 @@ pnpm test
 
 当前测试结果为 95/95 通过，已覆盖服务启动、统一响应 envelope、数据导出/迁移准备、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、Continuity V1/V2、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
 
+第一轮双方共享验收使用独立命令，不并入不具备 Engine 仓库的普通后端测试：
+
+```bash
+CONTINUITY_ENGINE_REPO=/path/to/continuity-engine pnpm test:continuity-shared
+```
+
+共享专项 6/6 通过，固定核对 Engine `7a32a99` 与 Vio `97874ee` 基线、三份 Schema 解析结构、真实 V1 SQLite 请求、A/B/C revision 0→1→1、四类真实错误、同进程/双方重启幂等、UTF-8 JSONL、异常/超时/非法输出失败和应用/HTTP/前端零注册。环境变量缺失会明确失败，不会 skip。该测试使用 Engine 内确定性 test double 和临时双数据库，不是网络或生产连接。
+
 Continuity Vio V1 测试另外覆盖三份严格本地 Schema/引用、所有对象的未知字段拒绝、禁止状态写字段、正文唯一位置、跨结构 ID/identity 一致性、RFC 8785 与三项固定 hash、固定 Binding 全字段防漂移、Vio 归属与 Event 来源核对、requestId 重试、跨重启恢复，以及零 Engine/模型/MCP/Tool/设备/网络调用和零 SubjectState 推进。
 
 Continuity Vio V2 专项共 29 项，覆盖精确 success 与四类 error envelope、未知/旧字段拒绝、首次请求复用、未配置 transport、revision 0 head 原子初始化/重放/故障恢复、已有 head 的 changed=false 不变语义、changed/revision/engineUpdateId 组合、state/projection hash、结果重放、四类错误跨重启恢复、同 revision 内容唯一性、operation/response/update ID 冲突、reconciling/quarantine、真实 SQLite 重启恢复、事务回滚，以及迁移 `019` 的全新安装和 `018 → 019` 升级。V2 只使用显式 test-only fixture，不调用 Engine、网络、模型或外部能力，也不创建 Engine Event/StateMutation 或 legacy state_update。

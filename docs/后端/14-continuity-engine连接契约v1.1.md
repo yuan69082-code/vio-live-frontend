@@ -4,7 +4,7 @@
 
 - 契约名称：Continuity Integration Contract v1.1
 - 日期：2026-07-30
-- 状态：**已由 Continuity Engine 正式接受；Vio 与 Continuity Engine 双方工程档案同步以及 Continuity Engine 定点文档修正均已完成，双方最终只读复核已经通过。正式结论为“双方档案一致，可以制定第一轮最小连接施工提示词”。当前准备共同制定该提示词，但尚未共同制定；第一轮代码施工、共享测试和运行时连接仍未开始**
+- 状态：**已由 Continuity Engine 正式接受；Engine Runner `7a32a99` 与 Vio V2 `97874ee` 已通过第一轮 test-only 双方端到端共享验收。该验收不是网络或生产连接；前端接入、正式本地服务连接和生产 Integration Adapter 仍未开始**
 - 历史版本：[Continuity Integration Contract v1](14-continuity-engine连接契约v1.md)
 - 引擎审核依据：Engine Integration Contract Response v1
 - 最终接受依据：Engine Contract Final Read-Only Short Confirmation v1（归档见 [14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md](14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)）
@@ -645,10 +645,10 @@ Vio 至少记录 requestId、operationId、绑定版本、输入来源 ID、权�
 
 ### 19.0 状态、优先级与适用范围
 
-- Profile 状态：**已通过 Continuity Engine 最终只读短确认；第一轮机器契约语义闭合。Engine E1/E2/E3 与 Vio V1 单边基础已实现，双方尚未连接或运行共享测试**。
+- Profile 状态：**已通过 Continuity Engine 最终只读短确认；第一轮机器契约语义闭合。Engine E1/E2/E3/Runner 与 Vio V1/V2 已实现，第一轮 test-only 双方共享验收已通过；网络和生产连接未实现**。
 - 适用范围：第一轮“单一全新主体、无真实外部能力”的最小连接测试。
 - 规范优先级：本节对第一轮具有强制优先级；本文其他长期设计如与本节冲突，第一轮以本节为准。
-- 实现状态：Engine 提交 `c732f35` 已实现引擎侧三份 schema、ContractTestAdapter、确定性闭环和结果账本；Vio V1 已实现请求侧三份严格本地 schema/validator、RFC 8785/hash、固定 Binding 测试装载、未发送请求构造与输入账本。本节的跨系统调用、Vio operation/response/stateProjection 接收及共享测试仍未实现。
+- 实现状态：Engine Runner 提交 `7a32a99` 已包含三份 schema、ContractTestAdapter、确定性闭环、结果账本和 test-only JSONL 桥；Vio V2 基线 `97874ee` 已包含 V1 严格请求/输入账本与 V2 结果/投影账本。第一轮 test-only 双方共享验收已通过；网络跨系统调用、公共接口和生产 Integration Adapter 仍未实现。
 
 引擎第二次审核的历史结论是“暂不接受 v1.1，存在阻塞第一轮最小连接测试的契约问题”。该结论是当时的真实审核记录；本节完成校准后，Continuity Engine 已通过最终只读短确认正式接受 v1.1。此后 Engine E1/E2/E3 与 Vio V1 分别完成单边基础，但接受和单边实现都不等于双方连接、共享测试或生产集成已经完成。
 
@@ -1440,7 +1440,7 @@ ContractTestAdapter 是第一轮需要由 continuity-engine 新增的 test-only 
 | 唯一 Binding fixture 与 bindingFixtureHash | 19.3 | 全部字段、实际 UTC 时间和实际 hash 已固定 |
 | 第一轮唯一幂等错误码 | 19.5、19.7、19.8 | 仅 IDEMPOTENCY_KEY_REUSED / never；旧码只存在于明确标为已取代的历史引用 |
 
-Continuity Engine 已确认这些内容不再保留两种可选说法。双方工程档案同步和最终只读复核均已完成；Engine E1/E2/E3 与 Vio V1 已分别实现各自的第一轮本地基础。双方实际调用、Vio 结果/投影持久化和共享测试尚未实现，不能据此宣称第一轮连接已经完成。
+Continuity Engine 已确认这些内容不再保留两种可选说法。双方工程档案同步和最终只读复核均已完成；Engine E1/E2/E3/Runner 与 Vio V1/V2 已实现，第一轮 test-only 双方共享验收也已通过。该测试调用不等于应用运行时、网络或生产连接，不能据此宣称产品集成已经完成。
 
 ## 20. 第一轮最小连接测试
 
@@ -1535,6 +1535,6 @@ Continuity Engine 已确认这些内容不再保留两种可选说法。双方�
 
 1. Continuity Engine 已通过《Engine Contract Final Read-Only Short Confirmation v1》正式接受 v1.1。
 2. 最终确认复核了上轮阻塞项、第 19 节修订、14a 对齐文字及相关引擎源码边界，没有重新讨论或推翻长期架构。
-3. Vio 与 Continuity Engine 双方工程档案同步及最终只读复核已经完成；随后 Engine E1/E2/E3、Vio V1 和 Vio V2 分别完成单边施工。
-4. Engine 已实现 test-only ContractTestAdapter、确定性领域闭环和结果账本；Vio V1 已实现严格请求基础，Vio V2 已实现 fixture 结果的严格 envelope 校验、幂等结果账本、独立投影/revision 隔离和跨重启恢复。V2 默认 transport 仍未配置，跨系统调用、第一轮共享测试、网络和生产连接均尚未实现。
-5. v1.1 接受和双方单边基础完成都不表示双方已经连接、第一轮共享测试已经完成或生产集成已经完成；下一阶段仅是在新授权下进行双方共享验收。
+3. Vio 与 Continuity Engine 双方工程档案同步及最终只读复核已经完成；随后 Engine E1/E2/E3、Engine JSONL Runner、Vio V1 和 Vio V2 分别完成施工与验收。
+4. Engine Runner `7a32a99` 与 Vio V2 `97874ee` 已完成第一轮 test-only 双方端到端共享验收：真实 V1 请求、E3 确定性领域闭环、V2 结果/投影账本、revision、四类错误、幂等和双方重启恢复均已验证。
+5. v1.1 接受和 test-only 共享验收通过都不表示产品或生产连接已经完成。Vio 默认 transport 仍未配置，前端未接入该链路；下一阶段仅可在新授权下设计正式本地服务连接和生产形态 Integration Adapter。

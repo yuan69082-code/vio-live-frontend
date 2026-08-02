@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受。Engine E1/E2/E3 已在引擎提交 `c732f35` 完成，Vio V1 基线为 `c1e1336`；Vio V2 已在本地实现严格结果接收、幂等账本、独立状态投影、revision 隔离和跨重启恢复，但没有连接 Engine。后端运行版本仍为 `0.18.0`：
+长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受。Engine test-only JSONL Runner 基线为 `7a32a99`，Vio V2 基线为 `97874ee`；双方第一轮 test-only 端到端共享验收已经通过，真实 V1 请求、E3 确定性领域闭环、V2 结果/投影账本、revision、幂等和双方重启恢复已在临时双数据库上联验。该结论不是网络或生产连接，后端运行版本仍为 `0.18.0`：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -24,7 +24,7 @@ Token 请求 → 日/会话预算 → 超额策略 → 可选高风险确认 →
 Export Schema → 用户/主体归属与字段/外键预检 → data_export Permission → Security/Confirmation → ready 记录
 迁移契约准备 → Schema 兼容检查 → 未配置载体描述 → 固定不连接、不传输、不执行
 Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持久化逻辑请求（不发送）
-Vio V2 本地闭环：首次持久化请求 → test-only fixture → 严格结果校验 → 幂等账本 → 独立权威投影/隔离/恢复
+  第一轮共享验收：V1 首次持久化请求 → test-only JSONL Runner → Engine E3 → V2 严格结果/投影账本
 ```
 
 当前连接设计的权威入口是 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，最终接受证据见 [`14c`](../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。契约固定以下边界：
@@ -36,7 +36,7 @@ Vio V2 本地闭环：首次持久化请求 → test-only fixture → 严格结�
 - 前端只能连接 Vio 后端；两边数据库不合并。
 - 现有开发 `state_update` 写入口与目标边界冲突，后续必须收口；Vio V1 没有修改该接口或回灌任何历史状态。
 - Vio V1 已实现 PlatformObservation/fact/request 的三份严格本地 Schema、固定 SubjectBinding/hash 验证、RFC 8785 哈希、请求构造和请求输入持久化；这些能力只在进程内使用，不提供 HTTP API，也不发送请求。
-- Engine E1/E2/E3 已实现引擎侧 test-only ContractTestAdapter、结果 envelope/账本和确定性闭环。Vio V2 已实现精确 envelope 校验、结果/错误账本、独立投影版本与指针、revision 隔离和恢复；它仅使用 fixture transport，尚未调用 Engine。双方共享测试、网络连接和生产 Adapter 仍未实现。
+- Engine E1/E2/E3 与 test-only JSONL Runner 已实现；Vio V1/V2 已实现请求、结果/错误和投影账本。双方共享验收已由 Vio 测试代码实际启动 Engine `7a32a99` Runner 并通过，但该 transport 未进入应用装配，网络连接和生产 Adapter 仍未实现。
 
 已实现：
 
@@ -433,6 +433,6 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context 和唯一权威 SubjectState。Vio V1/V2 的固定 Binding、逻辑请求、结果账本和受控投影只是第一轮本地测试基础，不合并两边数据库、不创建引擎 Event/StateMutation，也不构成运行时连接。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、Engine 投影、AI Private Space 与 User Space 生活数据保持独立语义和存储边界；切换当前助手不会复制或重写这些记录。通用平台事实投影不自动读取私域或本地记忆。数据导出只形成版本化范围、完整性预检、安全准备和未来载体契约，不返回正文、不生成文件、不连接存储/机器人、不执行迁移。主动交互也不判断唤醒音频、不生成提示正文、不运行后台任务或调用模型。真实登录、系统语音、模型、外部存储、机器人、支付/银行、健康设备、双方共享测试和 continuity-engine 实际接入仍未实现。
+平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context 和唯一权威 SubjectState。Vio V1/V2 的固定 Binding、逻辑请求、结果账本和受控投影已通过第一轮 test-only 共享验收，但不合并两边数据库、不创建引擎 Event/StateMutation，也不构成产品运行时连接。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、Engine 投影、AI Private Space 与 User Space 生活数据保持独立语义和存储边界；切换当前助手不会复制或重写这些记录。通用平台事实投影不自动读取私域或本地记忆。数据导出只形成版本化范围、完整性预检、安全准备和未来载体契约，不返回正文、不生成文件、不连接存储/机器人、不执行迁移。主动交互也不判断唤醒音频、不生成提示正文、不运行后台任务或调用模型。真实登录、系统语音、模型、外部存储、机器人、支付/银行、健康设备、网络连接和生产 Integration Adapter 仍未实现。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。
