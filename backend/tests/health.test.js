@@ -33,6 +33,7 @@ test('service starts and reports a healthy development database', async () => {
       service: 'vio-live-backend',
       version: '0.18.0',
       database: 'ok',
+      continuityEngine: 'disabled',
     });
   } finally {
     await context.application.stop();

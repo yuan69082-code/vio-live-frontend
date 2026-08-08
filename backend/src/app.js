@@ -29,6 +29,10 @@ import { createSqliteUserRepository } from './integrations/database/sqlite-user-
 import { createSqliteUserSpaceRepository } from './integrations/database/sqlite-user-space-repository.js';
 import { createUnconfiguredMigrationTargetRegistry } from './integrations/migrations/unconfigured-migration-target-registry.js';
 import { createUnconfiguredApiCredentialStore } from './integrations/secrets/unconfigured-api-credential-store.js';
+import { createHttpContinuityIntegrationTransport } from './integrations/continuity-engine/http-continuity-integration-transport.js';
+import { createSqliteContinuityDeliveryRepository } from './integrations/database/sqlite-continuity-delivery-repository.js';
+import { createSqliteContinuityIntegrationRepository } from './integrations/database/sqlite-continuity-integration-repository.js';
+import { createSqliteContinuityResultRepository } from './integrations/database/sqlite-continuity-result-repository.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAssistantGlobalSettingsService } from './modules/assistant-global-settings/assistant-global-settings-service.js';
 import { createAssistantPrivateSpaceService } from './modules/assistant-private-spaces/assistant-private-space-service.js';
@@ -36,6 +40,12 @@ import { createAuditLogService } from './modules/audit-logs/audit-log-service.js
 import { createCapabilityRegistryService } from './modules/capability-registries/capability-registry-service.js';
 import { createCapabilityService } from './modules/capabilities/capability-service.js';
 import { createConfirmationService } from './modules/confirmations/confirmation-service.js';
+import {
+  createContinuityDeliveryService,
+  createDisabledContinuityDeliveryService,
+} from './modules/continuity-integration/continuity-delivery-service.js';
+import { createFirstRoundContinuityRequestService } from './modules/continuity-integration/first-round-request-service.js';
+import { createFirstRoundContinuityResultService } from './modules/continuity-integration/first-round-result-service.js';
 import { createContextService } from './modules/contexts/context-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
 import { createConversationSummaryService } from './modules/conversation-summaries/conversation-summary-service.js';
@@ -62,7 +72,7 @@ import { createToolUsageService } from './modules/tool-usage/tool-usage-service.
 import { createUserService } from './modules/users/user-service.js';
 import { createUserSpaceService } from './modules/user-spaces/user-space-service.js';
 
-export function createApplication({ config, logger = console }) {
+export function createApplication({ config, logger = console, continuityTransport = null }) {
   const database = createSqliteDatabase(config);
   const userRepository = createSqliteUserRepository(database.connection);
   const userSpaceRepository = createSqliteUserSpaceRepository(database.connection);
@@ -99,6 +109,13 @@ export function createApplication({ config, logger = console }) {
   const confirmationRepository = createSqliteConfirmationRepository(database.connection);
   const dataExportRepository = createSqliteDataExportRepository(database.connection);
   const dataIsolationRepository = createSqliteDataIsolationRepository(database.connection);
+  const continuityIntegrationRepository = createSqliteContinuityIntegrationRepository(
+    database.connection,
+  );
+  const continuityResultRepository = createSqliteContinuityResultRepository(database.connection);
+  const continuityDeliveryRepository = createSqliteContinuityDeliveryRepository(
+    database.connection,
+  );
   const credentialStore = createUnconfiguredApiCredentialStore();
   const deviceAdapterRegistry = createUnconfiguredDeviceAdapterRegistry();
   const migrationTargetRegistry = createUnconfiguredMigrationTargetRegistry();
@@ -315,6 +332,40 @@ export function createApplication({ config, logger = console }) {
     eventService,
     runInTransaction: database.runInTransaction,
   });
+  const continuityRequestService = createFirstRoundContinuityRequestService({
+    continuityRepository: continuityIntegrationRepository,
+    userRepository,
+    subjectRepository,
+    conversationRepository,
+    messageRepository,
+    messageVersionRepository,
+    eventRepository,
+    runInTransaction: database.runInTransaction,
+  });
+  const continuityResultService = createFirstRoundContinuityResultService({
+    requestService: continuityRequestService,
+    resultRepository: continuityResultRepository,
+    runInTransaction: database.runInTransaction,
+  });
+  const configuredContinuityTransport = config.continuityEngine.enabled
+    ? (continuityTransport ?? createHttpContinuityIntegrationTransport({
+      baseUrl: config.continuityEngine.baseUrl,
+      serviceToken: config.continuityEngine.token,
+      connectTimeoutMs: config.continuityEngine.connectTimeoutMs,
+      responseTimeoutMs: config.continuityEngine.responseTimeoutMs,
+      maxResponseBytes: config.continuityEngine.maxResponseBytes,
+    }))
+    : null;
+  const continuityDeliveryService = configuredContinuityTransport
+    ? createContinuityDeliveryService({
+      requestService: continuityRequestService,
+      resultService: continuityResultService,
+      deliveryRepository: continuityDeliveryRepository,
+      transport: configuredContinuityTransport,
+      runInTransaction: database.runInTransaction,
+      logger,
+    })
+    : createDisabledContinuityDeliveryService();
   const router = createRouter({
     config,
     database,
@@ -350,6 +401,7 @@ export function createApplication({ config, logger = console }) {
     capabilityService,
     toolUsageService,
     deviceService,
+    continuityDeliveryService,
     logger,
   });
   const server = createServer((request, response) => {
@@ -360,7 +412,11 @@ export function createApplication({ config, logger = console }) {
   return {
     server,
     database,
+    continuityRequestService,
+    continuityResultService,
+    continuityDeliveryService,
     async start() {
+      await continuityDeliveryService.initialize();
       await new Promise((resolve, reject) => {
         const handleError = (error) => {
           server.off('listening', handleListening);

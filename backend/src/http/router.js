@@ -74,6 +74,7 @@ export function createRouter({
   capabilityService,
   toolUsageService,
   deviceService,
+  continuityDeliveryService,
   logger = console,
 }) {
   return async function route(request, response) {
@@ -101,6 +102,7 @@ export function createRouter({
             service: config.serviceName,
             version: config.serviceVersion,
             database: database.ping() ? 'ok' : 'unavailable',
+            continuityEngine: continuityDeliveryService.getHealthStatus(),
           },
         });
         return;

@@ -4,7 +4,7 @@
 
 本目录依据《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》整理，用于描述平台后端的职责、数据边界、接口原则、安全约束和开发顺序。
 
-本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、账号与数据隔离、对话/平台事实投影、Event、模型路由、Permission/Security、扩展/设备/私域/生活数据、主动交互/Token 控制，以及版本化数据导出准备基础；前端已建立独立 API 客户端和真实健康握手。`Continuity Integration Contract v1.1` 已由 Continuity Engine 正式接受，Engine Runner `7a32a99` 与 Vio V2 `97874ee` 已完成第一轮 test-only 端到端共享验收：真实 V1 SQLite 请求进入 Engine E3，真实回复/错误/投影再由 V2 持久化，A/B/C、四类错误、幂等和双方重启均已验证。该测试桥不进入产品装配。这不代表真实认证、页面数据迁移、正式数据库、事件消费、网络/生产连接、真实语音/系统唤醒、后台调度、消息投递、导出文件/外部存储/真实迁移、模型连接/测试、API Key 或真实外部执行已经完成。
+本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、账号与数据隔离、对话/平台事实投影、Event、模型路由、Permission/Security、扩展/设备/私域/生活数据、主动交互/Token 控制，以及版本化数据导出准备基础；前端已建立独立 API 客户端和真实健康握手。`Continuity Integration Contract v1.1` 已获接受，第一轮 test-only 共享验收已通过。Engine E4 正式本机服务基线为 `c5ebbf9`；Vio V3 已实现默认关闭的本机 HTTP/JSON Integration Adapter、delivery/outbox/attempt 和查询优先恢复。双方 S2/S3 正式本机共享验收、真实模型、对话 API 串接、页面真实回复、真实认证、正式数据库及其他外部执行仍未完成。
 
 ## 系统边界
 
@@ -47,12 +47,12 @@ Vio Live 由五层协作组成：
 - 当前未接入真实认证或正式数据库，基础路由不得直接公开部署。
 - 总规划记录的部分连续性底层框架不等于平台后端已经完成。
 - 已完成：Vio 与 Continuity Engine 长期架构、SubjectState 权威、Observation/内部 Event 边界，以及第一轮 Schema、固定 SubjectBinding、幂等、revision、错误、投影和 ContractTestAdapter 入口的契约对齐；Continuity Engine 已正式接受 v1.1。
-- Engine 当前基线：E1/E2/E3 与共享 JSONL Runner 已在提交 `7a32a99` 完成；Runner 直接进入真实 test-only ContractTestAdapter，Engine 完整基线为 219 项测试。
-- Vio 当前基线：Vio V2 为 `97874ee`；V1 请求账本与 V2 结果/投影账本已通过第一轮双方 test-only 共享验收。
-- 共享子进程 transport 只在 `test-support` 和独立共享测试中启用；生产默认端口仍未配置，不提供 HTTP 路由，也不被前端调用。
-- 下一阶段：在新的明确授权下设计正式本地服务连接和生产形态 Integration Adapter；不得把已通过的 test-only 共享验收直接包装成产品连接。
-- 尚未实现：应用运行时 Engine 调用、网络连接、生产 Integration Adapter、服务间鉴权、多租户和部署。第一轮 test-only 共享测试已通过，不属于本条未实现项。
-- 分支、消息删除、窗口重置、真实摘要生成、语义检索、供应商 Token 计量/计费、私域披露/删除、真实导出文件/下载/外部存储、备份恢复、生活记录删除、自动提醒、支付/银行、健康设备、真实语音/系统唤醒、后台调度、消息投递、正式数据库、真实模型、continuity-engine、真实 MCP、插件安装、Skill/Tool 执行、真实设备/机器人连接控制、载体迁移、厂商 API、外部执行和公开运行能力仍处于规划或待接入状态。
+- Engine 当前基线：E1—E4 已在提交 `c5ebbf9` 完成；E4 提供只监听 `127.0.0.1` 的正式 HTTP/JSON 服务，test-only JSONL Runner 继续独立。
+- Vio 当前状态：V1 请求账本、V2 结果/投影账本和 V3 正式本机 HTTP delivery/outbox 已完成；V3 独立专项 18/18、后端全量 113/113 通过。
+- V3 默认关闭，不提供公共交付路由；显式启用时只连接本机 Engine，Engine 不可达不会阻止 Vio 启动。共享子进程 transport 仍只在 `test-support` 和独立共享测试中启用。
+- 下一阶段：在新的明确任务中执行双方 S2/S3 正式本机共享验收；不得把 V3 独立验收写成双方正式链路已通过。
+- 尚未实现：双方 S2/S3、真实模型、Vio 对话 API 串接、前端真实回复、生产认证、多租户和部署。第一轮 test-only 共享测试已通过，不属于本条未实现项。
+- 分支、消息删除、窗口重置、真实摘要生成、语义检索、供应商 Token 计量/计费、私域披露/删除、真实导出文件/下载/外部存储、备份恢复、生活记录删除、自动提醒、支付/银行、健康设备、真实语音/系统唤醒、后台调度、消息投递、正式数据库、真实模型、双方 S2/S3 与真实对话链路、真实 MCP、插件安装、Skill/Tool 执行、真实设备/机器人连接控制、载体迁移、厂商 API、外部执行和公开运行能力仍处于规划或待接入状态。
 - GitHub 只保存代码和文档，不保存运行数据、用户数据或密钥。
 
 ## 文档目录

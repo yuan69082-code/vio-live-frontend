@@ -424,6 +424,12 @@ export function createFirstRoundContinuityResultService({
   return Object.freeze({
     submitStoredRequest,
     receiveResult,
+    recoverStoredResult(requestId) {
+      const normalized = requireString(requestId, 'requestId', { maxLength: 128 });
+      const request = requestService.getStoredRequest(normalized);
+      const record = resultRepository.findResultByRequestId(normalized);
+      return record ? resumeStoredResult(record, request) : null;
+    },
     getStoredResult(requestId) {
       const normalized = requireString(requestId, 'requestId', { maxLength: 128 });
       const record = resultRepository.findResultByRequestId(normalized);

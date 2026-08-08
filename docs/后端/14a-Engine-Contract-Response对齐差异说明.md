@@ -5,7 +5,7 @@
 - 日期：2026-07-30
 - 对齐输入：Continuity Integration Contract v1、Engine Integration Contract Response v1
 - 对齐输出：[Continuity Integration Contract v1.1](14-continuity-engine连接契约v1.1.md)
-- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。Engine Runner `7a32a99` 与 Vio V2 `97874ee` 已通过第一轮 test-only 双方端到端共享验收；网络和生产连接仍未实现**
+- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。第一轮 test-only 双方共享验收已通过；Engine E4 `c5ebbf9` 与 Vio V3 正式本机 HTTP Adapter 已分别实现并独立验收，双方 S2/S3 尚未开始**
 - 最终接受依据：Engine Contract Final Read-Only Short Confirmation v1（归档见 [14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md](14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)）
 - 证据原则：源码、迁移和测试高于规划文字
 
@@ -15,8 +15,8 @@ Engine Integration Contract Response v1 当前来自 continuity-engine 审核窗
 
 - Engine E1/E2/E3 与共享 JSONL Runner 已在提交 `7a32a99` 完成：引擎侧严格 Schema/hash、固定 Binding、test-only ContractTestAdapter、确定性 Action Gate/Evolution、成功/错误 envelope、持久化结果账本、跨重启恢复和测试桥。
 - Vio V1 已完成：请求侧三份严格本地 Schema/validator、RFC 8785/hash、固定 Binding 测试装载、经 Vio 归属与来源验证的逻辑请求构造，以及请求输入跨重启恢复。
-- Vio V2 基线 `97874ee` 已完成严格 success/error envelope 校验、operation/response/stateProjection 幂等账本、独立投影版本/回执/指针、revision 隔离和跨重启恢复。
-- 第一轮 test-only 双方共享验收已通过：Vio 测试代码从真实 V1 SQLite 请求账本启动并调用 Engine Runner，V2 保存真实 Engine 结果；尚未完成网络连接和生产 Integration Adapter。
+- Vio V2 已完成严格 success/error envelope 校验、operation/response/stateProjection 幂等账本、独立投影版本/回执/指针、revision 隔离和跨重启恢复；Vio V3 已完成默认关闭的正式本机 HTTP delivery/outbox 与查询恢复。
+- 第一轮 test-only 双方共享验收已通过；Engine E4 与 Vio V3 目前只分别完成独立验收，双方 S2/S3 正式本机共享验收、真实模型、对话 API 串接和前端试用尚未开始。
 - 本附注只更新施工状态，不改变下文保存的第二次审核历史、v1.1 规范内容或长期待决策项。
 
 ### 1.2 第一轮 test-only 共享验收结论
@@ -330,7 +330,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 
 因此，上述七项已经不再构成契约或第一轮 test-only 验收阻塞，Continuity Engine 也已确认不存在会使双方采取不同第一轮实现的规则。Engine 侧 Adapter/结果账本和 Vio 侧请求/结果/投影账本已经通过本地 JSONL 共享验收；不能把“test-only 共享验收通过”写成“产品或生产连接完成”。
 
-机器契约校准已闭合文档精度；随后 Engine E1/E2/E3、JSONL Runner、Vio V1 和 Vio V2 实现了严格 Schema、Binding/hash、结果与持久化基础，并完成第一轮 test-only 双方共享验收。正式跨服务网络调用仍未实现。
+机器契约校准已闭合文档精度；随后 Engine E1—E4、JSONL Runner 与 Vio V1—V3 实现了严格 Schema、Binding/hash、结果/投影账本和正式本机 HTTP delivery 基础，并完成第一轮 test-only 双方共享验收。E4/V3 双方 S2/S3 正式本机共享验收仍未开始。
 
 不阻塞第一轮但阻塞生产的事项：
 
@@ -351,7 +351,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - revision 冲突盲重试：明确禁止。
 - AI 私域与用户私密混用：已拆成三层空间。
 - 调试接口冒充生产：明确禁止。
-- 将设计写成已实现：只把 Engine E1/E2/E3/Runner、Vio V1/V2 及已通过的 test-only 共享验收标为已实现；网络和生产连接仍标记未实现。
+- 将设计写成已实现：只把 Engine E1—E4、Vio V1—V3 及已通过的 test-only 共享验收标为已实现；双方 S2/S3、真实模型、对话 API 和前端真实回复仍标记未实现。
 
 ## 9. 本轮边界
 
