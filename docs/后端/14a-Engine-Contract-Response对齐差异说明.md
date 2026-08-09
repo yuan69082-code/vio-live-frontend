@@ -5,7 +5,7 @@
 - 日期：2026-07-30
 - 对齐输入：Continuity Integration Contract v1、Engine Integration Contract Response v1
 - 对齐输出：[Continuity Integration Contract v1.1](14-continuity-engine连接契约v1.1.md)
-- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。第一轮 test-only 双方共享验收已通过；Engine E4 `c5ebbf9` 与 Vio V3 正式本机 HTTP Adapter 已分别实现并独立验收，双方 S2/S3 尚未开始**
+- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。第一轮 test-only 共享验收和 S2/S3 正式本机 HTTP/JSON 共享验收均已通过；Engine 当前基线为 `189441f9bad2a34119b4ef10365a4385ed0949cc`**
 - 最终接受依据：Engine Contract Final Read-Only Short Confirmation v1（归档见 [14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md](14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)）
 - 证据原则：源码、迁移和测试高于规划文字
 
@@ -16,7 +16,7 @@ Engine Integration Contract Response v1 当前来自 continuity-engine 审核窗
 - Engine E1/E2/E3 与共享 JSONL Runner 已在提交 `7a32a99` 完成：引擎侧严格 Schema/hash、固定 Binding、test-only ContractTestAdapter、确定性 Action Gate/Evolution、成功/错误 envelope、持久化结果账本、跨重启恢复和测试桥。
 - Vio V1 已完成：请求侧三份严格本地 Schema/validator、RFC 8785/hash、固定 Binding 测试装载、经 Vio 归属与来源验证的逻辑请求构造，以及请求输入跨重启恢复。
 - Vio V2 已完成严格 success/error envelope 校验、operation/response/stateProjection 幂等账本、独立投影版本/回执/指针、revision 隔离和跨重启恢复；Vio V3 已完成默认关闭的正式本机 HTTP delivery/outbox 与查询恢复。
-- 第一轮 test-only 双方共享验收已通过；Engine E4 与 Vio V3 目前只分别完成独立验收，双方 S2/S3 正式本机共享验收、真实模型、对话 API 串接和前端试用尚未开始。
+- 截至 2026-08-02 本附注形成时，第一轮 test-only 双方共享验收已通过；Engine E4 与 Vio V3 当时只分别完成独立验收，S2/S3、真实模型、对话 API 串接和前端试用尚未开始。后续状态见第 1.3 节。
 - 本附注只更新施工状态，不改变下文保存的第二次审核历史、v1.1 规范内容或长期待决策项。
 
 ### 1.2 第一轮 test-only 共享验收结论
@@ -25,13 +25,21 @@ Engine Integration Contract Response v1 当前来自 continuity-engine 审核窗
 - 场景 B `remember continuity test focus` 经真实 Perception、Thinking、Action Gate 和 Evolution 返回 `changed=true / 0→1`，Engine 仅有一条内部更新，Vio 仅有一份 revision 1 投影。
 - 场景 C 在 expected revision 1 返回 `changed=false / 1→1`，Vio head 保持 1。
 - 同进程重放和双方进程/数据库重启后重放均返回首次 operation/response/projection，未重复推进 revision；四类固定错误及 Vio terminal/reassemble/incident 行为通过。
-- 该结论只关闭第一轮 test-only 共享验收，不改变测试桥非生产、前端未接入、真实模型未接入和网络 Adapter 未实现的边界。
+- 该结论在当时只关闭第一轮 test-only 共享验收，不改变测试桥非生产、前端未接入、真实模型未接入和网络 Adapter 尚未实现的边界；后续 S2/S3 结果见第 1.3 节。
+
+### 1.3 S2/S3 正式本机共享验收结论
+
+- Vio V1 持久化请求通过 V3 正式 HTTP transport 和真实 loopback TCP/HTTP 进入 Engine E4，正式 result/stateProjection 返回后由 Vio V2 严格验证并持久化。
+- S2 验证 changed=false 0→0、changed=true 0→1、后续 1→1、四类机器错误和 completed/not_found 查询；S3 验证 completed/recovery_required、POST 响应丢失、Engine/Vio/双方重启以及 requestHash/operationId 冲突隔离。
+- S3 首次运行曾发现 Engine 在 reserved 非终态、已有部分 Wake/Thinking 副作用但 domain checkpoint 尚未持久化时无法恢复；Vio 保持 outcome_unknown 并按契约处理，问题归属 Engine crash-recovery。Engine 在 `189441f9bad2a34119b4ef10365a4385ed0949cc` 完成定点修复后，原失败场景和全部 S3 场景通过。
+- S2/S3 正式 HTTP shared tests 15/15；Vio V1 + RFC 8785 + V2 + V3 64/64、后端全量 113/113；Engine crash-recovery 15/15、E4 67/67、全量 301/301。Wake、Thinking、Event、StateUpdateRecord、revision、result、projection 和 receipt 均保持幂等。
+- 该结论只关闭正式本机连接及恢复验收，不表示真实模型/Capability、公共对话 API、前端真实回复、生产认证、多租户或部署已经完成。
 
 ## 2. 总体处理结论
 
 第一轮 Engine Integration Contract Response v1 的十二项意见主方向已纳入 v1.1。该历史阶段中，第 5—8 项因生产参数和跨服务恢复细节尚未定，标记为“调整后接受”；第 10 项以三层数据空间取代“Private Space 是用户控制区”的单层定义。
 
-Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存在阻塞第一轮最小连接测试的契约问题”的结论，并把十二项落实情况评为：正确落实 5 项、部分落实 6 项、存在新风险 1 项。第三轮修订没有改写这一历史结论，只针对七个阻塞项新增第一轮一致性 Profile。Continuity Engine 已在最终只读短确认中确认现行差异闭合，不存在会使双方采取不同第一轮实现的规则，并正式接受 v1.1；这不表示运行时能力或第一轮共享测试已经完成。
+Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存在阻塞第一轮最小连接测试的契约问题”的结论，并把十二项落实情况评为：正确落实 5 项、部分落实 6 项、存在新风险 1 项。第三轮修订没有改写这一历史结论，只针对七个阻塞项新增第一轮一致性 Profile。Continuity Engine 随后在最终只读短确认中确认现行差异闭合，不存在会使双方采取不同第一轮实现的规则，并正式接受 v1.1；该接受在当时不表示运行时能力或第一轮共享测试已经完成，后续实现与验收状态见第 1.1—1.3 节。
 
 ## 3. 引擎第二次审核七个阻塞项闭合说明
 
@@ -127,8 +135,8 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 | --- | --- | --- | --- |
 | 缺少顶层严格 Schema | 19.1.1—19.1.3 | 建立三份 Draft 2020-12 Schema 的显式 registry；使用唯一绝对 URN `$id` 和精确 `$ref`；所有对象拒绝未知字段；实际启用 date-time format 断言并用正则限制 RFC 3339 UTC `Z` | Engine E1、Vio V1 与共享结构对照均已通过 |
 | 空数组示例不是有效向量 | 19.1.1 | 写入 facts/observations 各一项的完整 conformance vector；交叉字段、Observation 引用和 `hello` contentHash 已校验；最终 requestHash 为 `sha256:ec07ad9ba66d1ffcdfa9177cd61bec1b880ad6ee99a6ec6449e732c1b86002d0` | Engine、Vio 单边及共享测试均已通过 |
-| Binding fixture/hash 不唯一 | 19.3 | 固定全部 ID、状态和时间；双方装载同一 fixture；bindingFixtureHash 为 `sha256:c75b72194c0158a549f3fb30f04a5147ea11a4e777cb1a9cc1a54da6b93359f6` | Engine 与 Vio 已分别实现装载/校验；尚未共同装载测试 |
-| 第一轮幂等错误码不统一 | 19.5、19.7、19.8 | 第一轮唯一使用 IDEMPOTENCY_KEY_REUSED / never，不接受旧码别名；第二次审核原文中的旧码只保留为被明确取代的历史引用 | 仅文档规则，错误映射未实现 |
+| Binding fixture/hash 不唯一 | 19.3 | 固定全部 ID、状态和时间；双方装载同一 fixture；bindingFixtureHash 为 `sha256:c75b72194c0158a549f3fb30f04a5147ea11a4e777cb1a9cc1a54da6b93359f6` | Engine 与 Vio 已实现并在 test-only、S2/S3 共享验收中共同装载/校验 |
+| 第一轮幂等错误码不统一 | 19.5、19.7、19.8 | 第一轮唯一使用 IDEMPOTENCY_KEY_REUSED / never，不接受旧码别名；第二次审核原文中的旧码只保留为被明确取代的历史引用 | 双方已实现，并通过 test-only 与正式本机 HTTP 错误验收 |
 
 同时完成的校准：expectedEngineRevision != currentEngineRevision 一律 REVISION_CONFLICT / reassemble，且 currentEngineRevision 只能在完整 Binding 验证后返回；第一轮投影内容、request 关联和非 null engineUpdateId 的唯一性分别固定；第 18.4 节仅保留第一轮之外的未来生产接口待定项。
 
@@ -330,7 +338,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 
 因此，上述七项已经不再构成契约或第一轮 test-only 验收阻塞，Continuity Engine 也已确认不存在会使双方采取不同第一轮实现的规则。Engine 侧 Adapter/结果账本和 Vio 侧请求/结果/投影账本已经通过本地 JSONL 共享验收；不能把“test-only 共享验收通过”写成“产品或生产连接完成”。
 
-机器契约校准已闭合文档精度；随后 Engine E1—E4、JSONL Runner 与 Vio V1—V3 实现了严格 Schema、Binding/hash、结果/投影账本和正式本机 HTTP delivery 基础，并完成第一轮 test-only 双方共享验收。E4/V3 双方 S2/S3 正式本机共享验收仍未开始。
+机器契约校准已闭合文档精度；随后 Engine E1—E4、JSONL Runner 与 Vio V1—V3 实现了严格 Schema、Binding/hash、结果/投影账本和正式本机 HTTP delivery，并完成第一轮 test-only 共享验收及 S2/S3 正式本机 HTTP/JSON 共享验收。
 
 不阻塞第一轮但阻塞生产的事项：
 
@@ -351,7 +359,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - revision 冲突盲重试：明确禁止。
 - AI 私域与用户私密混用：已拆成三层空间。
 - 调试接口冒充生产：明确禁止。
-- 将设计写成已实现：只把 Engine E1—E4、Vio V1—V3 及已通过的 test-only 共享验收标为已实现；双方 S2/S3、真实模型、对话 API 和前端真实回复仍标记未实现。
+- 将设计写成已实现：只把 Engine E1—E4、Vio V1—V3、test-only 共享验收和 S2/S3 正式本机共享验收标为已实现；真实模型/Capability、公共对话 API 和前端真实回复仍标记未实现。
 
 ## 9. 本轮边界
 

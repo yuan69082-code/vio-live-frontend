@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-- 当前阶段：第一轮 test-only 共享验收已通过；Engine E4 正式本机服务基线为 `c5ebbf9`，Vio V3 已完成默认关闭的 HTTP/JSON Integration Adapter、delivery/outbox/attempt 和查询恢复。双方 S2/S3 正式本机共享验收、真实模型、对话 API 串接和前端试用尚未开始
+- 当前阶段：第一轮 test-only 共享验收和 S2/S3 正式本机 HTTP/JSON 共享验收均已通过；Engine E4 正式基线为 `189441f9bad2a34119b4ef10365a4385ed0949cc`，Vio V3 已通过真实 loopback TCP/HTTP 将 V1 原请求交给 E4，并将正式 result/stateProjection 交给 V2 验证和持久化。真实模型、CapabilityRequest/CapabilityResult、公共对话 API 串接和前端试用尚未开始
 - 后端版本：`0.18.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
@@ -76,7 +76,7 @@
 - Data Export 创建只接受 `exportType` 和预定义 `scopes`；不接受正文、文件名、外部地址、机器人参数、密钥或迁移执行载荷。
 - 不得在请求、资源 ID、日志或文档中放入 API Key、密码、Token 或其他秘密值。
 
-## Continuity Integration Contract v1.1（已接受；Vio V3 正式本机交付基础已实现）
+## Continuity Integration Contract v1.1（已接受；正式本机 S2/S3 连接已验收）
 
 权威机器契约、完整 conformance vector、固定 Binding fixture 和第一轮测试边界见 [`../../docs/后端/14-continuity-engine连接契约v1.1.md`](../../docs/后端/14-continuity-engine连接契约v1.1.md)。Continuity Engine 的最终接受证据见 [`14c`](../../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。本节只同步 API 状态，不重复定义可能漂移的第二份机器 Schema。
 
@@ -84,17 +84,17 @@
 
 | 状态 | 接口/能力 | 说明 |
 | --- | --- | --- |
-| **已实现** | Vio User/Subject/Conversation/Message/Version、ConversationSummary、Event、AI Private Space 当前安全投影、Permission/Security/Token 接口 | 可作为未来连接的数据与安全基础，但当前没有调用引擎 |
+| **已实现** | Vio User/Subject/Conversation/Message/Version、ConversationSummary、Event、AI Private Space 当前安全投影、Permission/Security/Token 接口 | 这些公共业务接口提供数据与安全基础，但尚未串接当前正式 Engine delivery 链路 |
 | **已实现但需收口** | `POST /api/v1/users/:userId/subjects/:subjectId/state-updates` | 当前接受开发调用方状态；不能成为未来权威写入口，历史数据须按 `legacy/unverified` 处理 |
 | **已实现但仅为事实来源** | `GET .../conversations/:conversationId/context` | 当前是只读平台事实投影，不是最终认知 Context |
-| **Vio V1 已实现（仅进程内、未发送）** | 三份严格 Schema/本地 validator、RFC 8785/hash、固定 SubjectBinding 测试装载、PlatformObservation/fact/request 构造、请求输入持久化与跨重启读取 | 没有公共路由；不保存 operation/response/stateProjection，不调用 Engine |
-| **Engine E1—E4 已实现** | ContractTestAdapter、严格验证、确定性领域闭环、成功/错误 envelope、持久化结果账本、跨重启恢复，以及仅监听本机的正式 HTTP/JSON 服务 | E4 基线 `c5ebbf9`；JSONL Runner 仍仅用于测试 |
+| **Vio V1 已实现（仅进程内构造）** | 三份严格 Schema/本地 validator、RFC 8785/hash、固定 SubjectBinding 测试装载、PlatformObservation/fact/request 构造、请求输入持久化与跨重启读取 | 没有公共路由；V1 不调用 Engine，V3 只读取并交付 V1 首次保存的原请求 |
+| **Engine E1—E4 已实现** | ContractTestAdapter、严格验证、确定性领域闭环、成功/错误 envelope、持久化结果账本、跨重启恢复，以及仅监听本机的正式 HTTP/JSON 服务 | E4/crash-recovery 基线 `189441f9bad2a34119b4ef10365a4385ed0949cc`；JSONL Runner 仍仅用于测试 |
 | **Vio V2 已实现** | 精确 success/error envelope 校验、operation/response/stateProjection 幂等账本、独立投影版本/回执/指针、revision 冲突隔离与跨重启恢复 | 无公共结果写入路由；legacy SubjectState 独立 |
 | **第一轮 test-only 共享验收已通过** | Vio 测试 seam 从 V1 SQLite 读取真实请求，经本地 JSONL Runner 进入 Engine E3，再由 V2 保存真实结果 | A/B/C、四类错误、幂等和双方重启通过；只使用临时双数据库 |
 | **Vio V3 已实现** | 默认关闭的本机 HTTP/JSON transport、Bearer service token、独立 connect/response timeout、响应上限、delivery/outbox/attempt、query-first 恢复与启动对账 | 从 V1 读取原始请求，结果交给 V2；不提供公共交付路由 |
-| **S2/S3 尚未开始** | 双方正式本机服务共享验收、错误/重启恢复联验 | V3 独立测试不等于已与 Engine E4 实际联验 |
+| **S2/S3 已通过** | V1 → V3 HTTP transport → Engine E4 → V2 的真实本机服务共享验收 | 正常 A/B/C、四类机器错误、查询、响应丢失、Engine/Vio/双方重启和冲突隔离均通过；15/15 |
 | **第一轮明确排除** | CapabilityRequest/CapabilityResult、真实模型、Tool、MCP、设备和三层数据空间跨系统读写 | 三个确定性 test double 均位于 Continuity Engine 进程内，Vio 不实现 capability stub |
-| **未来生产待共同决定** | 正式传输、服务鉴权、多租户、部署、通用重绑定、异步/流式、完整 Outbox 运维参数 | 不属于第一轮已确认机器 Profile，也不是当前 API |
+| **未来产品/生产待共同决定** | 真实模型/Capability、公共对话 API 串接、前端接线、生产认证、多租户、部署、通用重绑定、异步/流式与完整 Outbox 运维参数 | 本机正式传输已完成；这些能力不是当前已实现公共 API |
 
 ### Vio V3 正式本机传输（内部服务，不是公共路由）
 
@@ -119,7 +119,7 @@ V3 不新增外部可调用的 Vio 交付 API。未来对话 API 只能调用应
 - 无状态变化时 `changed=false`、revision 不变、`engineUpdateId=null`；有状态变化时 revision 只增加一次，`engineUpdateId=StateUpdateRecord.update_id`。第一轮只用最小 snapshot，不用 delta。
 - 第一轮摄取入口只能是 Continuity Engine 内独立、test-only 的 `ContractTestAdapter`；现有 `APIService.submit_message`、本地 HTTP、`UserInteractionService` 和 Vio 公共 API 均不是该入口。
 
-这些规则已经获得 Continuity Engine 正式确认。Vio V1 已落实严格请求构造/持久化，Vio V2 已落实结果接收、幂等账本、投影隔离与恢复，Vio V3 已落实默认关闭的正式本机 HTTP 交付与恢复。test-only JSONL bridge 仍不是生产入口；V3 也尚未完成双方 S2/S3 共享验收，且没有把该链路接入真实对话 API 或前端。前端仍只调用 Vio 公共 API，不直接连接引擎。
+这些规则已经获得 Continuity Engine 正式确认。Vio V1 已落实严格请求构造/持久化，Vio V2 已落实结果接收、幂等账本、投影隔离与恢复，Vio V3 已落实默认关闭的正式本机 HTTP 交付与恢复；双方 S2/S3 也已通过真实 loopback HTTP 验证。test-only JSONL bridge 仍不是正式入口；当前链路尚未接入公共对话 API 或前端，前端仍只调用 Vio 公共 API，不直接连接引擎。
 
 ## 服务接口
 
@@ -678,7 +678,7 @@ Context 投影只读取请求中允许的内容类型和数量，固定声明模
 ```
 
 - `ready` 只表示当前用户和主体均为 `active`。
-- `continuityStatus=not_available` 明确表示独立 continuity-engine 尚未接入；本阶段新增的 SubjectState 基础存储不会把 Dashboard 状态冒充为引擎可用。
+- `continuityStatus=not_available` 明确表示当前 Dashboard 公共 API 尚未串接 V1/V2/V3 正式本机 delivery 链路；它不否定内部 E4/V3 连接已通过 S2/S3，也不会把 legacy SubjectState 基础存储冒充为引擎实时可用状态。
 - 本接口不会返回工作台 mock、设备状态、待办、提醒或模型结果，也不会调用外部服务。
 
 ## APIProvider API

@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受。双方第一轮 test-only 端到端共享验收已经通过；Engine E4 正式本机服务基线为 `c5ebbf9`。Vio V3 已实现默认关闭的正式本机 HTTP/JSON Integration Adapter、delivery/outbox/attempt 账本及查询优先恢复，并复用 V1 原请求与 V2 严格结果/投影账本。双方 S2/S3 正式本机共享验收尚未开始，真实模型、对话 API 串接和前端试用也未开始；后端运行版本仍为 `0.18.0`：
+长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受。双方第一轮 test-only 端到端共享验收，以及 S2/S3 正式本机 HTTP/JSON 共享验收均已通过；Engine E4 正式基线为 `189441f9bad2a34119b4ef10365a4385ed0949cc`。Vio V3 已通过真实 loopback TCP/HTTP 将 V1 原请求交给 Engine E4，并由 V2 严格验证和持久化正式 result/stateProjection；delivery/outbox/attempt、查询优先恢复、Engine/Vio 崩溃恢复及冲突隔离均已联验。真实模型、CapabilityRequest/CapabilityResult、公共对话 API 串接和前端试用仍未开始；后端运行版本仍为 `0.18.0`：
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -25,7 +25,7 @@ Export Schema → 用户/主体归属与字段/外键预检 → data_export Perm
 迁移契约准备 → Schema 兼容检查 → 未配置载体描述 → 固定不连接、不传输、不执行
 Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持久化逻辑请求（不发送）
   第一轮共享验收：V1 首次持久化请求 → test-only JSONL Runner → Engine E3 → V2 严格结果/投影账本
-  正式本机链路（默认关闭）：V1 原请求 → HTTP/JSON → Engine E4 → V2 结果/投影 → V3 delivery 完成
+  正式本机链路（默认关闭；S2/S3 已通过）：V1 原请求 → HTTP/JSON → Engine E4 → V2 结果/投影 → V3 delivery 完成
 ```
 
 当前连接设计的权威入口是 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，最终接受证据见 [`14c`](../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。契约固定以下边界：
@@ -37,7 +37,7 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
 - 前端只能连接 Vio 后端；两边数据库不合并。
 - 现有开发 `state_update` 写入口与目标边界冲突，后续必须收口；Vio V1 没有修改该接口或回灌任何历史状态。
 - Vio V1 已实现 PlatformObservation/fact/request 的三份严格本地 Schema、固定 SubjectBinding/hash 验证、RFC 8785 哈希、请求构造和请求输入持久化；这些能力只在进程内使用，不提供 HTTP API，也不发送请求。
-- Engine E1/E2/E3/Runner 与 E4 正式本机 HTTP 服务已实现；Vio V1/V2 已实现输入、结果/错误和投影账本，Vio V3 已实现正式本机 transport、交付状态机与启动恢复。test-only JSONL transport 仍不进入应用装配；V3 只在显式配置时连接 `127.0.0.1`，双方 S2/S3 正式本机共享验收尚未开始。
+- Engine E1/E2/E3/Runner 与 E4 正式本机 HTTP 服务已实现；Vio V1/V2 已实现输入、结果/错误和投影账本，Vio V3 已实现正式本机 transport、交付状态机与启动恢复。test-only JSONL transport 仍不进入应用装配；V3 只在显式配置时连接 `127.0.0.1`。S2/S3 已验证正常交付、四类机器错误、completed/not_found/recovery_required 查询，以及响应丢失、Engine/Vio/双方重启和冲突隔离恢复。
 
 已实现：
 
@@ -124,9 +124,10 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
 - 第一轮三份 Draft 2020-12 机器契约 Schema 的封闭本地 registry、严格未知字段/禁止状态字段校验、RFC 8785 与三项固定 SHA-256 conformance hash
-- 固定 SubjectBinding 测试装载、Vio 归属/来源验证、未发送逻辑请求构造，以及 requestId/createdAt/requestHash 跨重启恢复
+- 固定 SubjectBinding 测试装载、Vio 归属/来源验证、规范化逻辑请求构造，以及 requestId/createdAt/requestHash 跨重启恢复
 - Vio V3 正式本机 HTTP transport、delivery/outbox/attempt、timeout 后查询、`completed` / `recovery_required` / `not_found` 恢复、启动重放与 `disabled` / `ready` / `degraded` 健康状态
 - `pnpm test` 当前 113/113 通过，覆盖既有平台能力、Vio V1/V2 契约基础、RFC 8785，以及 Vio V3 transport、020 迁移、状态机、隔离、事务和重启恢复边界
+- S2/S3 正式本机 HTTP shared tests 15/15 通过；Vio V1 + RFC 8785 + V2 + V3 为 64/64，Engine crash-recovery 15/15、E4 67/67、全量 301/301 通过
 
 Vio V1 生成、验证并保存第一轮逻辑请求；Vio V2 严格验证并保存 Engine envelope/投影；Vio V3 只负责把首次保存的原请求交付到显式配置的 Engine E4 本机服务并恢复交付结果。V3 不重建请求、不复制 V2 账本、不调用模型/MCP/Tool/设备，也不修改 legacy SubjectState；前端 `src`、页面与 mock 未修改。
 
@@ -363,7 +364,7 @@ backend/
 │  ├─ modules/subject-states/ # state_update 与当前状态指针
 │  ├─ modules/contexts/       # 跨窗口只读平台事实投影
 │  ├─ modules/events/        # Event 类型、记录和查询规则
-│  ├─ modules/continuity-integration/ # 第一轮严格 Schema/hash/Binding 与未发送请求构造
+│  ├─ modules/continuity-integration/ # V1 请求、V2 结果投影与 V3 正式本机交付
 │  ├─ modules/api-providers/ # Provider 配置与安全边界
 │  ├─ modules/models/        # Model 目录与能力标签
 │  ├─ modules/model-routing-rules/ # 默认/备用模型路由规则
@@ -391,7 +392,7 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构由 `001`—`019` 顺序迁移维护；`018` 保存第一轮固定 Binding fixture 和未发送逻辑请求，`019` 独立保存不可覆盖结果、投影版本/回执/当前指针和隔离事件，不复用 legacy `state_updates`。
+- 当前物理结构由 `001`—`020` 顺序迁移维护；`018` 保存第一轮固定 Binding fixture 和规范化逻辑请求，`019` 独立保存不可覆盖结果、投影版本/回执/当前指针和隔离事件，`020` 保存正式本机 HTTP delivery outbox/attempt 与恢复元数据，三者均不复用 legacy `state_updates`。
 - User 创建与 User Space 建立在同一事务提交；首个 Subject 创建会在当前指针为空时原子选为当前助手。迁移为既有用户回填一个空间，并按最早活动 Subject 稳定选择当前助手。
 - 当前助手只是用户空间内的导航选择，不改变 Subject、Assistant Global Settings、Assistant Private Space、SubjectState、对话、事件或生活数据的既有归属。
 - 数据隔离仓储只使用预定义资源查询，并按资源要求组合 `user_id`、`assistant_id` 与资源 ID；不存在或错配组合统一按未找到处理，不通过先查全局 ID 再做应用层过滤。
@@ -441,6 +442,8 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context 和唯一权威 SubjectState。Vio V1/V2 的输入、结果账本与受控投影已通过第一轮 test-only 共享验收；V3 只新增默认关闭的本机 HTTP 交付、outbox 与恢复，不合并两边数据库、不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、Engine 投影、AI Private Space 与 User Space 生活数据保持独立语义和存储边界。数据导出和主动交互仍不执行外部动作。真实登录、系统语音、真实模型、外部存储、机器人、支付/银行、健康设备、S2/S3 正式共享验收、对话 API 串接和前端真实回复链路仍未实现。
+平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context 和唯一权威 SubjectState。Vio V1/V2 的输入、结果账本与受控投影已通过第一轮 test-only 共享验收；V3 与 Engine E4 又通过 S2/S3 正式本机 HTTP 共享验收，不合并两边数据库、不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、Engine 投影、AI Private Space 与 User Space 生活数据保持独立语义和存储边界。数据导出和主动交互仍不执行外部动作。真实登录、系统语音、真实模型、CapabilityRequest/CapabilityResult、外部存储、机器人、支付/银行、健康设备、公共对话 API 串接和前端真实回复链路仍未实现。
+
+下一阶段：共同确定真实模型/Capability、Vio 公共对话 API 与现有前端接线的最短施工顺序。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

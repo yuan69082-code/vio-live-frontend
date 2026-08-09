@@ -282,15 +282,15 @@
 ## BE-ADR-035｜continuity-engine 是 SubjectState 唯一权威源，Vio 只保存受控投影
 
 - 日期：2026-07-29
-- 状态：已采用；v1.1 已正式接受，Engine E1/E2/E3 与 Vio V1 单边基础已完成，双方实际连接尚未开始
+- 状态：已采用；v1.1 已正式接受，Engine E1—E4 与 Vio V1—V3 已完成，S2/S3 正式本机 HTTP/JSON 共享验收已通过
 - 决策：continuity-engine 是 AI `SubjectState` 的唯一权威来源。状态只能由引擎在 Wake、Perception、Thinking、Action、Learning 和 Evolution 约束下，以引擎 Event、`expected_revision` 和可审计差异推进。Vio 现有 SubjectState 数据层在接入后只保存带引擎 `subjectId`、schema、revision、update ID、请求/来源和内容哈希的受控投影、快照、缓存或审计历史；Vio 不自行推演状态，也不把 Vio Event 直接转换为状态修改。状态不一致时以引擎为准，Vio 的历史 `state_update` 不能回灌覆盖引擎。现有开发调用方状态写入口属于接入前遗留能力，后续必须改为内部受信投影入口或停用，历史记录需单独迁移标记。
 - 前端边界：Vio 前端只能连接 Vio 平台后端。Vio 负责用户身份、复合归属、Permission、Security Policy、Confirmation、Token、会话落库和安全能力通道；若前端直连引擎，将绕过这些平台控制，也会把引擎地址、错误和内部状态暴露成不稳定的产品接口。
 - Context 边界：Vio Context Service 只提供经过权限筛选、带来源和分类的平台事实包，不组织最终认知 Context。continuity-engine 结合权威状态、引擎 Memory、Wake/Perception 和学习历史组织唯一的最终认知 Context。两边各自组装最终 Context 会造成事实选择、安全规则、Token 计算和状态因果分叉，因此禁止双重装配；AI Private Space 只能以本次目的获批的最小投影进入事实包，不能整库注入。
 - 引擎不可用：Vio 可以保存用户消息、平台 Event、待投递 Observation、请求状态和最后确认的状态快照，也可以把快照标为陈旧后只读展示；不能自行生成并冒充 AI 回复、推进 SubjectState revision、把 Vio Event 当作状态变化、用旧快照另组最终 Context 调用模型，或自动写入引擎派生的 AI 私域内容。
 - 原因：引擎源码已把状态变化收口到 Event → StateMutation → Evolution，并用 revision 和重复 Event 检查保护因果链；Vio 当前 SubjectState 只保存调用方提交的版本，没有引擎 revision、update ID 或演化约束。若两个系统同时拥有写权威，会产生两套人格/情绪/意图真相，且无法可靠处理乱序、重试、回滚和学习。平台事实与认知解释也属于不同信任边界：Vio最了解用户授权和数据归属，引擎最了解状态演化和认知选择。
 - 接受结果：历史审核曾因第一轮机器契约歧义暂不接受；Vio 随后以纯文档修订固定三份严格 Schema、正式 conformance vector、SubjectBinding fixture、哈希、幂等/revision/错误/投影和独立 ContractTestAdapter 入口。Continuity Engine 在《Engine Contract Final Read-Only Short Confirmation v1》中确认现行差异闭合、未发现新的架构问题，并正式接受 v1.1；该确认没有改变长期权威边界。
-- 影响：Vio V1 已实现 PlatformObservation/fact/request 严格本地 Schema、固定 SubjectBinding/hash、RFC 8785、未发送请求构造与输入持久化；它没有改变 `state_update`、没有接收投影，也没有创建状态更新。Engine E1/E2/E3 已实现引擎侧 ContractTestAdapter 和结果恢复。后续仍需 Vio operation/response/stateProjection 幂等接收、revision 冲突隔离、双方共享测试及实际连接；生产接口还需服务间鉴权、多租户、正式传输、故障对账和运维参数。
-- 契约：当前权威设计见 `docs/后端/14-continuity-engine连接契约v1.1.md`，最终接受证据见 `docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md`。契约已正式接受不表示任何当前 API、第一轮共享测试或实际连接已经完成。
+- 影响：Vio V1 已实现 PlatformObservation/fact/request 严格本地 Schema、固定 SubjectBinding/hash、RFC 8785 与输入持久化；Vio V2 已实现 operation/response/stateProjection 幂等接收、revision 隔离和投影账本；Vio V3 已实现正式本机 HTTP delivery/outbox。Engine E1—E4 与 crash-recovery 已实现，S2/S3 已证明正式本机链路在正常、机器错误、响应丢失、进程崩溃和双方重启后保持唯一 operation、Event、StateUpdateRecord、revision、result、projection 与 receipt。该实现没有改变 legacy `state_update`，也没有让 Vio 创建状态更新。真实模型/Capability、公共对话 API、前端接线、生产认证、多租户和部署仍需后续阶段。
+- 契约：当前权威设计见 `docs/后端/14-continuity-engine连接契约v1.1.md`，最终接受证据见 `docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md`。契约、正式本机连接与共享验收均不表示真实模型、公共对话 API、前端试用或生产部署已经完成。
 
 ## 待形成的 ADR
 

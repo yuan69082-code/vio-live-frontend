@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、账号/数据隔离、对话/平台事实投影、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；Vio V1 已实现第一轮严格机器请求的本地构造、验证和持久化，但不提供连接 API、不发送；第一轮共享测试和运行时连接尚未实现
+- 实现状态：已建立统一响应、账号/数据隔离、对话/平台事实投影、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；Vio V1/V2/V3 与 Engine E4 已通过 S2/S3 真实 loopback HTTP/JSON 完成正式本机请求、结果投影、错误和崩溃恢复闭环，但没有新增公共连接 API
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -47,15 +47,17 @@ continuity-engine 决定何时需要模型并组织最终认知 Context；Vio �
 | 状态 | 内容 |
 | --- | --- |
 | 已实现 | Vio 的 User/Subject/Conversation/Message/Version、Summary、Event、现有状态历史/只读事实投影、当前 Private Space 安全投影、Permission/Security/Token；引擎内部 SubjectState revision、Event/Evolution、Wake/Perception/Thinking/Action/Learning |
-| Vio V1 已实现 | 第一轮 PlatformObservation/fact/request 严格本地 Schema/validator、RFC 8785/hash、固定 SubjectBinding 测试装载、未发送请求构造与输入跨重启恢复 |
-| Engine E1/E2/E3 已实现 | 引擎侧 test-only ContractTestAdapter、成功/错误 envelope、结果账本、确定性 Action Gate/Evolution 与跨重启恢复 |
-| 尚未实现 | Vio 到 Engine 调用、Vio operation/response/stateProjection 幂等保存、revision 冲突隔离、双方共享测试和生产连接 |
+| Vio V1 已实现 | 第一轮 PlatformObservation/fact/request 严格本地 Schema/validator、RFC 8785/hash、固定 SubjectBinding 测试装载、规范化请求构造与输入跨重启恢复 |
+| Engine E1—E4 已实现 | 引擎侧 test-only ContractTestAdapter、成功/错误 envelope、结果账本、确定性 Action Gate/Evolution、正式本机 HTTP 服务与非终态 operation 恢复 |
+| Vio V2/V3 已实现 | operation/response/stateProjection 幂等账本、revision 冲突隔离、正式本机 HTTP transport、delivery outbox/attempt 与查询/重启恢复 |
+| S2/S3 已通过 | V1 → V3 → Engine E4 → V2 真实 loopback HTTP 正常、机器错误、响应丢失、Engine/Vio/双方重启和冲突隔离共享验收；15/15 |
+| 尚未实现 | 真实模型/CapabilityRequest/CapabilityResult、公共对话 API 串接、前端真实回复、生产认证、多租户与部署 |
 | 第一轮明确排除 | CapabilityRequest/CapabilityResult、真实模型/Tool/MCP/设备、三层数据空间实际跨系统读写、生产认证/多租户/部署 |
-| 未来生产待共同决定 | 正式传输/鉴权、异步/流式、通用重绑定、完整 Outbox 运维参数、生产投影扩展和 Capability 往返 |
+| 未来产品/生产待共同决定 | 真实模型/Capability、公共对话 API 与前端接线、生产鉴权、异步/流式、通用重绑定、完整 Outbox 运维参数和生产投影扩展 |
 
-现有 Vio `POST .../state-updates` 是接入前开发调用方写入口，不是引擎权威投影接口；现有 Context API 是平台事实只读投影，不是最终认知 Context。二者都不能用来宣称连接已经完成。
+现有 Vio `POST .../state-updates` 是 legacy/unverified 开发调用方写入口，不是引擎权威投影接口；现有 Context API 是平台事实只读投影，不是最终认知 Context。正式本机连接使用独立 V1/V2/V3 链路，没有复用这两个旧入口。
 
-第一轮机器契约只在 v1.1 第 19 节定义：三份严格 Draft 2020-12 Schema、正式 conformance vector、固定 SubjectBinding fixture、`requestHash`/`bindingFixtureHash`、`IDEMPOTENCY_KEY_REUSED / never`、revision 全不等冲突、最小 snapshot 和独立进程内 ContractTestAdapter 均已获确认。Vio 当前只实现请求侧内部模型、validator、固定测试 Binding、输入表和构造测试；没有新增公共 API 或 Adapter。投影接收、共享测试和实际连接仍待 Vio V2/后续阶段。
+第一轮机器契约只在 v1.1 第 19 节定义：三份严格 Draft 2020-12 Schema、正式 conformance vector、固定 SubjectBinding fixture、`requestHash`/`bindingFixtureHash`、`IDEMPOTENCY_KEY_REUSED / never`、revision 全不等冲突、最小 snapshot 和独立进程内 ContractTestAdapter 均已获确认。Vio V1/V2/V3 已分别实现请求、结果投影和正式本机 delivery，Engine E4 提供正式 HTTP Adapter；S2/S3 已完成真实 loopback 联验。该实现仍没有新增 Vio 公共交付 API，也未接真实模型或前端。
 
 ## 契约中的通用信息
 
