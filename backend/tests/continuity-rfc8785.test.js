@@ -194,7 +194,7 @@ const engineHashingModule = join(
   'integration_hashing.py',
 );
 
-test('Vio and Engine c5ebbf9 produce identical canonical UTF-8 and SHA-256 for independent corpus', {
+test('Vio and Engine 189441f produce identical canonical UTF-8 and SHA-256 for independent corpus', {
   skip: existsSync(engineHashingModule)
     ? false
     : `Continuity Engine checkout not found at ${engineRoot}`,
@@ -242,7 +242,7 @@ test('Vio and Engine c5ebbf9 produce identical canonical UTF-8 and SHA-256 for i
   assert.equal(gitResult.status, 0, gitResult.stderr);
   assert.equal(
     gitResult.stdout.trim(),
-    'c5ebbf9b7583f3fb50198a3bf37ea0553edc131f',
+    '189441f9bad2a34119b4ef10365a4385ed0949cc',
   );
 
   const pythonScript = String.raw`
