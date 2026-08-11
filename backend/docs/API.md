@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-- 当前阶段：Vio V4 已按 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 实现持久化 CapabilityRequest、现实层门控、`openai_compatible` Provider HTTP 执行、严格 CapabilityResult 回传及 query-first/重启恢复。自动化测试只使用随机 loopback 受控 Provider；真实供应商 live smoke、S4、V5 和 F1 尚未开始
+- 当前阶段：Vio V4 已按 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 实现持久化 CapabilityRequest、现实层门控、`openai_compatible` Provider HTTP 执行、严格 CapabilityResult 回传及 query-first/重启恢复，并已通过 S4 真实双进程 loopback HTTP 双仓共享验收。自动化测试只使用随机 loopback 受控 Provider；真实供应商 live smoke、V5 和 F1 尚未开始
 - 后端版本：`0.19.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
@@ -95,7 +95,8 @@
 | **S2/S3 已通过** | V1 → V3 HTTP transport → Engine E4 → V2 的真实本机服务共享验收 | 正常 A/B/C、四类机器错误、查询、响应丢失、Engine/Vio/双方重启和冲突隔离均通过；15/15 |
 | **Vio V4 已实现** | E5-A 三份严格 Capability Schema、inbox/执行/usage/result/outbox/attempt/incident 账本、Permission/Security/Budget、secretRef、`openai_compatible` Provider adapter 与 CapabilityResult 回传恢复 | 无公共聊天路由；模型候选必须回 Engine，不能直接成为 Message 或状态更新 |
 | **第一轮明确排除** | CapabilityRequest/CapabilityResult、真实模型、Tool、MCP、设备和三层数据空间跨系统读写 | 三个确定性 test double 均位于 Continuity Engine 进程内，Vio 不实现 capability stub |
-| **未来产品/生产待共同决定** | S4 双仓共享验收、公共对话 API 串接、前端接线、生产认证、多租户、部署、通用重绑定和流式输出 | V4 生产形态 adapter 已实现，但没有完成真实供应商或产品入口验收 |
+| **已完成共享验收** | S4 双仓 Capability 本机共享验收 | 真实 Engine E5-A 进程、Vio V1–V4 正式后端路径与随机 loopback Provider 已验证；不代表真实供应商或产品入口验收 |
+| **未来产品/生产待共同决定** | 公共对话 API 串接、前端接线、真实供应商 live smoke、生产认证、多租户、部署、通用重绑定和流式输出 | V4 生产形态 adapter 与 S4 本机共享验收已完成，但没有完成真实供应商或产品入口验收 |
 
 ### Vio V3 正式本机传输（内部服务，不是公共路由）
 

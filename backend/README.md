@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON 共享验收也已通过。后端运行版本现为 `0.19.0`：Vio V4 已按 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 实现 CapabilityRequest 严格接收、独立可靠账本、权限/安全/预算门控、环境变量 secretRef、`openai_compatible` Provider HTTP 执行、可信 usage/费用事实和 CapabilityResult 回传恢复。自动化测试使用随机 loopback 受控 Provider，不代表真实供应商 live smoke；S4、V5、F1 均未开始。
+长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON 与 S4 Capability 双仓共享验收也已通过。后端运行版本现为 `0.19.0`：Vio V4 已按 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 经真实双进程 loopback HTTP 验证 CapabilityRequest 严格接收、独立可靠账本、权限/安全/预算门控、环境变量 secretRef、`openai_compatible` Provider HTTP 执行、可信 usage/费用事实、CapabilityResult 回传、精确重放和双方重启恢复。自动化测试使用随机 loopback 受控 Provider，不代表真实供应商 live smoke；V5、F1 均未开始。
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -451,8 +451,8 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context 和唯一权威 SubjectState。Vio V1/V2 的输入、结果账本与受控投影已通过第一轮 test-only 共享验收；V3 与 Engine E4 又通过 S2/S3 正式本机 HTTP 共享验收；V4 已实现 E5-A Capability 模型执行和可靠回传，但尚未进行 S4 双仓验收或真实供应商 live smoke。两边不合并数据库，Vio 不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、Engine 投影、AI Private Space 与 User Space 生活数据保持独立语义和存储边界。数据导出和其他主动交互仍不执行外部动作。真实登录、系统语音、外部存储、机器人、支付/银行、健康设备、公共对话 API 串接和前端真实回复链路仍未实现。
+平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context 和唯一权威 SubjectState。Vio V1/V2 的输入、结果账本与受控投影已通过第一轮 test-only 共享验收；V3 与 Engine E4 又通过 S2/S3 正式本机 HTTP 共享验收；V4 与 Engine E5-A 已通过 S4 Capability 双仓共享验收，覆盖成功、显式 retryable、terminal、UNKNOWN、冲突、精确重放及双方重启。两边不合并数据库，Vio 不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、Engine 投影、AI Private Space 与 User Space 生活数据保持独立语义和存储边界。受控 loopback 验收不等于真实供应商 live smoke；真实登录、系统语音、外部存储、机器人、支付/银行、健康设备、公共对话 API 串接和前端真实回复链路仍未实现。
 
-下一阶段：V4 验收通过后另行开展 S4 双仓共享验收；V5 公共对话 API 与 F1 前端接线均未开始。
+S4 双仓共享验收已经完成；真实供应商 live smoke、V5 公共对话 API 与 F1 前端接线仍未开始，须等待后续独立任务。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

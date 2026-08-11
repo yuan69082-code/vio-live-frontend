@@ -11,6 +11,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test \"tests/*.test.js\"",
-    "test:continuity-shared": "node --test shared-tests/continuity-integration-shared.test.js"
+    "test:continuity-shared": "node --test shared-tests/continuity-integration-shared.test.js",
+    "test:continuity-capability-shared": "node --test shared-tests/continuity-capability-local-http-shared.test.js"
   }
 }

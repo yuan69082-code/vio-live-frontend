@@ -29,6 +29,8 @@ pnpm test
 
 当前测试结果为 159/159 通过，已覆盖服务启动、统一响应 envelope、数据导出/迁移准备、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、Continuity V1/V2/V3/V4、RFC 8785、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
 
+独立 S4 双仓共享测试通过 7/7。它显式读取 `CONTINUITY_ENGINE_REPO`，启动 Engine E5-A capability 模式与随机 loopback Provider，通过 Vio V1 → V3 → V4 → Engine → V2 真实 HTTP 路径验证成功闭环、精确重放、双方重启、429 显式批准重试、400 终止、UNKNOWN fail closed 及身份/冲突隔离。运行命令为 `pnpm run test:continuity-capability-shared`；该命令不属于默认 `pnpm test`，不会访问公网或真实供应商。
+
 第一轮 test-only 与正式本机 HTTP 双方共享验收使用独立命令，不并入不具备 Engine 仓库的普通后端测试：
 
 ```bash

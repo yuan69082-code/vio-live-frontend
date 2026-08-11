@@ -4,7 +4,7 @@ Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/`
 
 后端现可按用户保存 Security Policy 与安全偏好，并按 Permission → Policy → Confirmation 保护私域及生活数据。生活模块使用独立 User Space 表和 `life_data` 权限，提供本地确定性统计与受控记忆投影；不会支付、同步银行/健康设备或调用 AI。设备适配器仍只有未配置描述，扩展和设备均不执行真实操作。前端入口仍只通过 Vite 同源代理非阻塞检查 `/health`，页面尚未迁移到这些真实 API。
 
-[`Continuity Integration Contract v1.1`](docs/后端/14-continuity-engine连接契约v1.1.md) 已由 Continuity Engine 正式接受，第一轮 test-only 端到端共享验收以及 S2/S3 正式本机 HTTP/JSON 共享验收均已通过。Vio V4 现已按 Continuity Engine E5-A 基线 `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 实现持久化 CapabilityRequest、权限/安全/预算门控、`openai_compatible` Provider HTTP 执行、环境变量 secretRef、可信 Token/费用事实、严格 CapabilityResult 回传及重启恢复。自动化验收只连接随机 loopback 受控 Provider，没有调用真实供应商、使用真实密钥或产生费用。**这仍不表示产品已经可用**：S4 双仓共享验收、Vio 公共对话 API 串接、前端真实回复、生产认证、多租户和部署均未完成。Continuity Engine 继续是 AI SubjectState 唯一权威源，前端也仍只能连接 Vio 后端。
+[`Continuity Integration Contract v1.1`](docs/后端/14-continuity-engine连接契约v1.1.md) 已由 Continuity Engine 正式接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON 以及 S4 Capability 双仓共享验收均已通过。Vio V4 已按 Continuity Engine E5-A 基线 `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 经真实双进程 loopback HTTP 验证持久化 CapabilityRequest、权限/安全/预算门控、`openai_compatible` Provider HTTP 执行、环境变量 secretRef、可信 Token/费用事实、严格 CapabilityResult 回传、精确重放和双方重启恢复。自动化验收只连接随机 loopback 受控 Provider，没有调用真实供应商、使用真实密钥或产生费用。**这仍不表示产品已经可用**：真实供应商 live smoke、Vio 公共对话 API 串接、前端真实回复、生产认证、多租户和部署均未完成。Continuity Engine 继续是 AI SubjectState 唯一权威源，前端也仍只能连接 Vio 后端。
 
 ## 前后端本地运行
 
@@ -60,4 +60,4 @@ pnpm test
 - 生活管理只保存显式输入并进行本地统计；提醒不执行，AI 建议不生成，本地记忆不自动进入通用 Context。没有支付、银行同步、健康设备数据、医疗诊断、真实导出或自动数据删除。
 - 未认证后端不能直接公开部署。
 
-下一阶段：V4 验收通过后另行开展 S4 双仓共享验收；V5 公共对话 API 与 F1 前端接线均未开始。
+S4 双仓共享验收已经完成；真实供应商 live smoke、V5 公共对话 API 与 F1 前端接线仍未开始，须等待后续独立任务。
