@@ -20,5 +20,10 @@
 | `VIO_CONTINUITY_ENGINE_CONNECT_TIMEOUT_MS` | `2000` | 建立本机连接的超时毫秒数 |
 | `VIO_CONTINUITY_ENGINE_RESPONSE_TIMEOUT_MS` | `20000` | 连接建立后等待完整响应的超时毫秒数 |
 | `VIO_CONTINUITY_ENGINE_MAX_RESPONSE_BYTES` | `1048576` | Engine HTTP 响应体字节上限 |
+| `VIO_MODEL_PROVIDER_CONNECT_TIMEOUT_MS` | `5000` | Provider 建立连接的超时毫秒数 |
+| `VIO_MODEL_PROVIDER_RESPONSE_TIMEOUT_MS` | `60000` | Provider 完整响应超时毫秒数 |
+| `VIO_MODEL_PROVIDER_MAX_REQUEST_BYTES` | `1048576` | Provider 请求体字节上限 |
+| `VIO_MODEL_PROVIDER_MAX_RESPONSE_BYTES` | `2097152` | Provider 响应体字节上限 |
+| `VIO_MODEL_API_KEY_*` | 无 | V4 credential binding 可引用的密钥环境变量；只允许通过 `env:VIO_MODEL_API_KEY_*` 引用，值不得写入文件、SQLite、日志或响应 |
 
-配置值不会返回给前端。数据库路径可以迁移到其他适配器，但业务模块不得直接读取该环境变量。Continuity 集成默认关闭；启用时只连接本机，token 仅在进程内用于 `Authorization: Bearer ...`，不得写入 Git、SQLite、日志或错误响应。`/health` 只暴露 `disabled`、`ready`、`degraded`，不返回 token、完整 Engine URL、Binding 或请求正文。
+配置值不会返回给前端。数据库路径可以迁移到其他适配器，但业务模块不得直接读取该环境变量。Continuity 集成默认关闭；启用时只连接本机，token 仅在进程内用于 `Authorization: Bearer ...`，不得写入 Git、SQLite、日志或错误响应。Provider secretRef 由独立 credential binding 保存，真实值仅在模型调用瞬间从环境读取；环境变量名称和 Base URL 都必须先通过严格校验。`/health` 只暴露 `disabled`、`ready`、`degraded`，不返回 token、密钥配置、完整 Engine URL、Binding 或请求正文。

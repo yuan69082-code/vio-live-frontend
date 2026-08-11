@@ -7,5 +7,8 @@ export function createUnconfiguredApiCredentialStore() {
         writeSupported: false,
       });
     },
+    resolveApiKey() {
+      throw new Error('API credential store is not configured.');
+    },
   });
 }

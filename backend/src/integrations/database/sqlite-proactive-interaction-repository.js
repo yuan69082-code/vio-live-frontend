@@ -186,14 +186,24 @@ export function createSqliteProactiveInteractionRepository(connection) {
     WHERE user_id = ? AND subject_id = ? AND token_usage_id = ?
   `);
   const summarizeDay = connection.prepare(`
-    SELECT COALESCE(SUM(total_tokens), 0) AS total_tokens
-    FROM token_usage_records
-    WHERE user_id = ? AND subject_id = ? AND occurred_at >= ? AND occurred_at < ?
+    SELECT COALESCE(SUM(total_tokens), 0) AS total_tokens FROM (
+      SELECT total_tokens FROM token_usage_records
+      WHERE user_id = ? AND subject_id = ? AND occurred_at >= ? AND occurred_at < ?
+      UNION ALL
+      SELECT total_tokens FROM continuity_capability_usage_facts
+      WHERE user_id = ? AND subject_id = ? AND occurred_at >= ? AND occurred_at < ?
+        AND usage_status = 'provider_reported'
+    )
   `);
   const summarizeSession = connection.prepare(`
-    SELECT COALESCE(SUM(total_tokens), 0) AS total_tokens
-    FROM token_usage_records
-    WHERE user_id = ? AND subject_id = ? AND budget_session_id = ?
+    SELECT COALESCE(SUM(total_tokens), 0) AS total_tokens FROM (
+      SELECT total_tokens FROM token_usage_records
+      WHERE user_id = ? AND subject_id = ? AND budget_session_id = ?
+      UNION ALL
+      SELECT total_tokens FROM continuity_capability_usage_facts
+      WHERE user_id = ? AND subject_id = ? AND budget_session_id = ?
+        AND usage_status = 'provider_reported'
+    )
   `);
 
   const findBackground = connection.prepare(`
@@ -318,8 +328,12 @@ export function createSqliteProactiveInteractionRepository(connection) {
     },
     summarizeTokenUsage(userId, subjectId, dayStart, nextDayStart, budgetSessionId) {
       return {
-        dailyUsed: summarizeDay.get(userId, subjectId, dayStart, nextDayStart).total_tokens,
+        dailyUsed: summarizeDay.get(
+          userId, subjectId, dayStart, nextDayStart,
+          userId, subjectId, dayStart, nextDayStart,
+        ).total_tokens,
         sessionUsed: summarizeSession.get(
+          userId, subjectId, budgetSessionId,
           userId, subjectId, budgetSessionId,
         ).total_tokens,
       };

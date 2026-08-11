@@ -292,6 +292,16 @@
 - 影响：Vio V1 已实现 PlatformObservation/fact/request 严格本地 Schema、固定 SubjectBinding/hash、RFC 8785 与输入持久化；Vio V2 已实现 operation/response/stateProjection 幂等接收、revision 隔离和投影账本；Vio V3 已实现正式本机 HTTP delivery/outbox。Engine E1—E4 与 crash-recovery 已实现，S2/S3 已证明正式本机链路在正常、机器错误、响应丢失、进程崩溃和双方重启后保持唯一 operation、Event、StateUpdateRecord、revision、result、projection 与 receipt。该实现没有改变 legacy `state_update`，也没有让 Vio 创建状态更新。真实模型/Capability、公共对话 API、前端接线、生产认证、多租户和部署仍需后续阶段。
 - 契约：当前权威设计见 `docs/后端/14-continuity-engine连接契约v1.1.md`，最终接受证据见 `docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md`。契约、正式本机连接与共享验收均不表示真实模型、公共对话 API、前端试用或生产部署已经完成。
 
+## BE-ADR-036｜Capability 模型执行采用独立可靠账本与 Engine 回传闭环
+
+- 日期：2026-08-10
+- 状态：已采用，仅限 Vio V4；等待 S4 双仓共享验收
+- 决策：Vio 只在 Engine E5-A 返回通过严格校验的 `capability_required` 后执行模型能力。CapabilityRequest、CapabilityResult、`capability_required` 与 `capability_failed` 的外层合同固定为 `continuity-capability/v1`；`completed` 仍属于 `continuity-integration/v1.1`。用户、助手、主体和消息归属必须从不可变 V1 原请求反查，Engine 的 `permissionRef` 仅作关联；现实层固定经过 `chat` Model Router、`api:<providerId>:execute` Permission、`privacy_access_request + private_record` Security/Confirmation 和以 `originatingSessionId` 为会话标识的 Token Budget。模型候选不能直接写入 Message 或状态，只能成为严格、无包装层的 CapabilityResult 回传 Engine，再由 Engine 恢复 Thinking/Action Gate 并生成最终结果。
+- 持久化：新增迁移 `021_create_continuity_capability_execution_ledger.sql`，将 CapabilityRequest inbox、门控决策、0..N 个模型 execution、每次独立 usage/费用、完整 canonical Result、回传 outbox/attempt 和 incident/quarantine 与 V1/V2/V3 账本分开。一个 request 可在一个或多个 `FAILED_RETRYABLE` 后产生一个 `SUCCEEDED`，但每次真实调用必须使用新的 execution/result ID，历史失败不可覆盖，且数据库只允许一个成功结果。旧 `explicit_api_input/not_performed_by_platform/not_billed` 使用记录保持原义，V4 只把唯一 execution 的 `provider_reported` usage 纳入后续预算累计。
+- Provider 与密钥：本阶段仅实现 `openai_compatible` 非流式 HTTP adapter；其他接口格式 fail closed，不自动 fallback，也不在失败后调用第二个模型。非测试带密钥调用必须使用 HTTPS，loopback HTTP 只供明确测试装配。SQLite 只保存受限 `env:VIO_MODEL_API_KEY_*` secretRef，密钥在调用瞬间解析；Provider 公共投影只显示配置状态，日志、响应、测试 fixture 和 Git 均不得出现密钥、Authorization、完整请求正文或原始响应正文。
+- 失败边界：HTTP 回传重传和 Provider 真实重试是两套状态。POST 响应未知先查询，若需要重发，只能重发同一已持久化 Result。Engine 明确接受 `FAILED_RETRYABLE` 后请求进入 `waiting_retry`，默认不自动调用；内部明确 `retryApproved=true` 后仍须重新通过路由、权限、安全、预算和 deadline，才生成新 attempt。`UNKNOWN` 被接受后进入 `provider_outcome_unknown`，当前无 Provider reconciliation 能力，因此保持 fail closed，不重发已接受 Result、不再次调用。`FAILED_TERMINAL/CANCELLED/EXPIRED/SUCCEEDED` 后禁止新执行。费用仅保存 Provider 报告或可证明配置计算结果，否则明确为 `not_reported/NULL`。
+- 权威影响：Vio V4 不创建 Engine Event、StateMutation、SubjectState 或 revision，也不改写 legacy `state_update`。Engine 仍是主体状态和最终表达的唯一权威；V1、V2、V3 的事实与幂等语义保持不变。当前未新增公共对话 API、前端接线、S4 shared test、MCP/Tool/设备或真实供应商验收。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：
@@ -299,7 +309,7 @@
 1. Google 登录、邮箱验证码和会话机制
 2. 正式数据库产品、备份、并发和生产迁移方案
 3. 完整 API 契约、分页、兼容和版本治理
-4. 密钥加密、轮换和运行环境注入方式
+4. 生产级外部密钥管理、轮换审计和非环境变量 credential store（V4 已固定最小环境变量引用）
 5. 部署平台、环境划分和配置管理
 6. 生产数据库行级安全、租户分区和最低隔离覆盖要求
 7. 生产日志、监控、审计保留周期、法定可见范围和完整脱敏方案

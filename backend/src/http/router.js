@@ -1484,6 +1484,21 @@ export function createRouter({
         return;
       }
 
+      const apiProviderCredentialRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/api-providers\/([^/]+)\/credential-reference$/,
+        ['userId', 'providerId'],
+      );
+      if (request.method === 'PATCH' && apiProviderCredentialRoute) {
+        const input = await readJsonBody(request);
+        sendSecuredResult(response, apiProviderService.bindCredentialReference(
+          apiProviderCredentialRoute.userId,
+          apiProviderCredentialRoute.providerId,
+          input,
+        ));
+        return;
+      }
+
       const apiProviderRoute = routeMatch(
         url.pathname,
         /^\/api\/v1\/users\/([^/]+)\/api-providers\/([^/]+)$/,

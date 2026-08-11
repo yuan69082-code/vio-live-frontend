@@ -840,7 +840,7 @@ test('migration 020 installs from 001 and upgrades databases at 018 and 019', ()
       const after = createSqliteDatabase({ databasePath, migrationsPath: allMigrations });
       assert.equal(after.connection.prepare(
         'SELECT COUNT(*) AS count FROM schema_migrations',
-      ).get().count, 20);
+      ).get().count, 21);
       assert.equal(after.connection.prepare(`
         SELECT COUNT(*) AS count FROM sqlite_master
         WHERE type = 'table' AND name IN (

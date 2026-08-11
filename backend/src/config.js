@@ -104,7 +104,29 @@ export function loadConfig(environment = process.env) {
     databasePath: readDatabasePath(environment.VIO_BACKEND_DB_PATH),
     migrationsPath: join(backendRoot, 'migrations'),
     serviceName: 'vio-live-backend',
-    serviceVersion: '0.18.0',
+    serviceVersion: '0.19.0',
     continuityEngine: readContinuityEngineConfig(environment),
+    modelProvider: Object.freeze({
+      connectTimeoutMs: readPositiveInteger(
+        environment.VIO_MODEL_PROVIDER_CONNECT_TIMEOUT_MS,
+        'VIO_MODEL_PROVIDER_CONNECT_TIMEOUT_MS',
+        5_000,
+      ),
+      responseTimeoutMs: readPositiveInteger(
+        environment.VIO_MODEL_PROVIDER_RESPONSE_TIMEOUT_MS,
+        'VIO_MODEL_PROVIDER_RESPONSE_TIMEOUT_MS',
+        60_000,
+      ),
+      maxRequestBytes: readPositiveInteger(
+        environment.VIO_MODEL_PROVIDER_MAX_REQUEST_BYTES,
+        'VIO_MODEL_PROVIDER_MAX_REQUEST_BYTES',
+        1_048_576,
+      ),
+      maxResponseBytes: readPositiveInteger(
+        environment.VIO_MODEL_PROVIDER_MAX_RESPONSE_BYTES,
+        'VIO_MODEL_PROVIDER_MAX_RESPONSE_BYTES',
+        2_097_152,
+      ),
+    }),
   });
 }

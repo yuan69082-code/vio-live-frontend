@@ -979,6 +979,7 @@ test('migration 019 installs fresh and upgrades an existing 018 database', () =>
         /^\d+_.+\.sql$/.test(filename)
         && !filename.startsWith('019_')
         && !filename.startsWith('020_')
+        && !filename.startsWith('021_')
       ) {
         cpSync(join(allMigrations, filename), join(pre019, filename));
       }
@@ -993,7 +994,7 @@ test('migration 019 installs fresh and upgrades an existing 018 database', () =>
     after = createSqliteDatabase({ databasePath, migrationsPath: allMigrations });
     assert.equal(
       after.connection.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count,
-      20,
+      21,
     );
     assert.equal(
       after.connection.prepare(`

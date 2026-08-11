@@ -117,6 +117,9 @@ export function createDisabledContinuityDeliveryService() {
     async submitStoredRequest() {
       throw new ValidationError('Continuity Engine integration is disabled.');
     },
+    async resumeCapability() {
+      throw new ValidationError('Continuity Engine integration is disabled.');
+    },
     getOutbox: () => null,
     listAttempts: () => [],
   });
@@ -127,6 +130,7 @@ export function createContinuityDeliveryService({
   resultService,
   deliveryRepository,
   transport,
+  capabilityService = null,
   runInTransaction,
   clock = () => new Date(),
   idFactory = createId,
@@ -258,7 +262,64 @@ export function createContinuityDeliveryService({
   function recoverLocalResult(outbox) {
     const existing = resultService.recoverStoredResult(outbox.requestId);
     if (!existing) return null;
+    capabilityService?.reconcileEngineTerminal(outbox.requestId, 'completed');
     return completeFromV2(outbox, existing, { operationId: existing.envelope.operationId });
+  }
+
+  async function handleCapabilityRequired(outbox, original, envelope, details = {}) {
+    if (!capabilityService) {
+      return publicOutcome(quarantine(outbox, 'capability_service_unavailable', {
+        operationId: envelope?.operationId ?? null,
+        httpStatus: details.httpStatus ?? null,
+      }));
+    }
+    let current = outbox;
+    if (current.status !== 'outcome_unknown') {
+      current = transition(current, 'outcome_unknown', {
+        operationId: envelope.operationId,
+        attemptCompletedAt: timestamp(clock),
+        httpStatus: details.httpStatus ?? null,
+        transportResult: 'capability_required',
+        recoveryReason: 'waiting_for_capability_result',
+      });
+    }
+    const capabilityOutcome = await capabilityService.handleCapabilityRequired(
+      envelope,
+      original.request,
+    );
+    if (capabilityOutcome.status === 'completed') {
+      let result;
+      try {
+        result = resultService.receiveResult(current.requestId, capabilityOutcome.envelope);
+      } catch (error) {
+        current = quarantine(current, 'engine_result_rejected', {
+          operationId: envelope.operationId,
+          httpStatus: details.httpStatus ?? null,
+        });
+        throw error;
+      }
+      return completeFromV2(current, result, {
+        operationId: envelope.operationId,
+        httpStatus: details.httpStatus ?? null,
+        transportResult: 'capability_completed',
+      });
+    }
+    if (capabilityOutcome.status === 'capability_failed') {
+      current = transition(current, 'completed', {
+        operationId: envelope.operationId,
+        httpStatus: details.httpStatus ?? null,
+        transportResult: 'capability_failed',
+        errorCode: capabilityOutcome.envelope.errorCode,
+      });
+      return publicOutcome(current);
+    }
+    if (capabilityOutcome.status === 'quarantined') {
+      current = quarantine(current, 'capability_flow_quarantined', {
+        operationId: envelope.operationId,
+        httpStatus: details.httpStatus ?? null,
+      });
+    }
+    return publicOutcome(current);
   }
 
   async function postOriginal(outbox, original, recoveryReason = null) {
@@ -290,6 +351,11 @@ export function createContinuityDeliveryService({
         operationId,
         recoveryReason,
       });
+      if (envelope?.status === 'capability_required') {
+        return handleCapabilityRequired(current, original, envelope, {
+          httpStatus: response.statusCode,
+        });
+      }
       current = transition(current, 'result_received', {
         operationId,
         attemptCompletedAt: timestamp(clock),
@@ -352,6 +418,58 @@ export function createContinuityDeliveryService({
         });
         return postOriginal(outbox, original, 'not_found');
       }
+      if (response.payload?.status === 'capability_required') {
+        const operationId = response.payload.operationId ?? null;
+        if (!operationMatches(outbox, operationId)) {
+          finishAttempt(attempt, {
+            outcome: 'operation_id_mismatch',
+            httpStatus: response.statusCode,
+            operationId,
+            errorCode: 'operation_id_mismatch',
+          });
+          return publicOutcome(quarantine(outbox, 'operation_id_mismatch', {
+            httpStatus: response.statusCode,
+          }));
+        }
+        finishAttempt(attempt, {
+          outcome: 'query_capability_required',
+          httpStatus: response.statusCode,
+          operationId,
+          recoveryReason: 'capability_required',
+        });
+        return handleCapabilityRequired(outbox, original, response.payload, {
+          httpStatus: response.statusCode,
+        });
+      }
+      if (response.payload?.status === 'capability_failed') {
+        try {
+          capabilityService?.reconcileEngineTerminal(outbox.requestId, response.payload);
+        } catch (error) {
+          finishAttempt(attempt, {
+            outcome: 'query_rejected',
+            httpStatus: response.statusCode,
+            operationId: response.payload.operationId ?? null,
+            errorCode: error?.code ?? 'capability_failed_invalid',
+          });
+          return publicOutcome(quarantine(outbox, 'capability_failed_invalid', {
+            operationId: response.payload.operationId ?? null,
+            httpStatus: response.statusCode,
+          }));
+        }
+        finishAttempt(attempt, {
+          outcome: 'query_capability_failed',
+          httpStatus: response.statusCode,
+          operationId: response.payload.operationId ?? null,
+          recoveryReason: 'capability_failed',
+        });
+        const current = transition(outbox, 'completed', {
+          operationId: response.payload.operationId ?? null,
+          httpStatus: response.statusCode,
+          transportResult: 'query_capability_failed',
+          errorCode: response.payload.errorCode ?? 'capability_failed',
+        });
+        return publicOutcome(current);
+      }
       let query;
       try {
         query = validateQueryEnvelope(response.payload, original.request);
@@ -403,6 +521,7 @@ export function createContinuityDeliveryService({
         operationId: query.operationId,
         recoveryReason: 'completed',
       });
+      capabilityService?.reconcileEngineTerminal(outbox.requestId, 'completed');
       let current = transition(outbox, 'result_received', {
         operationId: query.operationId,
         attemptCompletedAt: timestamp(clock),
@@ -465,6 +584,38 @@ export function createContinuityDeliveryService({
     throw new ConflictError('Continuity delivery outbox is not recoverable.');
   }
 
+  async function resumeCapability(capabilityRequestId, resume = {}) {
+    if (!capabilityService) throw new ValidationError('Continuity capability service is unavailable.');
+    const record = capabilityService.getRequest(capabilityRequestId);
+    if (!record) throw new ValidationError('Continuity CapabilityRequest was not found.');
+    let outbox = deliveryRepository.findOutbox(record.requestId);
+    if (!outbox || !operationMatches(outbox, record.operationId)) {
+      throw new ConflictError('Original interaction outbox does not match CapabilityRequest.');
+    }
+    const outcome = await capabilityService.resumeCapability(capabilityRequestId, resume);
+    if (outcome.status === 'completed') {
+      const result = resultService.receiveResult(record.requestId, outcome.envelope);
+      return completeFromV2(outbox, result, {
+        operationId: record.operationId,
+        transportResult: 'capability_completed',
+      });
+    }
+    if (outcome.status === 'capability_failed') {
+      outbox = transition(outbox, 'completed', {
+        operationId: record.operationId,
+        transportResult: 'capability_failed',
+        errorCode: outcome.envelope.errorCode,
+      });
+      return publicOutcome(outbox);
+    }
+    if (outcome.status === 'quarantined') {
+      outbox = quarantine(outbox, 'capability_flow_quarantined', {
+        operationId: record.operationId,
+      });
+    }
+    return publicOutcome(outbox);
+  }
+
   async function initialize() {
     let recovered = 0;
     for (const outbox of deliveryRepository.listRecoverable()) {
@@ -497,6 +648,7 @@ export function createContinuityDeliveryService({
     enabled: true,
     initialize,
     submitStoredRequest,
+    resumeCapability,
     getHealthStatus: () => healthStatus,
     getOutbox(requestId) {
       return deliveryRepository.findOutbox(requireString(requestId, 'requestId', {

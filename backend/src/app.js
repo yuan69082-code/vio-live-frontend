@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { createRouter } from './http/router.js';
 import { createUnconfiguredDeviceAdapterRegistry } from './integrations/devices/unconfigured-device-adapter-registry.js';
 import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
+import { createSqliteApiProviderCredentialRepository } from './integrations/database/sqlite-api-provider-credential-repository.js';
 import { createSqliteAssistantGlobalSettingsRepository } from './integrations/database/sqlite-assistant-global-settings-repository.js';
 import { createSqliteAssistantPrivateSpaceRepository } from './integrations/database/sqlite-assistant-private-space-repository.js';
 import { createSqliteAuditLogRepository } from './integrations/database/sqlite-audit-log-repository.js';
@@ -28,11 +29,13 @@ import { createSqliteSubjectStateRepository } from './integrations/database/sqli
 import { createSqliteUserRepository } from './integrations/database/sqlite-user-repository.js';
 import { createSqliteUserSpaceRepository } from './integrations/database/sqlite-user-space-repository.js';
 import { createUnconfiguredMigrationTargetRegistry } from './integrations/migrations/unconfigured-migration-target-registry.js';
-import { createUnconfiguredApiCredentialStore } from './integrations/secrets/unconfigured-api-credential-store.js';
 import { createHttpContinuityIntegrationTransport } from './integrations/continuity-engine/http-continuity-integration-transport.js';
 import { createSqliteContinuityDeliveryRepository } from './integrations/database/sqlite-continuity-delivery-repository.js';
 import { createSqliteContinuityIntegrationRepository } from './integrations/database/sqlite-continuity-integration-repository.js';
 import { createSqliteContinuityResultRepository } from './integrations/database/sqlite-continuity-result-repository.js';
+import { createSqliteContinuityCapabilityRepository } from './integrations/database/sqlite-continuity-capability-repository.js';
+import { createEnvironmentApiCredentialStore } from './integrations/secrets/environment-api-credential-store.js';
+import { createOpenAiCompatibleModelExecutor } from './integrations/model-providers/openai-compatible-model-executor.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAssistantGlobalSettingsService } from './modules/assistant-global-settings/assistant-global-settings-service.js';
 import { createAssistantPrivateSpaceService } from './modules/assistant-private-spaces/assistant-private-space-service.js';
@@ -46,6 +49,7 @@ import {
 } from './modules/continuity-integration/continuity-delivery-service.js';
 import { createFirstRoundContinuityRequestService } from './modules/continuity-integration/first-round-request-service.js';
 import { createFirstRoundContinuityResultService } from './modules/continuity-integration/first-round-result-service.js';
+import { createContinuityCapabilityService } from './modules/continuity-integration/continuity-capability-service.js';
 import { createContextService } from './modules/contexts/context-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
 import { createConversationSummaryService } from './modules/conversation-summaries/conversation-summary-service.js';
@@ -72,7 +76,13 @@ import { createToolUsageService } from './modules/tool-usage/tool-usage-service.
 import { createUserService } from './modules/users/user-service.js';
 import { createUserSpaceService } from './modules/user-spaces/user-space-service.js';
 
-export function createApplication({ config, logger = console, continuityTransport = null }) {
+export function createApplication({
+  config,
+  logger = console,
+  continuityTransport = null,
+  credentialStore: providedCredentialStore = null,
+  modelExecutor: providedModelExecutor = null,
+}) {
   const database = createSqliteDatabase(config);
   const userRepository = createSqliteUserRepository(database.connection);
   const userSpaceRepository = createSqliteUserSpaceRepository(database.connection);
@@ -92,6 +102,9 @@ export function createApplication({ config, logger = console, continuityTranspor
   const eventRepository = createSqliteEventRepository(database.connection);
   const lifeManagementRepository = createSqliteLifeManagementRepository(database.connection);
   const apiProviderRepository = createSqliteApiProviderRepository(database.connection);
+  const apiProviderCredentialRepository = createSqliteApiProviderCredentialRepository(
+    database.connection,
+  );
   const modelRepository = createSqliteModelRepository(database.connection);
   const modelRoutingRuleRepository = createSqliteModelRoutingRuleRepository(
     database.connection,
@@ -116,7 +129,11 @@ export function createApplication({ config, logger = console, continuityTranspor
   const continuityDeliveryRepository = createSqliteContinuityDeliveryRepository(
     database.connection,
   );
-  const credentialStore = createUnconfiguredApiCredentialStore();
+  const continuityCapabilityRepository = createSqliteContinuityCapabilityRepository(
+    database.connection,
+  );
+  const credentialStore = providedCredentialStore
+    ?? createEnvironmentApiCredentialStore();
   const deviceAdapterRegistry = createUnconfiguredDeviceAdapterRegistry();
   const migrationTargetRegistry = createUnconfiguredMigrationTargetRegistry();
   const userService = createUserService({
@@ -212,13 +229,6 @@ export function createApplication({ config, logger = console, continuityTranspor
     subjectRepository,
     runInTransaction: database.runInTransaction,
   });
-  const apiProviderService = createApiProviderService({
-    apiProviderRepository,
-    userRepository,
-    auditLogService,
-    credentialStore,
-    runInTransaction: database.runInTransaction,
-  });
   const modelService = createModelService({
     modelRepository,
     apiProviderRepository,
@@ -254,6 +264,15 @@ export function createApplication({ config, logger = console, continuityTranspor
     confirmationService,
     auditLogService,
     eventService,
+    runInTransaction: database.runInTransaction,
+  });
+  const apiProviderService = createApiProviderService({
+    apiProviderRepository,
+    credentialBindingRepository: apiProviderCredentialRepository,
+    userRepository,
+    auditLogService,
+    credentialStore,
+    securityService,
     runInTransaction: database.runInTransaction,
   });
   const dataExportService = createDataExportService({
@@ -356,12 +375,38 @@ export function createApplication({ config, logger = console, continuityTranspor
       maxResponseBytes: config.continuityEngine.maxResponseBytes,
     }))
     : null;
+  const configuredModelExecutor = providedModelExecutor
+    ?? createOpenAiCompatibleModelExecutor({
+      connectTimeoutMs: config.modelProvider.connectTimeoutMs,
+      responseTimeoutMs: config.modelProvider.responseTimeoutMs,
+      maxRequestBytes: config.modelProvider.maxRequestBytes,
+      maxResponseBytes: config.modelProvider.maxResponseBytes,
+      allowLoopbackHttp: false,
+    });
+  const continuityCapabilityService = configuredContinuityTransport
+    ? createContinuityCapabilityService({
+      requestService: continuityRequestService,
+      resultService: continuityResultService,
+      capabilityRepository: continuityCapabilityRepository,
+      modelRouterService,
+      modelService,
+      apiProviderService,
+      permissionChecker,
+      securityService,
+      proactiveInteractionService,
+      modelExecutor: configuredModelExecutor,
+      transport: configuredContinuityTransport,
+      runInTransaction: database.runInTransaction,
+      logger,
+    })
+    : null;
   const continuityDeliveryService = configuredContinuityTransport
     ? createContinuityDeliveryService({
       requestService: continuityRequestService,
       resultService: continuityResultService,
       deliveryRepository: continuityDeliveryRepository,
       transport: configuredContinuityTransport,
+      capabilityService: continuityCapabilityService,
       runInTransaction: database.runInTransaction,
       logger,
     })
@@ -402,6 +447,7 @@ export function createApplication({ config, logger = console, continuityTranspor
     toolUsageService,
     deviceService,
     continuityDeliveryService,
+    continuityCapabilityService,
     logger,
   });
   const server = createServer((request, response) => {
@@ -415,7 +461,18 @@ export function createApplication({ config, logger = console, continuityTranspor
     continuityRequestService,
     continuityResultService,
     continuityDeliveryService,
+    continuityCapabilityService,
+    apiProviderService,
+    modelService,
+    modelRouterService,
+    permissionService,
+    permissionChecker,
+    securityService,
+    securityPolicyService,
+    confirmationService,
+    proactiveInteractionService,
     async start() {
+      await continuityCapabilityService?.initialize();
       await continuityDeliveryService.initialize();
       await new Promise((resolve, reject) => {
         const handleError = (error) => {

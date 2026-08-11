@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:continuity-engine:capability:schema:request:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "schemaVersion", "capabilityRequestId", "operationId", "requestId", "requestHash", "subjectId", "bindingId", "bindingVersion", "originatingSessionType", "originatingSessionId", "capabilityType", "taskType", "inputSchemaVersion", "input", "inputHash", "permissionRef", "resourceRef", "riskLevel", "deadlineAt", "idempotencyKey", "createdAt"],
+  "properties": {
+    "contractVersion": {"const": "continuity-capability/v1"},
+    "schemaVersion": {"const": "continuity-capability-request/v1"},
+    "capabilityRequestId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "operationId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "requestHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "subjectId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "bindingId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "bindingVersion": {"const": 1},
+    "originatingSessionType": {"const": "thinking"},
+    "originatingSessionId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "capabilityType": {"const": "model.generate"},
+    "taskType": {"const": "conversation_response"},
+    "inputSchemaVersion": {"const": "continuity-model-input/v1"},
+    "input": {
+      "type": "object", "additionalProperties": false,
+      "required": ["instruction", "messageFactId", "observationId", "messageContent", "perceptionId", "perceptionSummary", "currentFocus", "sourceRevision", "outputSchemaVersion", "maximumOutputCharacters"],
+      "properties": {
+        "instruction": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "messageFactId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "observationId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "messageContent": {"type": "string", "maxLength": 32768},
+        "perceptionId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "perceptionSummary": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "currentFocus": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "sourceRevision": {"type": "integer", "minimum": 0},
+        "outputSchemaVersion": {"const": "continuity-model-output/v1"},
+        "maximumOutputCharacters": {"type": "integer", "minimum": 1, "maximum": 16384}
+      }
+    },
+    "inputHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "permissionRef": {"type": "string", "minLength": 1, "maxLength": 128},
+    "resourceRef": {"type": "string", "minLength": 1, "maxLength": 128},
+    "riskLevel": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+    "deadlineAt": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "idempotencyKey": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "createdAt": {"type": "string", "format": "date-time", "pattern": "Z$"}
+  }
+}

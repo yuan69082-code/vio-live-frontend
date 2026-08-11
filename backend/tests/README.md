@@ -19,7 +19,7 @@
 - Export Schema、十二类数据范围、完整性预检、安全确认、导出记录和未执行迁移契约
 - 错误结果不泄露密钥或其他用户数据
 
-当前使用 Node.js 内置测试运行器，不连接任何真实外部服务。测试数据库位于操作系统临时目录，每个测试使用独立 SQLite 文件并在结束后清理。
+当前使用 Node.js 内置测试运行器，不连接公网或真实供应商。Provider adapter 测试会在随机 loopback 端口启动受控 HTTP 服务；测试数据库位于操作系统临时目录，每个测试使用独立 SQLite 文件并在结束后清理。
 
 运行：
 
@@ -27,7 +27,7 @@
 pnpm test
 ```
 
-当前测试结果为 113/113 通过，已覆盖服务启动、统一响应 envelope、数据导出/迁移准备、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、Continuity V1/V2/V3、RFC 8785、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+当前测试结果为 159/159 通过，已覆盖服务启动、统一响应 envelope、数据导出/迁移准备、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、Continuity V1/V2/V3/V4、RFC 8785、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
 
 第一轮 test-only 与正式本机 HTTP 双方共享验收使用独立命令，不并入不具备 Engine 仓库的普通后端测试：
 
@@ -46,6 +46,8 @@ Continuity Vio V2 专项共 29 项，覆盖精确 success 与四类 error envelo
 
 Continuity Vio V3 专项共 18 项，使用本机临时 HTTP 服务验证 Engine E4 精确 POST/GET/health 路径、Bearer header、原始 canonical UTF-8 body、success/四类机器错误透传、连接拒绝、响应超时、401/5xx、非法 JSON/UTF-8/Content-Type、响应体上限、completed/recovery_required/not_found 查询、requestHash/operationId 隔离、outcome_unknown 查询优先恢复、本地 V2 checkpoint 重启恢复、Engine 不可达时 Vio 降级启动，以及 `001→020`、`018→020`、`019→020` 迁移和约束。该专项本身不运行真实 Engine、模型、MCP、Tool 或设备；真实 Engine E4 联验由上述 S2/S3 独立 shared test 覆盖。
 
+Continuity Vio V4 三个专项共 46 项，覆盖 Engine E5-A 三份严格 Capability Schema、身份/hash/deadline 联合校验、`021` fresh/upgrade/失败回滚、独立不可变多 attempt 账本、V1 归属反查、Permission/Security/Confirmation/Token Budget、secretRef 轮换与脱敏、Model Router、`openai_compatible` adapter 的真实 loopback HTTP、可信 usage、失败/超时/断线映射、无包装层 Result 回传、query-first、精确重放、崩溃恢复和冲突隔离。CapabilityRequest、CapabilityResult、`capability_required` 与 `capability_failed` 使用 `continuity-capability/v1`，completed 继续使用 `continuity-integration/v1.1`，并由不依赖 Vio 常量的 Engine 字面量测试锁定。一个或多个 `FAILED_RETRYABLE` 只有在内部明确批准并重新通过现实门控后才会产生新 execution/result；Engine 已接受的 `UNKNOWN` 保持 fail closed，重启也不重复 Provider 调用。指定 V1–V4 组合共 101/101 通过。测试使用注入 credential store，不修改真实环境，不访问公网、不使用真实密钥、不产生真实费用；真实供应商 live smoke 未执行。
+
 Data Export 测试覆盖迁移 `017` 对既有 Permission、Security Policy、Confirmation 与 AuditLog 的保留和外键完整性，三类 Export Schema、十二类范围、归属/字段/关系预检、缺失字段阻止、`data_export` Permission、高风险逐次确认、导出记录持久化和跨用户/主体隔离。机器人/其他载体契约固定未实现、未连接、未执行，接口拒绝服务地址等连接载荷，所有结果均不包含业务数据、不创建文件、不连接外部存储。
 
 Account/Data Isolation 测试覆盖迁移 `015` 对既有用户的空间与当前助手回填、外键完整性、User/Space 原子创建、首个助手选择、助手列表、切换与重启持久化。测试同时验证多助手 Global Settings 与 SubjectState 保持独立，用户/AI/设备/生活/Event 资源只通过固定复合范围命中，错配组合按未找到处理；AI 私域、设备和生活资源在所有权命中后仍经过 Permission 与 Security Policy，全部结果保持 `not_executed`。
@@ -62,7 +64,7 @@ Context / Summary / SubjectState 测试覆盖摘要保存、MessageVersion/Event
 
 Assistant Global Settings 测试覆盖创建主体时的默认设定、七类字段局部更新、跨窗口 Context 读取、重启持久化、未知/非法字段拒绝、去重列表、跨用户隔离、无变化不写入，以及 Subject 身份、扩展设定和 Event 的事务回滚；同时验证设定更新不会创建或改变 SubjectState。
 
-Model Routing 测试覆盖 Provider 的 Base URL、接口格式、启停与测试状态，Model 的八类能力标签、费用说明与测试状态，六类任务查询，默认/备用规则创建、读取、更新与重启持久化。测试验证默认 Provider 停用时切换到备用模型、显式规则不可用时明确失败、无规则时稳定目录回退、跨用户或能力不匹配引用被拒绝，以及全部路由结果均标记模型和外部 API 未调用。API Key、Token、Secret、凭据引用和含凭据 Base URL 均被拒绝，安全存储端口明确返回 `writeSupported=false`。
+Model Routing 测试覆盖 Provider 的 Base URL、接口格式、启停与测试状态，Model 的八类能力标签、费用说明与测试状态，六类任务查询，默认/备用规则创建、读取、更新与重启持久化。公共 Router 选择接口仍只返回目录结果并标记模型和外部 API 未调用。Provider 创建继续拒绝 API Key、Token、Secret、凭据引用和含凭据 Base URL；V4 另以高风险确认保护的专用入口只接受 `env:VIO_MODEL_API_KEY_*` 引用，测试核对轮换和脱敏且不写入密钥原值。
 
 Capability 测试覆盖 Tool/MCP/Skill/Plugin 创建、默认停用、启停、查询、持久化、用户内名称唯一和跨用户隔离；统一能力视图覆盖分类、Permission 允许/询问/拒绝、Plugin 纯元数据状态和 Tool 最近使用。Tool 执行准备覆盖低风险直接准备、中风险确认、确认消费、停用阻止和缺少权限拒绝；全部记录固定 `not_executed`、零外部调用和零 Token。执行载荷、含凭据 MCP 地址与跨主体读取均被拒绝，不连接任何外部服务。
 

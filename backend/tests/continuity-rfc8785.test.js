@@ -242,7 +242,7 @@ test('Vio and Engine 189441f produce identical canonical UTF-8 and SHA-256 for i
   assert.equal(gitResult.status, 0, gitResult.stderr);
   assert.equal(
     gitResult.stdout.trim(),
-    '189441f9bad2a34119b4ef10365a4385ed0949cc',
+    'cba52126db2fb5eca57d9b5c0c80884693c59a6f',
   );
 
   const pythonScript = String.raw`

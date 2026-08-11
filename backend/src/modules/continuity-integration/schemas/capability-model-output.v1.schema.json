@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:continuity-engine:capability:schema:model-output:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "responseCandidate", "metadata"],
+  "properties": {
+    "schemaVersion": {"const": "continuity-model-output/v1"},
+    "responseCandidate": {"type": "string", "minLength": 1, "maxLength": 16384},
+    "metadata": {
+      "type": "object", "additionalProperties": false,
+      "required": ["finishReason"],
+      "properties": {"finishReason": {"type": "string", "minLength": 1, "maxLength": 128}}
+    }
+  }
+}

@@ -97,6 +97,13 @@ function mapHttpFailure(statusCode) {
       httpStatus: statusCode,
     });
   }
+  if (statusCode === 408) {
+    return transportFailure('Continuity Engine response outcome is unknown.', {
+      transportCode: 'request_timeout',
+      outcomeUnknown: true,
+      httpStatus: statusCode,
+    });
+  }
   return transportFailure('Continuity Engine rejected the transport request.', {
     transportCode: 'http_error',
     httpStatus: statusCode,
@@ -249,6 +256,19 @@ export function createHttpContinuityIntegrationTransport({
       const response = await exchange({
         method: 'POST',
         path: '/internal/v1/continuity/interactions',
+        body: canonicalBody,
+        outcomeUnknown: true,
+      });
+      if (response.statusCode !== 200) throw mapHttpFailure(response.statusCode);
+      return response;
+    },
+    async submitCapabilityResult(canonicalBody) {
+      if (!Buffer.isBuffer(canonicalBody)) {
+        throw new ValidationError('canonicalBody must be a Buffer.');
+      }
+      const response = await exchange({
+        method: 'POST',
+        path: '/internal/v1/continuity/capability-results',
         body: canonicalBody,
         outcomeUnknown: true,
       });

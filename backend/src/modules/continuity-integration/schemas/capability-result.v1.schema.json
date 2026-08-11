@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:continuity-engine:capability:schema:result:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "schemaVersion", "capabilityResultId", "capabilityRequestId", "operationId", "requestId", "requestHash", "subjectId", "bindingId", "bindingVersion", "status", "capabilityType", "provider", "output", "contentHash", "startedAt", "completedAt", "actualUsage", "vioLedgerEntryId", "errorCode", "retryClass", "auditRef", "executionFact"],
+  "properties": {
+    "contractVersion": {"const": "continuity-capability/v1"},
+    "schemaVersion": {"const": "continuity-capability-result/v1"},
+    "capabilityResultId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "capabilityRequestId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "operationId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "requestHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "subjectId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "bindingId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "bindingVersion": {"const": 1},
+    "status": {"enum": ["SUCCEEDED", "FAILED_RETRYABLE", "FAILED_TERMINAL", "CANCELLED", "EXPIRED", "UNKNOWN"]},
+    "capabilityType": {"const": "model.generate"},
+    "provider": {
+      "type": "object", "additionalProperties": false,
+      "required": ["providerType", "providerId", "modelName"],
+      "properties": {
+        "providerType": {"const": "model"},
+        "providerId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "modelName": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "output": {"oneOf": [{"$ref": "urn:continuity-engine:capability:schema:model-output:v1"}, {"type": "null"}]},
+    "contentHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "startedAt": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "completedAt": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "actualUsage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["inputTokens", "outputTokens", "totalTokens"],
+      "properties": {"inputTokens": {"type": "integer", "minimum": 0}, "outputTokens": {"type": "integer", "minimum": 0}, "totalTokens": {"type": "integer", "minimum": 0}}
+    },
+    "vioLedgerEntryId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "errorCode": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+    "retryClass": {"enum": ["retry", "query", "never", null]},
+    "auditRef": {"type": "string", "minLength": 1, "maxLength": 128},
+    "executionFact": {"const": true}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "SUCCEEDED"}}}, "then": {"properties": {"output": {"$ref": "urn:continuity-engine:capability:schema:model-output:v1"}, "errorCode": {"type": "null"}, "retryClass": {"type": "null"}}}, "else": {"properties": {"output": {"type": "null"}, "errorCode": {"type": "string"}}}},
+    {"if": {"properties": {"status": {"const": "FAILED_RETRYABLE"}}}, "then": {"properties": {"retryClass": {"const": "retry"}}}},
+    {"if": {"properties": {"status": {"const": "UNKNOWN"}}}, "then": {"properties": {"retryClass": {"const": "query"}}}},
+    {"if": {"properties": {"status": {"enum": ["FAILED_TERMINAL", "CANCELLED", "EXPIRED"]}}}, "then": {"properties": {"retryClass": {"const": "never"}}}}
+  ]
+}

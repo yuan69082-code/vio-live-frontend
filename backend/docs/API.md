@@ -2,8 +2,8 @@
 
 ## 状态与边界
 
-- 当前阶段：第一轮 test-only 共享验收和 S2/S3 正式本机 HTTP/JSON 共享验收均已通过；Engine E4 正式基线为 `189441f9bad2a34119b4ef10365a4385ed0949cc`，Vio V3 已通过真实 loopback TCP/HTTP 将 V1 原请求交给 E4，并将正式 result/stateProjection 交给 V2 验证和持久化。真实模型、CapabilityRequest/CapabilityResult、公共对话 API 串接和前端试用尚未开始
-- 后端版本：`0.18.0`
+- 当前阶段：Vio V4 已按 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 实现持久化 CapabilityRequest、现实层门控、`openai_compatible` Provider HTTP 执行、严格 CapabilityResult 回传及 query-first/重启恢复。自动化测试只使用随机 loopback 受控 Provider；真实供应商 live smoke、S4、V5 和 F1 尚未开始
+- 后端版本：`0.19.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
@@ -93,14 +93,16 @@
 | **第一轮 test-only 共享验收已通过** | Vio 测试 seam 从 V1 SQLite 读取真实请求，经本地 JSONL Runner 进入 Engine E3，再由 V2 保存真实结果 | A/B/C、四类错误、幂等和双方重启通过；只使用临时双数据库 |
 | **Vio V3 已实现** | 默认关闭的本机 HTTP/JSON transport、Bearer service token、独立 connect/response timeout、响应上限、delivery/outbox/attempt、query-first 恢复与启动对账 | 从 V1 读取原始请求，结果交给 V2；不提供公共交付路由 |
 | **S2/S3 已通过** | V1 → V3 HTTP transport → Engine E4 → V2 的真实本机服务共享验收 | 正常 A/B/C、四类机器错误、查询、响应丢失、Engine/Vio/双方重启和冲突隔离均通过；15/15 |
+| **Vio V4 已实现** | E5-A 三份严格 Capability Schema、inbox/执行/usage/result/outbox/attempt/incident 账本、Permission/Security/Budget、secretRef、`openai_compatible` Provider adapter 与 CapabilityResult 回传恢复 | 无公共聊天路由；模型候选必须回 Engine，不能直接成为 Message 或状态更新 |
 | **第一轮明确排除** | CapabilityRequest/CapabilityResult、真实模型、Tool、MCP、设备和三层数据空间跨系统读写 | 三个确定性 test double 均位于 Continuity Engine 进程内，Vio 不实现 capability stub |
-| **未来产品/生产待共同决定** | 真实模型/Capability、公共对话 API 串接、前端接线、生产认证、多租户、部署、通用重绑定、异步/流式与完整 Outbox 运维参数 | 本机正式传输已完成；这些能力不是当前已实现公共 API |
+| **未来产品/生产待共同决定** | S4 双仓共享验收、公共对话 API 串接、前端接线、生产认证、多租户、部署、通用重绑定和流式输出 | V4 生产形态 adapter 已实现，但没有完成真实供应商或产品入口验收 |
 
 ### Vio V3 正式本机传输（内部服务，不是公共路由）
 
 | 方法 | Engine E4 路径 | Vio 行为 |
 | --- | --- | --- |
 | `POST` | `/internal/v1/continuity/interactions` | 发送 V1 SQLite 首次保存请求的 RFC 8785 canonical UTF-8 字节；success/四类契约 error 的 HTTP 200 envelope 交给 V2 |
+| `POST` | `/internal/v1/continuity/capability-results` | 发送 V4 首次持久化的无包装层 canonical CapabilityResult；completed 进入 V2，capability_failed 终止，结果未知时先查询 |
 | `GET` | `/internal/v1/continuity/requests/:requestId` | 只用于 outcome_unknown 恢复；严格区分 `completed`、`recovery_required` 和 exact `404 {"error":"not_found"}` |
 | `GET` | `/health/ready` | 启动和健康状态探测；不携带 service token |
 
@@ -120,6 +122,18 @@ V3 不新增外部可调用的 Vio 交付 API。未来对话 API 只能调用应
 - 第一轮摄取入口只能是 Continuity Engine 内独立、test-only 的 `ContractTestAdapter`；现有 `APIService.submit_message`、本地 HTTP、`UserInteractionService` 和 Vio 公共 API 均不是该入口。
 
 这些规则已经获得 Continuity Engine 正式确认。Vio V1 已落实严格请求构造/持久化，Vio V2 已落实结果接收、幂等账本、投影隔离与恢复，Vio V3 已落实默认关闭的正式本机 HTTP 交付与恢复；双方 S2/S3 也已通过真实 loopback HTTP 验证。test-only JSONL bridge 仍不是正式入口；当前链路尚未接入公共对话 API 或前端，前端仍只调用 Vio 公共 API，不直接连接引擎。
+
+### Vio V4 Capability 内部闭环（不是公共路由）
+
+Engine 返回 `capability_required` 后，Vio 先用 V1 账本反查唯一用户、助手、主体和原消息事实，再严格核对 request/hash/operation/binding/schema 身份。CapabilityRequest、CapabilityResult、`capability_required` 和 `capability_failed` 的外层 `contractVersion` 都固定为 `continuity-capability/v1`；最终 `completed` FirstRoundSuccessResult 与原 V1.1 查询结果继续固定为 `continuity-integration/v1.1`，两者不得混用。`permissionRef` 仅保存为关联信息，不能绕过 Vio 的 `api:<providerId>:execute` Permission。
+
+每次 Provider 执行都重新经过 Model Router（`taskType=chat`）→ Permission → `privacy_access_request + private_record` Security/Confirmation → Token Budget → deadline → credential store。`private_record` 是平台对对话记录的固定可信分类，不根据正文猜测身份、支付或其他类别；缺少任何事实均 fail closed。审计只保存作用域、风险和决定，不保存对话正文、Authorization、密钥或 Provider 原始响应。
+
+当前仅正式支持 `interfaceFormat=openai_compatible` 的非流式 HTTP 请求。带密钥的非测试调用必须使用 HTTPS；HTTP 仅允许显式测试配置下的 loopback Provider。`anthropic_messages`、`glm_compatible`、`custom_http` 均明确拒绝，不会套用 OpenAI 格式。Provider 返回的第一条文本候选和可信 usage 被保存为执行事实；费用仅在 Provider 报告或可证明配置存在时记录，否则保存 `not_reported` 与 `NULL`。
+
+模型候选只进入 `continuity-capability-result/v1` 的 `responseCandidate`，Vio 不把它直接写成 assistant Message。一个 CapabilityRequest 可以保存多个不可变 execution/result attempt；每次真实 Provider 调用生成新的 `executionId` 和 `capabilityResultId`，每个 attempt 有独立 usage/费用、Result outbox 和 HTTP attempt，且最多只有一个 `SUCCEEDED`。
+
+HTTP 重传与 Provider 重试严格分开：完整 CapabilityResult 经 RFC 8785 canonicalize 和 SHA-256 后先落盘，再 POST Engine；POST 响应丢失时先 GET 原 requestId，必要时仅重发相同 `capabilityResultId` 和相同 JSON，不重新调用 Provider。Engine 明确接受 `FAILED_RETRYABLE` 并返回 `capability_required` 后，旧 Result outbox 标为 `accepted`，请求进入 `waiting_retry`；只有内部调用显式给出 `retryApproved=true`，并重新通过路由、权限、安全确认、预算和 deadline 检查，才创建新的 execution/result。`UNKNOWN` 被 Engine 明确接受后进入 `provider_outcome_unknown`，当前没有 Provider 查询能力，因此只允许查询 Engine 和等待未来对账，不重发已接受 Result、不再次调用 Provider。`FAILED_TERMINAL`、`CANCELLED`、`EXPIRED` 或 `SUCCEEDED` 后禁止新执行。Engine 返回 `completed` 后仍复用 V2 result/projection/receipt，不修改 legacy SubjectState。
 
 ## 服务接口
 
@@ -301,7 +315,7 @@ V3 不新增外部可调用的 Vio 交付 API。未来对话 API 只能调用应
 
 检查体包含 `estimatedTokens` 与不透明 `budgetSessionId`。统计以 UTC 日和预算会话分别累计已保存的 `totalTokens`；检查本身不预留、不写入、不消耗 Token，且始终返回模型未调用。
 
-使用记录体包含 `budgetSessionId`、可选同用户 `modelId`、`inputTokens`、`outputTokens` 和可选 `occurredAt`。总量由后端求和，来源固定 `explicit_api_input`。这允许未来可信模型适配器接入同一账本，但当前 HTTP 输入未经供应商签名或账单验证，不能被解释为真实费用凭证。
+使用记录体包含 `budgetSessionId`、可选同用户 `modelId`、`inputTokens`、`outputTokens` 和可选 `occurredAt`。总量由后端求和，来源固定 `explicit_api_input`，历史语义继续是 `not_performed_by_platform/not_billed`。V4 Provider 执行使用独立 `provider_reported` usage 表并纳入后续预算累计，不会改写旧记录；未经供应商签名或账单验证的公共 HTTP 输入仍不能解释为真实费用凭证。
 
 ### AI 后台运行策略
 
@@ -701,9 +715,9 @@ Context 投影只读取请求中允许的内容类型和数量，固定声明模
 - `interfaceFormat`：`openai_compatible`、`anthropic_messages`、`glm_compatible`、`custom_http`；省略时按 Provider 类型取得默认值。
 - `status`：`enabled` 或 `disabled`，默认 `enabled`。
 - `baseUrl` 只保存配置，必须为 HTTP(S)，不得包含用户名、密码、URL 片段或 Key/Token/Secret 类查询参数。
-- `testStatus` 由服务初始化为 `not_tested`，本阶段没有真实连通性测试或客户端写入入口。
+- `testStatus` 仍由服务初始化为 `not_tested`，不会因 V4 自动执行而伪造供应商连通性认证。
 
-响应中的凭据状态固定为：
+未绑定时响应中的凭据状态为：
 
 ```json
 {
@@ -717,7 +731,13 @@ Context 投影只读取请求中允许的内容类型和数量，固定声明模
 }
 ```
 
-请求体中的 API Key、Token、Secret、凭据或安全引用字段都会被拒绝；响应不会出现 `apiKeySecretRef` 或密钥原文。
+Provider 创建和普通更新请求中的 API Key、Token、Secret 或凭据引用字段继续被拒绝；响应不会出现 secretRef 或密钥原文。
+
+### 绑定或轮换密钥引用
+
+`PATCH /api/v1/users/:userId/api-providers/:providerId/credential-reference`
+
+请求只接受 `subjectId`、`secretRef` 以及安全链需要的可选 `confirmationId` / `securitySessionId`。`secretRef` 必须匹配 `env:VIO_MODEL_API_KEY_*`；接口只保存引用，不读取或保存密钥原值。该变更使用既有 API 配置高风险确认与审计，批准后同请求重试完成。绑定后 Provider JSON 仅显示 `status=configured`、`storage=environment_reference`、`writeSupported=true`，仍不回显引用名称。
 
 ### 查询与启停 Provider
 

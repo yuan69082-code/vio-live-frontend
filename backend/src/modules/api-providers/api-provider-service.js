@@ -1,6 +1,7 @@
 import { NotFoundError, ValidationError } from '../../core/errors.js';
 import { createId } from '../../core/ids.js';
 import { requirePlainObject, requireString } from '../../core/validation.js';
+import { requireApiKeySecretRef } from '../../integrations/secrets/environment-api-credential-store.js';
 import {
   API_INTERFACE_FORMATS,
   API_PROVIDER_STATUSES,
@@ -83,18 +84,22 @@ function defaultInterfaceFormat(providerType) {
   }[providerType];
 }
 
-function presentProvider(provider, credentialStore) {
+function presentProvider(provider, credentialStore, credentialBindingRepository) {
   if (!provider) {
     return null;
   }
 
   const { apiKeySecretRef, ...publicProvider } = provider;
+  const activeBinding = credentialBindingRepository?.findActive(
+    provider.ownerUserId,
+    provider.providerId,
+  );
   return {
     ...publicProvider,
     credentials: {
       apiKey: credentialStore.describeApiKey({
         providerId: provider.providerId,
-        secretRef: apiKeySecretRef,
+        secretRef: activeBinding?.secretRef ?? apiKeySecretRef,
       }),
     },
   };
@@ -105,6 +110,8 @@ export function createApiProviderService({
   userRepository,
   auditLogService,
   credentialStore,
+  credentialBindingRepository = null,
+  securityService = null,
   runInTransaction,
   clock = () => new Date(),
   idFactory = createId,
@@ -173,7 +180,7 @@ export function createApiProviderService({
       return runInTransaction(() => {
         const created = apiProviderRepository.insert(provider);
         recordChange(created, 'created');
-        return presentProvider(created, credentialStore);
+        return presentProvider(created, credentialStore, credentialBindingRepository);
       });
     },
     getProvider(userId, providerId) {
@@ -185,12 +192,12 @@ export function createApiProviderService({
         throw new NotFoundError('API provider was not found for this user.');
       }
 
-      return presentProvider(provider, credentialStore);
+      return presentProvider(provider, credentialStore, credentialBindingRepository);
     },
     listProviders(userId) {
       return apiProviderRepository
         .findManyByUser(requireUser(userId))
-        .map((provider) => presentProvider(provider, credentialStore));
+        .map((provider) => presentProvider(provider, credentialStore, credentialBindingRepository));
     },
     updateProviderStatus(userId, providerId, value) {
       const ownerUserId = requireUser(userId);
@@ -210,7 +217,64 @@ export function createApiProviderService({
         }
 
         recordChange(provider, 'status_updated');
-        return presentProvider(provider, credentialStore);
+        return presentProvider(provider, credentialStore, credentialBindingRepository);
+      });
+    },
+    bindCredentialReference(userId, providerId, value) {
+      const ownerUserId = requireUser(userId);
+      const normalizedProviderId = requireString(providerId, 'providerId', { maxLength: 128 });
+      if (!credentialBindingRepository || !securityService) {
+        throw new ValidationError('Secure credential reference binding is not configured.');
+      }
+      const provider = apiProviderRepository.findById(ownerUserId, normalizedProviderId);
+      if (!provider) throw new NotFoundError('API provider was not found for this user.');
+      const input = requireOnlyFields(value, ['secretRef', 'subjectId', 'confirmationId', 'securitySessionId']);
+      const { secretRef } = requireApiKeySecretRef(input.secretRef);
+      const subjectId = requireString(input.subjectId, 'subjectId', { maxLength: 128 });
+      const security = securityService.checkSecurity(ownerUserId, {
+        subjectId,
+        resourceType: 'api',
+        resourceId: normalizedProviderId,
+        action: 'manage',
+        operationType: 'api_configuration_change',
+        sensitiveDataCategories: ['api_key'],
+        ...(input.confirmationId ? { confirmationId: input.confirmationId } : {}),
+        ...(input.securitySessionId ? { securitySessionId: input.securitySessionId } : {}),
+      }, { minimumRiskLevel: 'high' });
+      if (security.decision !== 'allow') {
+        return {
+          operationStatus: security.decision === 'confirm' ? 'confirmation_required' : 'denied',
+          credentials: { status: 'not_changed' },
+          security,
+        };
+      }
+      const now = clock().toISOString();
+      const binding = runInTransaction(() => credentialBindingRepository.replaceActive({
+        credentialBindingId: idFactory(),
+        ownerUserId,
+        providerId: normalizedProviderId,
+        secretRef,
+        securityAuditLogId: security.auditLogId,
+        createdAt: now,
+      }));
+      return {
+        operationStatus: 'completed',
+        providerId: normalizedProviderId,
+        credentialBindingId: binding.credentialBindingId,
+        credentials: credentialStore.describeApiKey({ providerId: normalizedProviderId, secretRef }),
+        security,
+      };
+    },
+    getCredentialBindingForExecution(userId, providerId) {
+      const ownerUserId = requireUser(userId);
+      const normalizedProviderId = requireString(providerId, 'providerId', { maxLength: 128 });
+      const provider = apiProviderRepository.findById(ownerUserId, normalizedProviderId);
+      if (!provider) throw new NotFoundError('API provider was not found for this user.');
+      const binding = credentialBindingRepository?.findActive(ownerUserId, normalizedProviderId);
+      if (!binding) throw new NotFoundError('API provider credential is not configured.');
+      return Object.freeze({
+        credentialBindingId: binding.credentialBindingId,
+        resolveApiKey: () => credentialStore.resolveApiKey({ secretRef: binding.secretRef }),
       });
     },
   };
