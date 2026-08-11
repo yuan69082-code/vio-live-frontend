@@ -5,7 +5,7 @@
 - 日期：2026-07-30
 - 对齐输入：Continuity Integration Contract v1、Engine Integration Contract Response v1
 - 对齐输出：[Continuity Integration Contract v1.1](14-continuity-engine连接契约v1.1.md)
-- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。第一轮 test-only 共享验收和 S2/S3 正式本机 HTTP/JSON 共享验收均已通过；Engine 当前基线为 `189441f9bad2a34119b4ef10365a4385ed0949cc`**
+- 状态：**现行差异已闭合，Continuity Engine 已正式接受 v1.1；此前“暂不接受”的结论作为历史记录保留。第一轮 test-only、S2/S3 正式本机 HTTP/JSON 与 S4 Capability 双仓共享验收均已通过；Engine 当前 E5-A 正式基线为 `cba52126db2fb5eca57d9b5c0c80884693c59a6f`。S4 没有修改 v1.1**
 - 最终接受依据：Engine Contract Final Read-Only Short Confirmation v1（归档见 [14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md](14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)）
 - 证据原则：源码、迁移和测试高于规划文字
 
@@ -35,11 +35,18 @@ Engine Integration Contract Response v1 当前来自 continuity-engine 审核窗
 - S2/S3 正式 HTTP shared tests 15/15；Vio V1 + RFC 8785 + V2 + V3 64/64、后端全量 113/113；Engine crash-recovery 15/15、E4 67/67、全量 301/301。Wake、Thinking、Event、StateUpdateRecord、revision、result、projection 和 receipt 均保持幂等。
 - 该结论只关闭正式本机连接及恢复验收，不表示真实模型/Capability、公共对话 API、前端真实回复、生产认证、多租户或部署已经完成。
 
+### 1.4 S4 Capability 双仓共享验收结论
+
+- S2/S3 的历史 E4 基线继续固定为 `189441f9bad2a34119b4ef10365a4385ed0949cc`；当前 Engine E5-A 正式基线为 `cba52126db2fb5eca57d9b5c0c80884693c59a6f`。
+- S4 通过正式 Engine capability 进程、Vio V1–V4、正式 `openai_compatible` adapter、随机 loopback Provider、双方独立持久化和重启，验证成功、精确重放、显式 retryable、terminal、UNKNOWN 及身份/冲突隔离，结果 7/7 通过。
+- S4 只验证受控本机 Provider 与机器合同，不是公开网络或真实供应商验收；真实供应商 live smoke、公共对话 API、前端接线和生产部署仍未开始。
+- 本次实现与验收没有修改 `Continuity Integration Contract v1.1`，也没有改变 SubjectState 唯一权威、Action Gate 或 Vio/Engine 数据库独立边界。
+
 ## 2. 总体处理结论
 
 第一轮 Engine Integration Contract Response v1 的十二项意见主方向已纳入 v1.1。该历史阶段中，第 5—8 项因生产参数和跨服务恢复细节尚未定，标记为“调整后接受”；第 10 项以三层数据空间取代“Private Space 是用户控制区”的单层定义。
 
-Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存在阻塞第一轮最小连接测试的契约问题”的结论，并把十二项落实情况评为：正确落实 5 项、部分落实 6 项、存在新风险 1 项。第三轮修订没有改写这一历史结论，只针对七个阻塞项新增第一轮一致性 Profile。Continuity Engine 随后在最终只读短确认中确认现行差异闭合，不存在会使双方采取不同第一轮实现的规则，并正式接受 v1.1；该接受在当时不表示运行时能力或第一轮共享测试已经完成，后续实现与验收状态见第 1.1—1.3 节。
+Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存在阻塞第一轮最小连接测试的契约问题”的结论，并把十二项落实情况评为：正确落实 5 项、部分落实 6 项、存在新风险 1 项。第三轮修订没有改写这一历史结论，只针对七个阻塞项新增第一轮一致性 Profile。Continuity Engine 随后在最终只读短确认中确认现行差异闭合，不存在会使双方采取不同第一轮实现的规则，并正式接受 v1.1；该接受在当时不表示运行时能力或第一轮共享测试已经完成，后续实现与验收状态见第 1.1—1.4 节。
 
 ## 3. 引擎第二次审核七个阻塞项闭合说明
 
@@ -338,11 +345,11 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 
 因此，上述七项已经不再构成契约或第一轮 test-only 验收阻塞，Continuity Engine 也已确认不存在会使双方采取不同第一轮实现的规则。Engine 侧 Adapter/结果账本和 Vio 侧请求/结果/投影账本已经通过本地 JSONL 共享验收；不能把“test-only 共享验收通过”写成“产品或生产连接完成”。
 
-机器契约校准已闭合文档精度；随后 Engine E1—E4、JSONL Runner 与 Vio V1—V3 实现了严格 Schema、Binding/hash、结果/投影账本和正式本机 HTTP delivery，并完成第一轮 test-only 共享验收及 S2/S3 正式本机 HTTP/JSON 共享验收。
+机器契约校准已闭合文档精度；随后 Engine E1—E4、JSONL Runner 与 Vio V1—V3 实现了严格 Schema、Binding/hash、结果/投影账本和正式本机 HTTP delivery，并完成第一轮 test-only 共享验收及 S2/S3 正式本机 HTTP/JSON 共享验收。其后 Engine E5-A 与 Vio V4 实现 Capability 合同和现实层执行/回传账本，S4 已在当前 E5-A 基线上通过。
 
 不阻塞第一轮但阻塞生产的事项：
 
-- 真实模型/Tool/MCP/设备和异步长任务。
+- 真实供应商模型 live smoke、Tool/MCP/设备和异步长任务。
 - 三层数据空间实际读写。
 - 通用重绑定与迁移。
 - 生产认证、多租户、费用和部署。
@@ -359,7 +366,7 @@ Engine Contract Second Review Response v1 随后给出“暂不接受 v1.1，存
 - revision 冲突盲重试：明确禁止。
 - AI 私域与用户私密混用：已拆成三层空间。
 - 调试接口冒充生产：明确禁止。
-- 将设计写成已实现：只把 Engine E1—E4、Vio V1—V3、test-only 共享验收和 S2/S3 正式本机共享验收标为已实现；真实模型/Capability、公共对话 API 和前端真实回复仍标记未实现。
+- 将设计写成已实现：Engine E1—E5-A、Vio V1—V4、test-only、S2/S3 与 S4 共享验收按实际结果标为已实现；真实供应商 live smoke、公共对话 API 和前端真实回复仍标记未实现。
 
 ## 9. 本轮边界
 

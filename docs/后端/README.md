@@ -47,10 +47,10 @@ Vio Live 由五层协作组成：
 - 当前未接入真实认证或正式数据库，基础路由不得直接公开部署。
 - 总规划记录的部分连续性底层框架不等于平台后端已经完成。
 - 已完成：Vio 与 Continuity Engine 长期架构、SubjectState 权威、Observation/内部 Event 边界，以及第一轮 Schema、固定 SubjectBinding、幂等、revision、错误、投影和 ContractTestAdapter 入口的契约对齐；Continuity Engine 已正式接受 v1.1。
-- Engine 当前基线：E1—E4 与 crash-recovery 定点修复已在提交 `189441f9bad2a34119b4ef10365a4385ed0949cc` 完成；E4 提供只监听 `127.0.0.1` 的正式 HTTP/JSON 服务，test-only JSONL Runner 继续独立。
+- Engine 基线：S2/S3 历史 E4 验收固定使用 `189441f9bad2a34119b4ef10365a4385ed0949cc`；当前 E5-A 正式基线为 `cba52126db2fb5eca57d9b5c0c80884693c59a6f`，S4 已在该基线上通过。E4/E5-A 正式服务均只监听 `127.0.0.1`，test-only JSONL Runner 继续独立。
 - Vio 当前状态：V1 请求账本、V2 结果/投影账本、V3 正式本机 HTTP delivery/outbox 与 V4 Capability 执行/回传账本均已完成；S2/S3 15/15、S4 7/7、V1–V4 101/101、后端全量 159/159 通过。
 - V3 默认关闭，不提供公共交付路由；显式启用时只连接本机 Engine，Engine 不可达不会阻止 Vio 启动。共享子进程 transport 仍只在 `test-support` 和独立共享测试中启用。
-- 正式本机连接状态：V1 → V3 → Engine E4 → V2 已通过真实 loopback HTTP 正常、错误、崩溃与重启恢复验收；Wake、Thinking、Event、StateUpdateRecord、revision、result、projection 和 receipt 均保持幂等。
+- 历史 S2/S3 正式本机连接状态：V1 → V3 → Engine E4 → V2 已通过真实 loopback HTTP 正常、错误、崩溃与重启恢复验收；当前 S4 则在 E5-A 上验证 V1 → V3 → V4 → Engine → V2 Capability 闭环。两阶段的 Wake、Thinking、Event、StateUpdateRecord、revision、result、projection 和 receipt 均保持幂等。
 - S4 Capability 双仓共享验收已完成；后续阶段须另行确定真实供应商 live smoke、Vio 公共对话 API 与现有前端接线的施工顺序。
 - 尚未实现：真实供应商 live smoke、Vio 公共对话 API 串接、前端真实回复、生产认证、多租户和部署。正式本机 Capability 验收完成不表示产品已经可用。
 - 分支、消息删除、窗口重置、真实摘要生成、语义检索、真实供应商 Token 计量/计费与 live smoke、私域披露/删除、真实导出文件/下载/外部存储、备份恢复、生活记录删除、自动提醒、支付/银行、健康设备、真实语音/系统唤醒、后台调度、消息投递、正式数据库、公共 Capability 产品入口、公共对话与前端接线、真实 MCP、插件安装、Skill/Tool 执行、真实设备/机器人连接控制、载体迁移、厂商 API、其他外部执行和公开运行能力仍处于规划或待接入状态。

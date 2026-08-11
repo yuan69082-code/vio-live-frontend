@@ -29,18 +29,19 @@ pnpm test
 
 当前测试结果为 159/159 通过，已覆盖服务启动、统一响应 envelope、数据导出/迁移准备、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、Continuity V1/V2/V3/V4、RFC 8785、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
 
-独立 S4 双仓共享测试通过 7/7。它显式读取 `CONTINUITY_ENGINE_REPO`，启动 Engine E5-A capability 模式与随机 loopback Provider，通过 Vio V1 → V3 → V4 → Engine → V2 真实 HTTP 路径验证成功闭环、精确重放、双方重启、429 显式批准重试、400 终止、UNKNOWN fail closed 及身份/冲突隔离。运行命令为 `pnpm run test:continuity-capability-shared`；该命令不属于默认 `pnpm test`，不会访问公网或真实供应商。
+独立 S4 双仓共享测试通过 7/7。`continuity-capability-local-http-shared.test.js` 固定要求 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f`；它显式读取 `CONTINUITY_ENGINE_REPO`，启动 capability 模式与随机 loopback Provider，通过 Vio V1 → V3 → V4 → Engine → V2 真实 HTTP 路径验证成功闭环、精确重放、双方重启、429 显式批准重试、400 终止、UNKNOWN fail closed 及身份/冲突隔离。运行命令为 `pnpm run test:continuity-capability-shared`；该命令不属于默认 `pnpm test`，不会访问公网或真实供应商。
 
 第一轮 test-only 与正式本机 HTTP 双方共享验收使用独立命令，不并入不具备 Engine 仓库的普通后端测试：
 
 ```bash
 CONTINUITY_ENGINE_REPO=/path/to/continuity-engine pnpm test:continuity-shared
 CONTINUITY_ENGINE_REPO=/path/to/continuity-engine node --test shared-tests/continuity-integration-local-http-shared.test.js
+CONTINUITY_ENGINE_REPO=/path/to/continuity-engine pnpm run test:continuity-capability-shared
 ```
 
 test-only 共享专项 6/6 通过，固定核对 Engine `7a32a99` 与 Vio `97874ee` 基线、三份 Schema 解析结构、真实 V1 SQLite 请求、A/B/C revision 0→1→1、四类真实错误、同进程/双方重启幂等、UTF-8 JSONL、异常/超时/非法输出失败和应用/HTTP/前端零注册。该测试仍使用 Engine 内确定性 test double 和临时双数据库，不是正式网络入口。
 
-S2/S3 正式本机 HTTP shared tests 15/15 通过，固定核对 Engine `189441f9bad2a34119b4ef10365a4385ed0949cc`、真实 E4 HTTP Server、Vio V3 transport、V1 原请求和 V2 结果/投影账本。覆盖 changed=false 0→0、changed=true 0→1、后续 1→1、四类机器错误、completed/not_found/recovery_required 查询、POST 响应丢失、Engine 中途退出、Engine 查询不可达、Vio 中途退出、双方同时重启、requestHash/operationId 冲突隔离及 `IDEMPOTENCY_KEY_REUSED / never`。Wake、Thinking、Event、StateUpdateRecord、revision、result、projection 与 receipt 均保持幂等。测试只使用 loopback、确定性 provider 和临时双数据库；环境变量缺失会明确失败，不会 skip，不接真实模型、公共 API 或前端。
+历史 S2/S3 验收入口 `continuity-integration-local-http-shared.test.js` 为 15/15，固定要求 Engine E4 `189441f9bad2a34119b4ef10365a4385ed0949cc`、真实 E4 HTTP Server、Vio V3 transport、V1 原请求和 V2 结果/投影账本。覆盖 changed=false 0→0、changed=true 0→1、后续 1→1、四类机器错误、completed/not_found/recovery_required 查询、POST 响应丢失、Engine 中途退出、Engine 查询不可达、Vio 中途退出、双方同时重启、requestHash/operationId 冲突隔离及 `IDEMPOTENCY_KEY_REUSED / never`。Wake、Thinking、Event、StateUpdateRecord、revision、result、projection 与 receipt 均保持幂等。测试只使用 loopback、确定性 provider 和临时双数据库；环境变量缺失会明确失败，不会 skip，不接真实模型、公共 API 或前端。当前正式 Engine 仓库保持 E5-A，不得为重跑历史 S2/S3 checkout 或修改到 E4；需要回归时应使用指向 E4 固定提交的隔离临时本地副本，并把该副本路径显式传给 `CONTINUITY_ENGINE_REPO`。
 
 Continuity Vio V1 测试另外覆盖三份严格本地 Schema/引用、所有对象的未知字段拒绝、禁止状态写字段、正文唯一位置、跨结构 ID/identity 一致性、RFC 8785 与三项固定 hash、固定 Binding 全字段防漂移、Vio 归属与 Event 来源核对、requestId 重试、跨重启恢复，以及零 Engine/模型/MCP/Tool/设备/网络调用和零 SubjectState 推进。
 
