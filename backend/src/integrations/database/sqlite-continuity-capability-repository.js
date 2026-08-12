@@ -86,6 +86,21 @@ function mapResult(row) {
     createdAt: row.created_at,
   };
 }
+function mapDecision(row) {
+  if (!row) return null;
+  return {
+    capabilityRequestId: row.capability_request_id,
+    modelId: row.model_id,
+    providerId: row.provider_id,
+    permissionDecision: row.permission_decision,
+    securityDecision: row.security_decision,
+    budgetDecision: row.budget_decision,
+    confirmationId: row.confirmation_id,
+    auditRef: row.audit_ref,
+    decision: parse(row.decision_json),
+    createdAt: row.created_at,
+  };
+}
 function mapOutbox(row) {
   if (!row) return null;
   return {
@@ -127,6 +142,12 @@ export function createSqliteContinuityCapabilityRepository(connection) {
       security_decision, budget_decision, estimated_tokens, confirmation_id, audit_ref,
       decision_json, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const findLatestDecision = connection.prepare(`
+    SELECT * FROM continuity_capability_decisions
+    WHERE capability_request_id = ?
+    ORDER BY created_at DESC, decision_id DESC
+    LIMIT 1
   `);
   const insertExecution = connection.prepare(`
     INSERT INTO continuity_capability_model_executions (
@@ -238,6 +259,7 @@ export function createSqliteContinuityCapabilityRepository(connection) {
         record.decisionJson, record.createdAt,
       ), 'Capability decision fact conflicts with existing history.');
     },
+    findLatestDecision(id) { return mapDecision(findLatestDecision.get(id)); },
     findExecution(id) { return mapExecution(findExecution.get(id)); },
     findLatestExecutionByRequest(id) { return mapExecution(findLatestExecutionByRequest.get(id)); },
     listExecutionsByRequest(id) { return listExecutionsByRequest.all(id).map(mapExecution); },

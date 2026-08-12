@@ -225,6 +225,7 @@ export function createV4Application(databasePath, {
   transport = createEngineTransportDouble(),
   credentialStore = createFakeCredentialStore(),
   modelExecutor,
+  conversationTurnFaultInjector = null,
 } = {}) {
   const config = loadConfig({
     VIO_BACKEND_DB_PATH: databasePath,
@@ -239,6 +240,7 @@ export function createV4Application(databasePath, {
     continuityTransport: transport,
     credentialStore,
     modelExecutor,
+    conversationTurnFaultInjector,
   });
   return { application, transport };
 }

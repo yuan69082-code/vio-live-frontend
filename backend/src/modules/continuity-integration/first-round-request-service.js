@@ -124,7 +124,7 @@ export function createFirstRoundContinuityRequestService({
     return stored;
   }
 
-  function prepareFixedBindingFixtureForTests() {
+  function loadFixedLocalChatProfileBinding() {
     const fixture = fixedSubjectBindingFixture();
     const user = requireActive(
       userRepository.findById(fixture.userId),
@@ -304,7 +304,8 @@ export function createFirstRoundContinuityRequestService({
   }
 
   return Object.freeze({
-    prepareFixedBindingFixtureForTests,
+    loadFixedLocalChatProfileBinding,
+    prepareFixedBindingFixtureForTests: loadFixedLocalChatProfileBinding,
     loadFixedBindingFixture() {
       return structuredClone(requireStoredBinding());
     },

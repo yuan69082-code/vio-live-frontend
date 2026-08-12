@@ -27,7 +27,7 @@
 pnpm test
 ```
 
-当前测试结果为 159/159 通过，已覆盖服务启动、统一响应 envelope、数据导出/迁移准备、主动交互/Token 控制、账号/User Space/主体、当前助手、五类数据边界、设定/私域、对话/Context、生活管理、Event、模型路由、能力/设备、Permission/Security/Confirmation/AuditLog、Continuity V1/V2/V3/V4、RFC 8785、事务回滚、重启持久化、迁移升级、跨用户/主体隔离和秘密字段拦截。
+当前测试结果为 176/176 通过，已覆盖既有平台能力、Continuity V1–V5、RFC 8785、事务回滚、重启持久化、迁移升级、跨范围隔离和秘密字段拦截。
 
 独立 S4 双仓共享测试通过 7/7。`continuity-capability-local-http-shared.test.js` 固定要求 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f`；它显式读取 `CONTINUITY_ENGINE_REPO`，启动 capability 模式与随机 loopback Provider，通过 Vio V1 → V3 → V4 → Engine → V2 真实 HTTP 路径验证成功闭环、精确重放、双方重启、429 显式批准重试、400 终止、UNKNOWN fail closed 及身份/冲突隔离。运行命令为 `pnpm run test:continuity-capability-shared`；该命令不属于默认 `pnpm test`，不会访问公网或真实供应商。
 
@@ -37,7 +37,10 @@ pnpm test
 CONTINUITY_ENGINE_REPO=/path/to/continuity-engine pnpm test:continuity-shared
 CONTINUITY_ENGINE_REPO=/path/to/continuity-engine node --test shared-tests/continuity-integration-local-http-shared.test.js
 CONTINUITY_ENGINE_REPO=/path/to/continuity-engine pnpm run test:continuity-capability-shared
+CONTINUITY_ENGINE_REPO=/path/to/continuity-engine pnpm run test:continuity-conversation-shared
 ```
+
+V5 公共轮次专项共 17 项，覆盖 `022` fresh/`001–021` upgrade/失败回滚、固定 Profile 幂等准备、公共创建/查询/恢复、Engine 禁用前置失败、幂等/范围冲突、单主体活动轮次、确认/预算/deny/retry/UNKNOWN、query-first，以及 V1 前后、V2 完成后和主体 Message 发布窗口的 SQLite 重启恢复。正式 V5 shared test 共 6/6，以真实 Engine E5-A、Vio 公共 HTTP、V1–V5、随机 loopback Provider 和临时双数据库验证确认恢复、Engine 最终回复落为唯一主体 Message、精确重放、双方重启及无直连边界；不访问公网、不使用真实密钥或产生费用。
 
 test-only 共享专项 6/6 通过，固定核对 Engine `7a32a99` 与 Vio `97874ee` 基线、三份 Schema 解析结构、真实 V1 SQLite 请求、A/B/C revision 0→1→1、四类真实错误、同进程/双方重启幂等、UTF-8 JSONL、异常/超时/非法输出失败和应用/HTTP/前端零注册。该测试仍使用 Engine 内确定性 test double 和临时双数据库，不是正式网络入口。
 

@@ -4,7 +4,7 @@
 
 本目录依据《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》整理，用于描述平台后端的职责、数据边界、接口原则、安全约束和开发顺序。
 
-本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、账号与数据隔离、对话/平台事实投影、Event、模型路由、Permission/Security、扩展/设备/私域/生活数据、主动交互/Token 控制，以及版本化数据导出准备基础；前端已建立独立 API 客户端和真实健康握手。`Continuity Integration Contract v1.1` 已获接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON 和 S4 Capability 双仓共享验收均已通过。Vio V4 已通过真实 loopback TCP/HTTP 把 Engine E5-A CapabilityRequest 交给现实层门控和受控 Provider，并将 CapabilityResult 回传 Engine 后由 V2 验证、持久化正式 result/stateProjection。该 Provider 是自动化测试用随机本机服务，不是真实供应商；公共对话 API 串接、页面真实回复、真实供应商 live smoke、真实认证、正式数据库及其他外部执行仍未完成。
+本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、账号与数据隔离、对话/平台事实投影、Event、模型路由、Permission/Security、扩展/设备/私域/生活数据、主动交互/Token 控制，以及版本化数据导出准备基础；前端已建立独立 API 客户端和真实健康握手。`Continuity Integration Contract v1.1` 已获接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON 和 S4 Capability 双仓共享验收均已通过。Vio V5 已在固定本地 Profile 下把公共 Conversation Turn API 接入 V1–V4 与 Engine E5-A，最终主体 Message 只来自 V2 保存的 Engine response。共享验收使用随机 loopback 受控 Provider，不是真实供应商；页面真实回复、真实供应商 live smoke、通用 Binding、真实认证、正式数据库及其他外部执行仍未完成。
 
 ## 系统边界
 
@@ -51,9 +51,9 @@ Vio Live 由五层协作组成：
 - Vio 当前状态：V1 请求账本、V2 结果/投影账本、V3 正式本机 HTTP delivery/outbox 与 V4 Capability 执行/回传账本均已完成；S2/S3 15/15、S4 7/7、V1–V4 101/101、后端全量 159/159 通过。
 - V3 默认关闭，不提供公共交付路由；显式启用时只连接本机 Engine，Engine 不可达不会阻止 Vio 启动。共享子进程 transport 仍只在 `test-support` 和独立共享测试中启用。
 - 历史 S2/S3 正式本机连接状态：V1 → V3 → Engine E4 → V2 已通过真实 loopback HTTP 正常、错误、崩溃与重启恢复验收；当前 S4 则在 E5-A 上验证 V1 → V3 → V4 → Engine → V2 Capability 闭环。两阶段的 Wake、Thinking、Event、StateUpdateRecord、revision、result、projection 和 receipt 均保持幂等。
-- S4 Capability 双仓共享验收已完成；后续阶段须另行确定真实供应商 live smoke、Vio 公共对话 API 与现有前端接线的施工顺序。
-- 尚未实现：真实供应商 live smoke、Vio 公共对话 API 串接、前端真实回复、生产认证、多租户和部署。正式本机 Capability 验收完成不表示产品已经可用。
-- 分支、消息删除、窗口重置、真实摘要生成、语义检索、真实供应商 Token 计量/计费与 live smoke、私域披露/删除、真实导出文件/下载/外部存储、备份恢复、生活记录删除、自动提醒、支付/银行、健康设备、真实语音/系统唤醒、后台调度、消息投递、正式数据库、公共 Capability 产品入口、公共对话与前端接线、真实 MCP、插件安装、Skill/Tool 执行、真实设备/机器人连接控制、载体迁移、厂商 API、其他外部执行和公开运行能力仍处于规划或待接入状态。
+- V5 固定本地 Profile 公共轮次 API、迁移 `022` 和恢复账本已完成；用户 Message 可经 V1 → V3 → Engine E5-A → V4 → V2 形成唯一 Engine 最终主体 Message。
+- 尚未实现：真实供应商 live smoke、F1 前端真实回复、通用 Binding、生产认证、多租户和部署。固定本地公共 API 完成不表示产品已经可公开使用。
+- 分支、消息删除、窗口重置、真实摘要生成、语义检索、真实供应商 Token 计量/计费与 live smoke、私域披露/删除、真实导出文件/下载/外部存储、备份恢复、生活记录删除、自动提醒、支付/银行、健康设备、真实语音/系统唤醒、后台调度、消息投递、正式数据库、公共 Capability 产品入口、通用对话 Profile 与前端接线、真实 MCP、插件安装、Skill/Tool 执行、真实设备/机器人连接控制、载体迁移、厂商 API、其他外部执行和公开运行能力仍处于规划或待接入状态。
 - GitHub 只保存代码和文档，不保存运行数据、用户数据或密钥。
 
 ## 文档目录

@@ -10,8 +10,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "prepare:local-chat": "node scripts/prepare-local-chat-profile.js",
     "test": "node --test \"tests/*.test.js\"",
     "test:continuity-shared": "node --test shared-tests/continuity-integration-shared.test.js",
-    "test:continuity-capability-shared": "node --test shared-tests/continuity-capability-local-http-shared.test.js"
+    "test:continuity-capability-shared": "node --test shared-tests/continuity-capability-local-http-shared.test.js",
+    "test:continuity-conversation-shared": "node --test shared-tests/continuity-conversation-local-http-shared.test.js"
   }
 }

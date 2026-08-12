@@ -13,7 +13,7 @@
 
 模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现账号/User Space/主体、数据隔离、设定/私域、对话/Context、事件、模型/扩展/设备、生活管理、主动交互与 Token 控制、数据导出准备、Permission/Security/Confirmation/AuditLog。Dashboard 只聚合已有事实；Security 只返回安全资格并标记外部执行未发生；Permission Checker 不执行资源操作，Router 也不调用真实模型。
 
-`continuity-integration/` 承载第一轮机器契约。Vio V1 提供三份固定 Schema、严格验证、RFC 8785/hash、固定 SubjectBinding fixture 和不可变逻辑请求；Vio V2 提供精确 success/error envelope 验证、不可覆盖结果账本、独立投影版本/回执/指针、revision 隔离及三阶段恢复；Vio V3 从 V1 账本读取原请求，通过显式启用的本机 HTTP transport 调用 Engine E4，并用 delivery/outbox/attempt 管理 timeout、query 与重启恢复，最终仍委托 V2 保存结果。S2/S3 已用正式 E4 HTTP Server 和 V3 transport 验证正常 A/B/C、错误、响应丢失、进程崩溃与双方重启恢复。该模块不注册公共交付路由，不创建引擎 Event/StateMutation，不写入 legacy Vio SubjectState，也不把投影回灌 Engine；test-only fixture/JSONL transport 仍与正式装配隔离。
+`continuity-integration/` 承载 V1–V5 连接编排。V1 提供严格请求；V2 提供结果/投影账本；V3 提供本机 HTTP delivery；V4 提供受控 Capability 模型执行与回传；V5 在固定本地 Profile 下把公共 Conversation Turn API 与用户 Message、V1 请求、V3/V4/V2 结果和最终主体 Message 关联。只有 Engine 最终 `FirstRoundSuccessResult.response.content` 能形成 V5 主体 Message，Provider 原始候选不能直接落入对话。模块不创建 Engine Event/StateMutation、不写 legacy SubjectState；S2/S3、S4 和 V5 shared test 分别验证正式本机链路、Capability 与公共轮次恢复边界。
 
 User Space 是账号的一对一数据根，只保存开发期身份状态、空间状态和当前助手指针。当前助手是用户导航选择，不是 Subject 状态；切换不会修改 Global Settings、Private Space、SubjectState、对话、事件或生活数据。数据隔离模块只接收预定义资源类型和不透明 ID，先通过仓储复合过滤验证归属，再对私域、设备和生活资源调用既有 Permission/Security 链。它不读取资源正文、不接受任意 SQL/表名，也不执行资源操作。
 

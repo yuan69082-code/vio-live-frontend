@@ -728,5 +728,25 @@ export function createContinuityCapabilityService({
     },
     getRequest(id) { return capabilityRepository.findRequest(id); },
     getResult(id) { return capabilityRepository.findResultByRequest(id); },
+    getExecutionStateByInteraction(requestId) {
+      const record = capabilityRepository.findRequestByInteraction(requestId);
+      if (!record) return null;
+      const decision = capabilityRepository.findLatestDecision(record.capabilityRequestId);
+      const result = capabilityRepository.findResultByRequest(record.capabilityRequestId);
+      const resultOutbox = result
+        ? capabilityRepository.findOutbox(result.capabilityResultId)
+        : null;
+      return Object.freeze({
+        capabilityRequestId: record.capabilityRequestId,
+        requestId: record.requestId,
+        operationId: record.operationId,
+        status: record.status,
+        confirmationId: decision?.confirmationId ?? null,
+        decisionOutcome: decision?.decision?.outcome ?? null,
+        resultStatus: result?.status ?? null,
+        resultOutboxStatus: resultOutbox?.status ?? null,
+        errorCode: result?.result?.errorCode ?? null,
+      });
+    },
   });
 }

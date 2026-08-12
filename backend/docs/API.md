@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-- 当前阶段：Vio V4 已按 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 实现持久化 CapabilityRequest、现实层门控、`openai_compatible` Provider HTTP 执行、严格 CapabilityResult 回传及 query-first/重启恢复，并已通过 S4 真实双进程 loopback HTTP 双仓共享验收。自动化测试只使用随机 loopback 受控 Provider；真实供应商 live smoke、V5 和 F1 尚未开始
+- 当前阶段：Vio V5 已在固定本地试聊 Profile 下实现公共 Conversation Turn API，正式复用 V1 请求、V3 delivery、Engine E5-A、V4 Capability 和 V2 结果/投影账本，并只将 Engine 最终 response 保存为主体 Message。自动化测试只使用随机 loopback 受控 Provider；真实供应商 live smoke 与 F1 前端接线尚未开始
 - 后端版本：`0.19.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
@@ -84,7 +84,7 @@
 
 | 状态 | 接口/能力 | 说明 |
 | --- | --- | --- |
-| **已实现** | Vio User/Subject/Conversation/Message/Version、ConversationSummary、Event、AI Private Space 当前安全投影、Permission/Security/Token 接口 | 这些公共业务接口提供数据与安全基础，但尚未串接当前正式 Engine delivery 链路 |
+| **已实现** | Vio User/Subject/Conversation/Message/Version、ConversationSummary、Event、AI Private Space 当前安全投影、Permission/Security/Token 接口 | 固定本地 Profile 的 Conversation Turn API 已串入正式 Engine 链路；其余通用对话入口保持原语义 |
 | **已实现但需收口** | `POST /api/v1/users/:userId/subjects/:subjectId/state-updates` | 当前接受开发调用方状态；不能成为未来权威写入口，历史数据须按 `legacy/unverified` 处理 |
 | **已实现但仅为事实来源** | `GET .../conversations/:conversationId/context` | 当前是只读平台事实投影，不是最终认知 Context |
 | **Vio V1 已实现（仅进程内构造）** | 三份严格 Schema/本地 validator、RFC 8785/hash、固定 SubjectBinding 测试装载、PlatformObservation/fact/request 构造、请求输入持久化与跨重启读取 | 没有公共路由；V1 不调用 Engine，V3 只读取并交付 V1 首次保存的原请求 |
@@ -93,10 +93,11 @@
 | **第一轮 test-only 共享验收已通过** | Vio 测试 seam 从 V1 SQLite 读取真实请求，经本地 JSONL Runner 进入 Engine E3，再由 V2 保存真实结果 | A/B/C、四类错误、幂等和双方重启通过；只使用临时双数据库 |
 | **Vio V3 已实现** | 默认关闭的本机 HTTP/JSON transport、Bearer service token、独立 connect/response timeout、响应上限、delivery/outbox/attempt、query-first 恢复与启动对账 | 从 V1 读取原始请求，结果交给 V2；不提供公共交付路由 |
 | **S2/S3 已通过** | V1 → V3 HTTP transport → Engine E4 → V2 的真实本机服务共享验收 | 正常 A/B/C、四类机器错误、查询、响应丢失、Engine/Vio/双方重启和冲突隔离均通过；15/15 |
-| **Vio V4 已实现** | E5-A 三份严格 Capability Schema、inbox/执行/usage/result/outbox/attempt/incident 账本、Permission/Security/Budget、secretRef、`openai_compatible` Provider adapter 与 CapabilityResult 回传恢复 | 无公共聊天路由；模型候选必须回 Engine，不能直接成为 Message 或状态更新 |
+| **Vio V4 已实现** | E5-A 三份严格 Capability Schema、inbox/执行/usage/result/outbox/attempt/incident 账本、Permission/Security/Budget、secretRef、`openai_compatible` Provider adapter 与 CapabilityResult 回传恢复 | V4 本身保持内部服务；模型候选必须回 Engine，不能直接成为 Message 或状态更新 |
+| **Vio V5 已实现** | 固定本地 Profile 的公共轮次创建、纯查询、显式确认/重试恢复，以及 `022` 轮次幂等与消息发布账本 | 不修改 V4 候选边界；最终主体 Message 只取 V2 保存的 Engine response |
 | **第一轮明确排除** | CapabilityRequest/CapabilityResult、真实模型、Tool、MCP、设备和三层数据空间跨系统读写 | 三个确定性 test double 均位于 Continuity Engine 进程内，Vio 不实现 capability stub |
 | **已完成共享验收** | S4 双仓 Capability 本机共享验收 | 真实 Engine E5-A 进程、Vio V1–V4 正式后端路径与随机 loopback Provider 已验证；不代表真实供应商或产品入口验收 |
-| **未来产品/生产待共同决定** | 公共对话 API 串接、前端接线、真实供应商 live smoke、生产认证、多租户、部署、通用重绑定和流式输出 | V4 生产形态 adapter 与 S4 本机共享验收已完成，但没有完成真实供应商或产品入口验收 |
+| **未来产品/生产待共同决定** | 前端接线、真实供应商 live smoke、生产认证、多租户、部署、通用 Binding 和流式输出 | V5 仅为固定本地试聊 Profile，不等于通用或生产产品入口 |
 
 ### Vio V3 正式本机传输（内部服务，不是公共路由）
 
@@ -122,7 +123,7 @@ V3 不新增外部可调用的 Vio 交付 API。未来对话 API 只能调用应
 - 无状态变化时 `changed=false`、revision 不变、`engineUpdateId=null`；有状态变化时 revision 只增加一次，`engineUpdateId=StateUpdateRecord.update_id`。第一轮只用最小 snapshot，不用 delta。
 - 第一轮摄取入口只能是 Continuity Engine 内独立、test-only 的 `ContractTestAdapter`；现有 `APIService.submit_message`、本地 HTTP、`UserInteractionService` 和 Vio 公共 API 均不是该入口。
 
-这些规则已经获得 Continuity Engine 正式确认。Vio V1 已落实严格请求构造/持久化，Vio V2 已落实结果接收、幂等账本、投影隔离与恢复，Vio V3 已落实默认关闭的正式本机 HTTP 交付与恢复；双方 S2/S3 也已通过真实 loopback HTTP 验证。test-only JSONL bridge 仍不是正式入口；当前链路尚未接入公共对话 API 或前端，前端仍只调用 Vio 公共 API，不直接连接引擎。
+这些规则已经获得 Continuity Engine 正式确认。Vio V1 已落实严格请求构造/持久化，V2 已落实结果接收、幂等账本、投影隔离与恢复，V3 已落实默认关闭的正式本机 HTTP 交付与恢复，V5 固定本地 Turn API 已在应用内编排这些服务。test-only JSONL bridge 仍不是正式入口；前端尚未接入 V5，且始终只能调用 Vio 公共 API，不能直接连接引擎。
 
 ### Vio V4 Capability 内部闭环（不是公共路由）
 
@@ -454,7 +455,7 @@ Global Settings 与 SubjectState 是不同数据层：前者是用户明确修�
 
 `sequenceNumber` 在同一 Conversation 内唯一且递增；列表只返回每条逻辑 Message 的当前版本投影，并按该序号升序排列。当前不提供 Message 删除、隐藏、分支或重置。
 
-`senderType=subject` 和后述“重生成”请求中的正文都由开发调用方显式提交。它们只表示被记录为主体消息，不表示后端调用过 AI、Model Router、Provider 或 continuity-engine。`system` 消息可以创建，但不能通过当前编辑或重生成接口追加版本。
+通用 `senderType=subject` 和后述“重生成”请求中的正文都由开发调用方显式提交，只表示被记录为主体消息。V5 Turn API 不使用该公共创建入口生成回复，而是在 V2 完成后由受信服务把 Engine 最终 response 保存为主体 Message。`system` 消息可以创建，但不能通过当前编辑或重生成接口追加版本。
 
 ### 编辑、重生成与版本历史
 
@@ -492,6 +493,22 @@ MessageVersion 返回：
 ```
 
 当前只实现 `original`、`edited`、`regenerated`。分支、删除标记、窗口重置、上下文修订和模型生成元数据仍未实现；ConversationSummary、SubjectState 与只读 Context 基础见后续章节，它们不改变 MessageVersion 语义。
+
+### V5 固定本地 Conversation Turn
+
+V5 只允许已由 `pnpm run prepare:local-chat` 准备的固定本地 Profile：`user-001`、平台助手 `assistant-001`、Engine 主体 `subject-001`、`binding-001` v1 和 `conversation-001`。该准备操作只写本地身份、会话与 Binding，不启动网络。公共轮次仍是开发期身份边界：所有路由必须携带唯一 `x-vio-user-id`，并与路径 `userId` 完全一致。
+
+| 方法 | 路径 | 请求 | 返回 |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/turns` | Header `Idempotency-Key`；正文仅 `{ "content": string }` | 新建已完成为 `201`；等待状态为 `202`；精确重放为 `200` |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/turns/:turnId` | 无 | `200` 当前轮次；纯查询，不调用 Engine 或 Provider |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/turns/:turnId/resumptions` | `{ "confirmationId": string }` 或 `{ "retryApproved": true }` | completed 为 `200`，仍等待为 `202` |
+
+`Idempotency-Key` 必须是 8—128 位 ASCII 字母、数字、点、下划线、冒号或连字符。相同 key、相同用户/助手/会话和相同正文 hash 返回首次轮次；任一范围或正文不同返回 `409`，不会创建第二条用户消息或业务请求。Engine 未启用时创建请求在落库前返回 `503 continuity_engine_unavailable`。
+
+轮次公开状态固定为 `processing`、`confirmation_required`、`budget_confirmation_required`、`waiting_budget`、`waiting_retry`、`outcome_unknown`、`completed`、`failed`、`quarantined`。GET 不推进状态；resumption 只能提交属于本轮的确认 ID，或在 `waiting_retry` 明确提交 `retryApproved=true`。终态不可恢复。跨用户、主体或会话访问按复合归属拒绝。
+
+V5 首先原子保存用户 Message/MessageVersion、脱敏 `message_created` Event 与轮次计划，再持久化唯一 V1 request。V3/V4/V2 完成后，主体正文只能来自 V2 中 Engine `FirstRoundSuccessResult.response.content`；Provider `responseCandidate` 永不直接成为 Message。轮次账本先关联稳定 operation/response，再保存唯一主体 Message，并在独立完成标记前允许崩溃恢复，因此重启不会复制请求、Provider 调用、result、projection、receipt 或回复。
 
 ### 对话软件事件
 

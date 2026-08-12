@@ -39,6 +39,29 @@ function sendSecuredResult(response, result, { created = false } = {}) {
   sendJson(response, statusCode, { data: result });
 }
 
+function requireSingleHeader(request, name) {
+  const value = request.headers[name.toLowerCase()];
+  if (Array.isArray(value)) {
+    throw new ValidationError(`${name} must have one value.`, { header: name });
+  }
+  if (value === undefined) {
+    throw new ValidationError(`${name} is required.`, { header: name });
+  }
+  return value;
+}
+
+function requireTurnUser(request, pathUserId) {
+  if (requireDevelopmentUserId(request) !== pathUserId) {
+    throw new ValidationError('Authenticated development user does not match the route user.');
+  }
+}
+
+function turnResponseStatus(turn, { created = false } = {}) {
+  if (created && turn.status === 'completed') return 201;
+  if (created && !['failed', 'quarantined'].includes(turn.status)) return 202;
+  return 200;
+}
+
 export function createRouter({
   config,
   database,
@@ -75,6 +98,7 @@ export function createRouter({
   toolUsageService,
   deviceService,
   continuityDeliveryService,
+  continuityConversationTurnService,
   logger = console,
 }) {
   return async function route(request, response) {
@@ -1285,6 +1309,69 @@ export function createRouter({
         /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/messages$/,
         ['userId', 'subjectId', 'conversationId'],
       );
+      const conversationTurnsRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/turns$/,
+        ['userId', 'subjectId', 'conversationId'],
+      );
+      if (request.method === 'POST' && conversationTurnsRoute) {
+        requireTurnUser(request, conversationTurnsRoute.userId);
+        const input = await readJsonBody(request);
+        const result = await continuityConversationTurnService.createTurn(
+          conversationTurnsRoute.userId,
+          conversationTurnsRoute.subjectId,
+          conversationTurnsRoute.conversationId,
+          requireSingleHeader(request, 'Idempotency-Key'),
+          input,
+        );
+        sendJson(
+          response,
+          turnResponseStatus(result.turn, { created: result.created }),
+          { data: result.turn },
+          {
+            location: `/api/v1/users/${encodeURIComponent(result.turn.userId)}/subjects/${encodeURIComponent(result.turn.subjectId)}/conversations/${encodeURIComponent(result.turn.conversationId)}/turns/${encodeURIComponent(result.turn.turnId)}`,
+          },
+        );
+        return;
+      }
+
+      const conversationTurnRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/turns\/([^/]+)$/,
+        ['userId', 'subjectId', 'conversationId', 'turnId'],
+      );
+      if (request.method === 'GET' && conversationTurnRoute) {
+        requireTurnUser(request, conversationTurnRoute.userId);
+        sendJson(response, 200, {
+          data: continuityConversationTurnService.getTurn(
+            conversationTurnRoute.userId,
+            conversationTurnRoute.subjectId,
+            conversationTurnRoute.conversationId,
+            conversationTurnRoute.turnId,
+          ),
+        });
+        return;
+      }
+
+      const conversationTurnResumptionRoute = routeMatch(
+        url.pathname,
+        /^\/api\/v1\/users\/([^/]+)\/subjects\/([^/]+)\/conversations\/([^/]+)\/turns\/([^/]+)\/resumptions$/,
+        ['userId', 'subjectId', 'conversationId', 'turnId'],
+      );
+      if (request.method === 'POST' && conversationTurnResumptionRoute) {
+        requireTurnUser(request, conversationTurnResumptionRoute.userId);
+        const input = await readJsonBody(request);
+        const turn = await continuityConversationTurnService.resumeTurn(
+          conversationTurnResumptionRoute.userId,
+          conversationTurnResumptionRoute.subjectId,
+          conversationTurnResumptionRoute.conversationId,
+          conversationTurnResumptionRoute.turnId,
+          input,
+        );
+        sendJson(response, turnResponseStatus(turn), { data: turn });
+        return;
+      }
+
       if (request.method === 'POST' && messagesRoute) {
         const input = await readJsonBody(request);
         const message = messageService.createMessage(

@@ -52,6 +52,28 @@ export function createSqliteEventRepository(connection) {
     FROM events
     WHERE user_id = ? AND event_id = ?
   `);
+  const findMessageCreatedByMessageStatement = connection.prepare(`
+    SELECT
+      event_id,
+      user_id,
+      subject_id,
+      event_type,
+      source_type,
+      source_ref,
+      occurred_at,
+      recorded_at,
+      event_data_json,
+      summary,
+      status
+    FROM events
+    WHERE user_id = ?
+      AND subject_id = ?
+      AND event_type = 'message_created'
+      AND source_type = 'message-service'
+      AND source_ref = ?
+    ORDER BY recorded_at, event_id
+    LIMIT 1
+  `);
 
   return {
     insert(event) {
@@ -73,6 +95,13 @@ export function createSqliteEventRepository(connection) {
     },
     findById(userId, eventId) {
       return mapEvent(findByIdStatement.get(userId, eventId));
+    },
+    findMessageCreatedByMessage(userId, subjectId, messageId) {
+      return mapEvent(findMessageCreatedByMessageStatement.get(
+        userId,
+        subjectId,
+        messageId,
+      ));
     },
     findMany({ userId, subjectId, eventType, status, from, to, limit }) {
       const conditions = ['user_id = ?'];

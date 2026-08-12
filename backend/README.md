@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON 与 S4 Capability 双仓共享验收也已通过。后端运行版本现为 `0.19.0`：Vio V4 已按 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 经真实双进程 loopback HTTP 验证 CapabilityRequest 严格接收、独立可靠账本、权限/安全/预算门控、环境变量 secretRef、`openai_compatible` Provider HTTP 执行、可信 usage/费用事实、CapabilityResult 回传、精确重放和双方重启恢复。自动化测试使用随机 loopback 受控 Provider，不代表真实供应商 live smoke；V5、F1 均未开始。
+长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON 与 S4 Capability 双仓共享验收也已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；自动化共享测试使用真实 Engine 进程与随机 loopback 受控 Provider，不代表真实供应商 live smoke。F1 前端接线尚未开始。
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -27,6 +27,7 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
   第一轮共享验收：V1 首次持久化请求 → test-only JSONL Runner → Engine E3 → V2 严格结果/投影账本
   正式本机链路（默认关闭；S2/S3 已通过）：V1 原请求 → HTTP/JSON → Engine E4 → V2 结果/投影 → V3 delivery 完成
   V4 Capability 闭环：Engine capability_required → 严格 inbox → Permission/Security/Budget → Model Router → Provider → durable Result outbox → Engine → V2
+  V5 固定本地试聊：公共 Turn API → user Message/V1 → V3/V4/Engine/V2 → Engine 最终 response → subject Message
 ```
 
 当前连接设计的权威入口是 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，最终接受证据见 [`14c`](../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。契约固定以下边界：
@@ -40,6 +41,7 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
 - Vio V1 已实现 PlatformObservation/fact/request 的三份严格本地 Schema、固定 SubjectBinding/hash 验证、RFC 8785 哈希、请求构造和请求输入持久化；这些能力只在进程内使用，不提供 HTTP API，也不发送请求。
 - Engine E1/E2/E3/Runner 与 E4 正式本机 HTTP 服务已实现；Vio V1/V2 已实现输入、结果/错误和投影账本，Vio V3 已实现正式本机 transport、交付状态机与启动恢复。test-only JSONL transport 仍不进入应用装配；V3 只在显式配置时连接 `127.0.0.1`。S2/S3 已验证正常交付、四类机器错误、completed/not_found/recovery_required 查询，以及响应丢失、Engine/Vio/双方重启和冲突隔离恢复。
 - Vio V4 已实现 Engine E5-A 三份 Capability Schema 的严格本地副本与校验、Capability 独立账本、真实 `openai_compatible` HTTP adapter 和 query-first 恢复；模型原始输出不会写为 Message，也不会创建 Engine Event、StateMutation 或推进 revision。
+- Vio V5 已实现固定 `user-001` / `assistant-001` / `subject-001` / `binding-001` / `conversation-001` 本地 Profile 的公共轮次 API、幂等轮次账本和可恢复轮次；启动阶段只从已有 V2 终态本地对账并补齐回复，不重新调用 Provider。V1 创建前后中断由客户端使用同一 `Idempotency-Key` 精确重放后继续；它复用 V1–V4，不重新实现机器契约或结果投影。
 
 已实现：
 
@@ -128,10 +130,10 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
 - 第一轮三份 Draft 2020-12 机器契约 Schema 的封闭本地 registry、严格未知字段/禁止状态字段校验、RFC 8785 与三项固定 SHA-256 conformance hash
 - 固定 SubjectBinding 测试装载、Vio 归属/来源验证、规范化逻辑请求构造，以及 requestId/createdAt/requestHash 跨重启恢复
 - Vio V3 正式本机 HTTP transport、delivery/outbox/attempt、timeout 后查询、`completed` / `recovery_required` / `not_found` 恢复、启动重放与 `disabled` / `ready` / `degraded` 健康状态
-- `pnpm test` 当前 159/159 通过，覆盖既有平台能力、Vio V1/V2/V3、RFC 8785，以及 V4 Capability 合同、021 多 attempt 迁移、loopback Provider、门控、受控重试、UNKNOWN fail-closed、账本、隔离、事务和重启恢复边界
+- `pnpm test` 当前 176/176 通过，覆盖既有平台能力、Vio V1–V5、RFC 8785、021/022 迁移、loopback Provider、门控、轮次幂等、隔离、事务和重启恢复边界
 - S2/S3 正式本机 HTTP shared tests 15/15 通过；Vio V1 + RFC 8785 + V2 + V3 为 64/64，Engine crash-recovery 15/15、E4 67/67、全量 301/301 通过
 
-Vio V1 生成、验证并保存第一轮逻辑请求；Vio V2 严格验证并保存 Engine envelope/投影；Vio V3 交付首次保存的原请求；Vio V4 只在 Engine 返回合法 `capability_required` 后，经 Vio 现实层门控执行模型请求并把严格 CapabilityResult 回传 Engine。Capability 外层使用 `continuity-capability/v1`，completed 结果继续使用 `continuity-integration/v1.1`。一个 CapabilityRequest 可保存多个不可变 execution/result attempt，但只允许一个成功；`FAILED_RETRYABLE` 只在内部明确批准且重新通过全部门控后产生新调用，`UNKNOWN` 不自动重试。最终主体表达仍由 Engine 生成，V4 不复制 V1/V2/V3 账本、不调用 MCP/Tool/设备、不修改 legacy SubjectState；前端 `src`、页面与 mock 未修改。
+Vio V1 生成并保存逻辑请求，V2 严格保存 Engine 结果/投影，V3 负责可靠交付，V4 负责受控 Capability 执行与回传。V5 只编排现有能力：先原子保存用户 Message 与轮次计划，再持久化 V1 请求并驱动 V3/V4；完成时从 V2 首次稳定结果读取 Engine `response.content`，原子保存一条主体 Message 后标记轮次完成。Provider 候选不能绕过 Engine。等待确认、预算、重试和 outcome unknown 均为可查询状态；恢复不会新建 requestId、重复 Provider 调用或复制回复。前端 `src`、页面与 mock 未修改。
 
 ## 运行要求
 
@@ -160,6 +162,12 @@ pnpm dev
 
 ```bash
 pnpm test
+```
+
+准备固定本地试聊数据（只建本地用户、助手、会话与 Binding，不发网络请求）：
+
+```bash
+pnpm run prepare:local-chat
 ```
 
 ## 前后端本地联调
@@ -224,6 +232,9 @@ Vite 将 `/api` 和 `/health` 同源代理到默认的 `http://127.0.0.1:8787`�
 | `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations` | 创建属于当前用户和主体的 Conversation |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations` | 按最近活动时间查询 Conversation 列表 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId` | 按复合归属查询 Conversation |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/turns` | 使用 `Idempotency-Key` 创建固定本地 Profile 的持久化对话轮次 |
+| `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/turns/:turnId` | 纯查询轮次与最终消息，不触发外部调用 |
+| `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/turns/:turnId/resumptions` | 显式恢复确认、预算确认或已批准的 Provider retry |
 | `POST` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages` | 创建 Message 和 `original` 初始版本 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages` | 按 `sequenceNumber` 查询当前消息投影 |
 | `GET` | `/api/v1/users/:userId/subjects/:subjectId/conversations/:conversationId/messages/:messageId` | 查询单条 Message 当前版本投影 |
@@ -451,8 +462,8 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context 和唯一权威 SubjectState。Vio V1/V2 的输入、结果账本与受控投影已通过第一轮 test-only 共享验收；V3 与 Engine E4 又通过 S2/S3 正式本机 HTTP 共享验收；V4 与 Engine E5-A 已通过 S4 Capability 双仓共享验收，覆盖成功、显式 retryable、terminal、UNKNOWN、冲突、精确重放及双方重启。两边不合并数据库，Vio 不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。User Space 只承担账号数据根与当前助手选择，不合并助手数据。AI Assistant Global Settings、Engine 投影、AI Private Space 与 User Space 生活数据保持独立语义和存储边界。受控 loopback 验收不等于真实供应商 live smoke；真实登录、系统语音、外部存储、机器人、支付/银行、健康设备、公共对话 API 串接和前端真实回复链路仍未实现。
+平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context、唯一权威 SubjectState 和最终主体表达。V1–V4 及 S2/S3/S4 已验证机器契约、正式本机交付和 Capability；V5 在固定本地 Profile 下把公共轮次接入该链路，并只从 Engine 稳定结果发布主体 Message。两边不合并数据库，Vio 不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。受控 loopback 验收不等于真实供应商 live smoke；真实登录、系统语音、外部存储、机器人、支付/银行、健康设备、F1 前端真实回复链路和生产部署仍未实现。
 
-S4 双仓共享验收已经完成；真实供应商 live smoke、V5 公共对话 API 与 F1 前端接线仍未开始，须等待后续独立任务。
+V5 固定本地 Profile 公共轮次 API 已完成；真实供应商 live smoke 与 F1 前端接线仍未开始，须等待后续独立任务。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

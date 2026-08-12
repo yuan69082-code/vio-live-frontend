@@ -34,6 +34,7 @@ import { createSqliteContinuityDeliveryRepository } from './integrations/databas
 import { createSqliteContinuityIntegrationRepository } from './integrations/database/sqlite-continuity-integration-repository.js';
 import { createSqliteContinuityResultRepository } from './integrations/database/sqlite-continuity-result-repository.js';
 import { createSqliteContinuityCapabilityRepository } from './integrations/database/sqlite-continuity-capability-repository.js';
+import { createSqliteContinuityConversationTurnRepository } from './integrations/database/sqlite-continuity-conversation-turn-repository.js';
 import { createEnvironmentApiCredentialStore } from './integrations/secrets/environment-api-credential-store.js';
 import { createOpenAiCompatibleModelExecutor } from './integrations/model-providers/openai-compatible-model-executor.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
@@ -50,6 +51,8 @@ import {
 import { createFirstRoundContinuityRequestService } from './modules/continuity-integration/first-round-request-service.js';
 import { createFirstRoundContinuityResultService } from './modules/continuity-integration/first-round-result-service.js';
 import { createContinuityCapabilityService } from './modules/continuity-integration/continuity-capability-service.js';
+import { createContinuityConversationTurnService } from './modules/continuity-integration/continuity-conversation-turn-service.js';
+import { createFixedLocalChatProfileService } from './modules/continuity-integration/fixed-local-chat-profile-service.js';
 import { createContextService } from './modules/contexts/context-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
 import { createConversationSummaryService } from './modules/conversation-summaries/conversation-summary-service.js';
@@ -82,6 +85,7 @@ export function createApplication({
   continuityTransport = null,
   credentialStore: providedCredentialStore = null,
   modelExecutor: providedModelExecutor = null,
+  conversationTurnFaultInjector = null,
 }) {
   const database = createSqliteDatabase(config);
   const userRepository = createSqliteUserRepository(database.connection);
@@ -132,6 +136,8 @@ export function createApplication({
   const continuityCapabilityRepository = createSqliteContinuityCapabilityRepository(
     database.connection,
   );
+  const continuityConversationTurnRepository =
+    createSqliteContinuityConversationTurnRepository(database.connection);
   const credentialStore = providedCredentialStore
     ?? createEnvironmentApiCredentialStore();
   const deviceAdapterRegistry = createUnconfiguredDeviceAdapterRegistry();
@@ -411,6 +417,29 @@ export function createApplication({
       logger,
     })
     : createDisabledContinuityDeliveryService();
+  const fixedLocalChatProfileService = createFixedLocalChatProfileService({
+    userRepository,
+    userSpaceRepository,
+    subjectRepository,
+    assistantGlobalSettingsRepository,
+    conversationRepository,
+    eventService,
+    requestService: continuityRequestService,
+    runInTransaction: database.runInTransaction,
+  });
+  const continuityConversationTurnService = createContinuityConversationTurnService({
+    turnRepository: continuityConversationTurnRepository,
+    conversationService,
+    messageService,
+    eventRepository,
+    requestService: continuityRequestService,
+    resultService: continuityResultService,
+    deliveryService: continuityDeliveryService,
+    capabilityService: continuityCapabilityService,
+    confirmationService,
+    runInTransaction: database.runInTransaction,
+    faultInjector: conversationTurnFaultInjector,
+  });
   const router = createRouter({
     config,
     database,
@@ -448,6 +477,7 @@ export function createApplication({
     deviceService,
     continuityDeliveryService,
     continuityCapabilityService,
+    continuityConversationTurnService,
     logger,
   });
   const server = createServer((request, response) => {
@@ -462,6 +492,8 @@ export function createApplication({
     continuityResultService,
     continuityDeliveryService,
     continuityCapabilityService,
+    continuityConversationTurnService,
+    fixedLocalChatProfileService,
     apiProviderService,
     modelService,
     modelRouterService,
@@ -474,6 +506,7 @@ export function createApplication({
     async start() {
       await continuityCapabilityService?.initialize();
       await continuityDeliveryService.initialize();
+      await continuityConversationTurnService.initialize();
       await new Promise((resolve, reject) => {
         const handleError = (error) => {
           server.off('listening', handleListening);

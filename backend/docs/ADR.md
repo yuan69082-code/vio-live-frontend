@@ -302,6 +302,15 @@
 - 失败边界：HTTP 回传重传和 Provider 真实重试是两套状态。POST 响应未知先查询，若需要重发，只能重发同一已持久化 Result。Engine 明确接受 `FAILED_RETRYABLE` 后请求进入 `waiting_retry`，默认不自动调用；内部明确 `retryApproved=true` 后仍须重新通过路由、权限、安全、预算和 deadline，才生成新 attempt。`UNKNOWN` 被接受后进入 `provider_outcome_unknown`，当前无 Provider reconciliation 能力，因此保持 fail closed，不重发已接受 Result、不再次调用。`FAILED_TERMINAL/CANCELLED/EXPIRED/SUCCEEDED` 后禁止新执行。费用仅保存 Provider 报告或可证明配置计算结果，否则明确为 `not_reported/NULL`。
 - 权威影响：Vio V4 不创建 Engine Event、StateMutation、SubjectState 或 revision，也不改写 legacy `state_update`。Engine 仍是主体状态和最终表达的唯一权威；V1、V2、V3 的事实与幂等语义保持不变。S4 shared test 已完成；当前未新增公共对话 API、前端接线、MCP/Tool/设备或真实供应商验收。
 
+## BE-ADR-037｜公共对话轮次只编排既有账本，最终回复必须来自 Engine 稳定结果
+
+- 日期：2026-08-12
+- 状态：已采用，仅限 Vio V5 固定本地试聊 Profile
+- 决策：公共轮次以独立 `continuity_conversation_turns` 协调账本关联 Conversation、唯一用户 Message/MessageVersion/Event、预分配 requestId、V1 原请求、V3/V4/V2 状态和唯一主体 Message。它不复制 V1 canonical 请求、V2 result/projection、V3 outbox 或 V4 execution/result。`Idempotency-Key` 在当前入口全局唯一，同一 key 只有在用户、助手、会话和正文 hash 全部一致时精确重放。一个 Engine subject 同时只允许一个非终态轮次；轮次计划、V1 持久化、V2 完成、主体 Message 发布和轮次完成之间的每个崩溃窗口都从已落盘 checkpoint 恢复。
+- 回复权威：Provider 候选只能作为 CapabilityResult 返回 Engine。V5 只能从 V2 已严格验证并持久化的 `FirstRoundSuccessResult.response.content` 创建 `senderType=subject` 的 Message，并同时固定 operationId、responseId 和消息版本关联；Provider 原始候选、Vio 本地拼接文本或 legacy SubjectState 均不能成为最终回复。Engine 仍是 SubjectState、revision、Event/StateMutation/Evolution 和主体表达的权威。
+- 公共与身份边界：V5 只提供固定本地 Profile 的 create/get/resume 三个轮次路由，使用开发期 `x-vio-user-id` 与路径 userId 精确匹配，不把它描述为认证。固定 Profile 由显式本地脚本幂等准备，冲突时 fail closed；不提供通用 Binding CRUD。GET 是纯查询；确认和 Provider retry 必须经 resumption 显式触发。Engine 未启用时在任何轮次事实落库前失败。
+- 影响：新增迁移 `022_create_continuity_conversation_turn_ledger.sql`、轮次仓储/服务、固定 Profile 准备服务/CLI 和 V5 专项/shared tests。F1 前端接线、真实供应商 live smoke、通用 Binding、生产认证、多租户、流式输出和部署仍需后续独立阶段；V5 完成不等于产品可公开使用。
+
 ## 待形成的 ADR
 
 以下事项是进入下一阶段前的阻塞性决策：
