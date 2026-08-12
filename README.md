@@ -6,6 +6,8 @@ Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/`
 
 [`Continuity Integration Contract v1.1`](docs/后端/14-continuity-engine连接契约v1.1.md) 已由 Continuity Engine 正式接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON 以及 S4 Capability 双仓共享验收均已通过。Vio V5 现已在固定本地试聊 Profile 下提供持久化公共 Conversation Turn API，把现有 Conversation/Message 串入 V1 → V3 → Engine E5-A → V4 → V2，并且只把 Engine 最终 `FirstRoundSuccessResult.response.content` 保存为主体 Message。F1 对话页只消费该公共 API：真实历史来自 Message 列表，发送、查询和显式恢复遵循 V5 状态机，超时或断线使用 `sessionStorage` 保留同一幂等事实。自动化共享验收只连接随机 loopback 受控 Provider，没有调用真实供应商、使用真实密钥或产生费用。**这仍不表示产品已经生产可用**：真实供应商 live smoke、通用 Binding、生产认证、多租户和部署均未完成。Continuity Engine 继续是 AI SubjectState 与最终主体表达的权威源，前端也仍只能连接 Vio 后端。
 
+L1 现提供三个安全准备入口：从正式 fixture/hash 导出仓库外 Binding、以只读 plan 或双确认 apply 幂等准备唯一 `openai_compatible` Provider/Model/路由/权限/有限预算/credential reference，以及在调用前只读运行 readiness doctor。L1 不调用真实供应商；API Key 只从当前进程环境读取，不进入 `.env`、SQLite、日志、输出、文档或 Git。完整 PowerShell 三端步骤见 [`backend/scripts/README.md`](backend/scripts/README.md)。
+
 ## 前后端本地运行
 
 后端：
@@ -63,7 +65,7 @@ pnpm test
 - test-only JSONL Runner 仍只由独立共享测试显式启动，不会被应用、HTTP、前端或正式 transport 装配。S2/S3 已使用 Engine E4 正式 HTTP Server、Vio V3 正式 transport、V1/V2/V3 账本和临时双数据库完成 15/15 共享验收；正式 transport 仍默认关闭且没有公共或前端直连入口。
 - AI 助手全局设定只保存用户明确配置的长期身份与行为偏好，不能覆盖平台安全规则，也不会自动形成或修改 SubjectState。
 - 用户安全策略只能在已有 Permission 上继续收紧；`session_allow` 使用的开发期安全会话 ID 不是认证凭证，且只在明确确认后的精确范围内短时有效。
-- 没有通用 Memory，也没有在仓库、数据库或文档保存真实 API Key。V4 已具备生产可配置的 `openai_compatible` HTTP adapter，但真实供应商 live smoke 未执行；`anthropic_messages`、`glm_compatible` 和 `custom_http` 仍 fail closed。AI Private Space 只有显式输入的数据层、版本、权限安全联动、独立 Context 投影与导出清单预留，不包含意识、自主行为、开放判断或 continuity-engine 生成。MCP/Skill/Plugin/Tool 目前只有注册、权限投影和未执行准备记录；设备目前只有注册、能力描述、授权和未执行操作日志。没有真实 MCP 连接、插件安装、Tool/Skill 执行、设备连接或控制、厂商 API、支付、真实 AI 私域决策或前端真实回复。
+- 没有通用 Memory，也没有在仓库、数据库或文档保存真实 API Key。V4 已具备生产可配置的 `openai_compatible` HTTP adapter，但真实供应商 live smoke 未执行；`anthropic_messages`、`glm_compatible` 和 `custom_http` 仍 fail closed。AI Private Space 只有显式输入的数据层、版本、权限安全联动、独立 Context 投影与导出清单预留，不包含意识、自主行为、开放判断或 continuity-engine 生成。MCP/Skill/Plugin/Tool 目前只有注册、权限投影和未执行准备记录；设备目前只有注册、能力描述、授权和未执行操作日志。没有真实 MCP 连接、插件安装、Tool/Skill 执行、设备连接或控制、厂商 API、支付、真实 AI 私域决策，真实供应商驱动的前端回复也尚未验收。
 - 生活管理只保存显式输入并进行本地统计；提醒不执行，AI 建议不生成，本地记忆不自动进入通用 Context。没有支付、银行同步、健康设备数据、医疗诊断、真实导出或自动数据删除。
 - 未认证后端不能直接公开部署。
 

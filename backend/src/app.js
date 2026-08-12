@@ -53,6 +53,7 @@ import { createFirstRoundContinuityResultService } from './modules/continuity-in
 import { createContinuityCapabilityService } from './modules/continuity-integration/continuity-capability-service.js';
 import { createContinuityConversationTurnService } from './modules/continuity-integration/continuity-conversation-turn-service.js';
 import { createFixedLocalChatProfileService } from './modules/continuity-integration/fixed-local-chat-profile-service.js';
+import { createLiveChatPreparationService } from './modules/continuity-integration/live-chat-preparation-service.js';
 import { createContextService } from './modules/contexts/context-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
 import { createConversationSummaryService } from './modules/conversation-summaries/conversation-summary-service.js';
@@ -81,6 +82,7 @@ import { createUserSpaceService } from './modules/user-spaces/user-space-service
 
 export function createApplication({
   config,
+  environment = process.env,
   logger = console,
   continuityTransport = null,
   credentialStore: providedCredentialStore = null,
@@ -139,7 +141,7 @@ export function createApplication({
   const continuityConversationTurnRepository =
     createSqliteContinuityConversationTurnRepository(database.connection);
   const credentialStore = providedCredentialStore
-    ?? createEnvironmentApiCredentialStore();
+    ?? createEnvironmentApiCredentialStore(environment);
   const deviceAdapterRegistry = createUnconfiguredDeviceAdapterRegistry();
   const migrationTargetRegistry = createUnconfiguredMigrationTargetRegistry();
   const userService = createUserService({
@@ -427,6 +429,17 @@ export function createApplication({
     requestService: continuityRequestService,
     runInTransaction: database.runInTransaction,
   });
+  const liveChatPreparationService = createLiveChatPreparationService({
+    connection: database.connection,
+    fixedLocalChatProfileService,
+    apiProviderService,
+    modelService,
+    modelRoutingRuleService,
+    permissionService,
+    confirmationService,
+    proactiveInteractionService,
+    environment,
+  });
   const continuityConversationTurnService = createContinuityConversationTurnService({
     turnRepository: continuityConversationTurnRepository,
     conversationService,
@@ -496,6 +509,7 @@ export function createApplication({
     continuityCapabilityService,
     continuityConversationTurnService,
     fixedLocalChatProfileService,
+    liveChatPreparationService,
     apiProviderService,
     modelService,
     modelRouterService,

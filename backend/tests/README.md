@@ -27,7 +27,7 @@
 pnpm test
 ```
 
-当前测试结果为 178/178 通过，已覆盖既有平台能力、Continuity V1–V5、RFC 8785、事务回滚、重启持久化、迁移升级、跨范围隔离和秘密字段拦截。
+L1 新增 `live-chat-preparation-l1.test.js`，18/18 覆盖只读 plan、双确认 apply、精确幂等、固定 Profile/Provider/Model/路由/Permission/Budget/credential 冲突、正式 Binding 导出、doctor 四态、秘密不落盘/不回显、零执行事实和真实 loopback adapter 回归。L1 完成后的后端全量基线为 196/196。
 
 独立 S4 双仓共享测试通过 7/7。`continuity-capability-local-http-shared.test.js` 固定要求 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f`；它显式读取 `CONTINUITY_ENGINE_REPO`，启动 capability 模式与随机 loopback Provider，通过 Vio V1 → V3 → V4 → Engine → V2 真实 HTTP 路径验证成功闭环、精确重放、双方重启、429 显式批准重试、400 终止、UNKNOWN fail closed 及身份/冲突隔离。运行命令为 `pnpm run test:continuity-capability-shared`；该命令不属于默认 `pnpm test`，不会访问公网或真实供应商。
 

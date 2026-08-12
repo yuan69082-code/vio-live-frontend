@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON 与 S4 Capability 双仓共享验收也已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；自动化共享测试使用真实 Engine 进程与随机 loopback 受控 Provider，不代表真实供应商 live smoke。F1 前端接线尚未开始。
+长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON 与 S4 Capability 双仓共享验收也已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 新增 Binding 导出、live-chat plan/apply 和只读 doctor，允许用户在不落盘真实 Key 的前提下准备首次真实 `openai_compatible` 试聊；自动化测试仍只使用随机 loopback Provider，真实供应商 live smoke 尚未执行。
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -29,6 +29,8 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
   V4 Capability 闭环：Engine capability_required → 严格 inbox → Permission/Security/Budget → Model Router → Provider → durable Result outbox → Engine → V2
   V5 固定本地试聊：公共 Turn API → user Message/V1 → V3/V4/Engine/V2 → Engine 最终 response → subject Message
 ```
+
+L1 命令与完整 PowerShell 启动步骤见 [`scripts/README.md`](scripts/README.md)，环境变量治理见 [`config/README.md`](config/README.md)。准备与 doctor 不会调用模型或产生费用；只有用户在 F1 页面发送消息并完成必要确认后，才可能发生真实 Provider 调用。
 
 当前连接设计的权威入口是 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，最终接受证据见 [`14c`](../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。契约固定以下边界：
 
@@ -462,8 +464,8 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context、唯一权威 SubjectState 和最终主体表达。V1–V4 及 S2/S3/S4 已验证机器契约、正式本机交付和 Capability；V5 在固定本地 Profile 下把公共轮次接入该链路，并只从 Engine 稳定结果发布主体 Message。两边不合并数据库，Vio 不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。受控 loopback 验收不等于真实供应商 live smoke；真实登录、系统语音、外部存储、机器人、支付/银行、健康设备、F1 前端真实回复链路和生产部署仍未实现。
+平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context、唯一权威 SubjectState 和最终主体表达。V1–V4 及 S2/S3/S4 已验证机器契约、正式本机交付和 Capability；V5 在固定本地 Profile 下把公共轮次接入该链路，并只从 Engine 稳定结果发布主体 Message；F1 已让现有对话页消费 V5 公共 API。两边不合并数据库，Vio 不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。受控 loopback 验收不等于真实供应商 live smoke；真实登录、系统语音、外部存储、机器人、支付/银行、健康设备和生产部署仍未实现。
 
-V5 固定本地 Profile 公共轮次 API 已完成；真实供应商 live smoke 与 F1 前端接线仍未开始，须等待后续独立任务。
+V5 固定本地 Profile 公共轮次 API、F1 前端接线与 L1 安全准备入口均已完成；真实供应商 live smoke 尚未执行，须由用户在当前进程提供真实 Provider 配置与秘密后另行明确发起。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。
