@@ -85,7 +85,43 @@ test('V5 public Conversation turn closes through real V1-V4, Engine E5-A and loo
       environment.completed = resumed.payload.data;
     });
 
-    await t.test('same Idempotency-Key replays exactly and conflicting content is rejected', async () => {
+    await t.test('legacy Message versions cannot rewrite the ledger-pinned public turn', async () => {
+      const userMessagePath = `/api/v1/users/user-001/subjects/assistant-001/conversations/conversation-001/messages/${environment.completed.userMessage.messageId}`;
+      const subjectMessagePath = `/api/v1/users/user-001/subjects/assistant-001/conversations/conversation-001/messages/${environment.completed.subjectMessage.messageId}`;
+      const edited = await request(environment, userMessagePath, {
+        method: 'PATCH',
+        body: {
+          baseVersionId: environment.completed.userMessage.messageVersionId,
+          content: 'CALLER-ALTERED USER INPUT',
+        },
+      });
+      assert.equal(edited.status, 200);
+      assert.notEqual(
+        edited.payload.data.messageVersionId,
+        environment.completed.userMessage.messageVersionId,
+      );
+      assert.equal(edited.payload.data.isCurrent, true);
+      const regenerated = await request(environment, `${subjectMessagePath}/regenerations`, {
+        method: 'POST',
+        body: {
+          baseVersionId: environment.completed.subjectMessage.messageVersionId,
+          content: 'CALLER-INJECTED ASSISTANT OUTPUT',
+        },
+      });
+      assert.equal(regenerated.status, 201);
+      assert.notEqual(
+        regenerated.payload.data.messageVersionId,
+        environment.completed.subjectMessage.messageVersionId,
+      );
+      assert.equal(regenerated.payload.data.isCurrent, true);
+      const currentUser = await request(environment, userMessagePath);
+      const currentSubject = await request(environment, subjectMessagePath);
+      assert.equal(currentUser.payload.data.content, 'CALLER-ALTERED USER INPUT');
+      assert.equal(currentSubject.payload.data.content, 'CALLER-INJECTED ASSISTANT OUTPUT');
+      const pinned = await request(environment, `${BASE_PATH}/${environment.completed.turnId}`);
+      assert.equal(pinned.status, 200);
+      assert.deepEqual(pinned.payload.data, environment.completed);
+
       const replay = await request(environment, BASE_PATH, {
         method: 'POST',
         key: 'v5-shared-turn-001',
@@ -100,6 +136,18 @@ test('V5 public Conversation turn closes through real V1-V4, Engine E5-A and loo
       });
       assert.equal(conflict.status, 409);
       assert.equal(environment.provider.calls.length, 1);
+      const connection = environment.application.database.connection;
+      assert.equal(count(connection, 'continuity_first_round_requests'), 1);
+      assert.equal(count(connection, 'continuity_first_round_results'), 1);
+      assert.equal(count(connection, 'continuity_engine_state_projection_versions'), 1);
+      assert.equal(count(connection, 'continuity_engine_state_projection_receipts'), 1);
+      assert.equal(count(connection, 'messages', "WHERE sender_type='subject'"), 1);
+      assert.deepEqual(inspectEngine(environment), {
+        revision: 0,
+        operations: 1,
+        completed: 1,
+        thinking: 1,
+      });
     });
 
     await t.test('Vio and Engine restart preserve the same public result without another model call', async () => {

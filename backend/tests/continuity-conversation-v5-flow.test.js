@@ -275,6 +275,165 @@ test('Idempotency-Key exact replay is stable while content and scope conflicts r
   }
 });
 
+test('public turn stays pinned to ledger MessageVersions after legacy edit and regeneration', async () => {
+  const testDatabase = createTestDatabasePath();
+  const counter = { calls: 0 };
+  const environment = setup(testDatabase.databasePath, { counter });
+  let firstCompleted;
+  let turnPathValue;
+  let userMessagePath;
+  let subjectMessagePath;
+  try {
+    const http = await startHttp(environment.application);
+    const created = await http.request(turnPath(), {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'turn-ledger-version-001' },
+      body: { content: 'ORIGINAL USER INPUT' },
+    });
+    const completed = await http.request(
+      turnPath(`/${created.body.data.turnId}/resumptions`),
+      {
+        method: 'POST',
+        body: { confirmationId: created.body.data.confirmation.confirmationId },
+      },
+    );
+    assert.equal(completed.status, 200);
+    firstCompleted = structuredClone(completed.body.data);
+    turnPathValue = turnPath(`/${firstCompleted.turnId}`);
+    userMessagePath = `/api/v1/users/${SCOPE.userId}/subjects/${SCOPE.subjectId}/conversations/${SCOPE.conversationId}/messages/${firstCompleted.userMessage.messageId}`;
+    subjectMessagePath = `/api/v1/users/${SCOPE.userId}/subjects/${SCOPE.subjectId}/conversations/${SCOPE.conversationId}/messages/${firstCompleted.subjectMessage.messageId}`;
+
+    const edited = await http.request(userMessagePath, {
+      method: 'PATCH',
+      body: {
+        baseVersionId: firstCompleted.userMessage.messageVersionId,
+        content: 'CALLER-ALTERED USER INPUT',
+      },
+    });
+    assert.equal(edited.status, 200);
+    assert.notEqual(edited.body.data.messageVersionId, firstCompleted.userMessage.messageVersionId);
+    assert.equal(edited.body.data.isCurrent, true);
+
+    const regenerated = await http.request(`${subjectMessagePath}/regenerations`, {
+      method: 'POST',
+      body: {
+        baseVersionId: firstCompleted.subjectMessage.messageVersionId,
+        content: 'CALLER-INJECTED ASSISTANT OUTPUT',
+      },
+    });
+    assert.equal(regenerated.status, 201);
+    assert.notEqual(
+      regenerated.body.data.messageVersionId,
+      firstCompleted.subjectMessage.messageVersionId,
+    );
+    assert.equal(regenerated.body.data.isCurrent, true);
+
+    const currentUser = await http.request(userMessagePath);
+    const currentSubject = await http.request(subjectMessagePath);
+    assert.equal(currentUser.body.data.currentVersionId, edited.body.data.messageVersionId);
+    assert.equal(currentUser.body.data.content, 'CALLER-ALTERED USER INPUT');
+    assert.equal(currentSubject.body.data.currentVersionId, regenerated.body.data.messageVersionId);
+    assert.equal(currentSubject.body.data.content, 'CALLER-INJECTED ASSISTANT OUTPUT');
+
+    const getAfterMutation = await http.request(turnPathValue);
+    assert.equal(getAfterMutation.status, 200);
+    assert.deepEqual(getAfterMutation.body.data, firstCompleted);
+    assert.equal(getAfterMutation.body.data.userMessage.content, 'ORIGINAL USER INPUT');
+    assert.equal(
+      getAfterMutation.body.data.userMessage.messageVersionId,
+      firstCompleted.userMessage.messageVersionId,
+    );
+    assert.equal(
+      getAfterMutation.body.data.subjectMessage.content,
+      'Engine-approved provider reply.',
+    );
+    assert.equal(
+      getAfterMutation.body.data.subjectMessage.messageVersionId,
+      firstCompleted.subjectMessage.messageVersionId,
+    );
+
+    const replay = await http.request(turnPath(), {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'turn-ledger-version-001' },
+      body: { content: 'ORIGINAL USER INPUT' },
+    });
+    assert.equal(replay.status, 200);
+    assert.deepEqual(replay.body.data, firstCompleted);
+
+    const terminalResume = await http.request(`${turnPathValue}/resumptions`, {
+      method: 'POST',
+      body: {},
+    });
+    assert.equal(terminalResume.status, 200);
+    assert.deepEqual(terminalResume.body.data, firstCompleted);
+    assert.equal(counter.calls, 1);
+  } finally {
+    await environment.application.stop();
+  }
+
+  const restarted = createV4Application(testDatabase.databasePath, {
+    modelExecutor: successExecutor(counter),
+  });
+  try {
+    const http = await startHttp(restarted.application);
+    const recovered = await http.request(turnPathValue);
+    assert.equal(recovered.status, 200);
+    assert.deepEqual(recovered.body.data, firstCompleted);
+    const connection = restarted.application.database.connection;
+    assert.equal(counter.calls, 1);
+    assert.equal(connection.prepare('SELECT COUNT(*) count FROM continuity_first_round_requests').get().count, 1);
+    assert.equal(connection.prepare('SELECT COUNT(*) count FROM continuity_first_round_results').get().count, 1);
+    assert.equal(connection.prepare('SELECT COUNT(*) count FROM continuity_engine_state_projection_versions').get().count, 1);
+    assert.equal(connection.prepare('SELECT COUNT(*) count FROM continuity_engine_state_projection_receipts').get().count, 1);
+    assert.equal(connection.prepare("SELECT COUNT(*) count FROM messages WHERE sender_type='subject'").get().count, 1);
+    assert.equal(connection.prepare("SELECT COUNT(*) count FROM events WHERE event_type='message_created'").get().count, 2);
+    assert.equal(connection.prepare('SELECT COUNT(*) count FROM subject_states').get().count, 0);
+    assert.equal(connection.prepare('SELECT COUNT(*) count FROM subject_state_heads').get().count, 0);
+  } finally {
+    await restarted.application.stop();
+    testDatabase.remove();
+  }
+});
+
+test('public turn fails closed when a locked MessageVersion identity is corrupt', async () => {
+  const testDatabase = createTestDatabasePath();
+  const counter = { calls: 0 };
+  const environment = setup(testDatabase.databasePath, { counter });
+  const http = await startHttp(environment.application);
+  try {
+    const created = await http.request(turnPath(), {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'turn-corrupt-version-001' },
+      body: { content: 'locked identity' },
+    });
+    const completed = await http.request(
+      turnPath(`/${created.body.data.turnId}/resumptions`),
+      {
+        method: 'POST',
+        body: { confirmationId: created.body.data.confirmation.confirmationId },
+      },
+    );
+    assert.equal(completed.status, 200);
+    const connection = environment.application.database.connection;
+    connection.exec('DROP TRIGGER prevent_message_version_update');
+    connection.prepare(`
+      UPDATE message_versions SET sender_type='system'
+      WHERE message_version_id=?
+    `).run(completed.body.data.userMessage.messageVersionId);
+
+    const rejected = await http.request(turnPath(`/${created.body.data.turnId}`));
+    assert.equal(rejected.status, 409);
+    assert.equal(rejected.body.error.code, 'conflict');
+    assert.equal(counter.calls, 1);
+    assert.equal(connection.prepare('SELECT COUNT(*) count FROM continuity_first_round_requests').get().count, 1);
+    assert.equal(connection.prepare('SELECT COUNT(*) count FROM continuity_first_round_results').get().count, 1);
+    assert.equal(connection.prepare("SELECT COUNT(*) count FROM messages WHERE sender_type='subject'").get().count, 1);
+  } finally {
+    await environment.application.stop();
+    testDatabase.remove();
+  }
+});
+
 test('public input rejects missing headers, invalid keys, unknown fields and disabled integration', async () => {
   const testDatabase = createTestDatabasePath();
   const environment = setup(testDatabase.databasePath);

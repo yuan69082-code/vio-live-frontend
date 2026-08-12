@@ -27,7 +27,7 @@
 pnpm test
 ```
 
-当前测试结果为 176/176 通过，已覆盖既有平台能力、Continuity V1–V5、RFC 8785、事务回滚、重启持久化、迁移升级、跨范围隔离和秘密字段拦截。
+当前测试结果为 178/178 通过，已覆盖既有平台能力、Continuity V1–V5、RFC 8785、事务回滚、重启持久化、迁移升级、跨范围隔离和秘密字段拦截。
 
 独立 S4 双仓共享测试通过 7/7。`continuity-capability-local-http-shared.test.js` 固定要求 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f`；它显式读取 `CONTINUITY_ENGINE_REPO`，启动 capability 模式与随机 loopback Provider，通过 Vio V1 → V3 → V4 → Engine → V2 真实 HTTP 路径验证成功闭环、精确重放、双方重启、429 显式批准重试、400 终止、UNKNOWN fail closed 及身份/冲突隔离。运行命令为 `pnpm run test:continuity-capability-shared`；该命令不属于默认 `pnpm test`，不会访问公网或真实供应商。
 
@@ -40,7 +40,7 @@ CONTINUITY_ENGINE_REPO=/path/to/continuity-engine pnpm run test:continuity-capab
 CONTINUITY_ENGINE_REPO=/path/to/continuity-engine pnpm run test:continuity-conversation-shared
 ```
 
-V5 公共轮次专项共 17 项，覆盖 `022` fresh/`001–021` upgrade/失败回滚、固定 Profile 幂等准备、公共创建/查询/恢复、Engine 禁用前置失败、幂等/范围冲突、单主体活动轮次、确认/预算/deny/retry/UNKNOWN、query-first，以及 V1 前后、V2 完成后和主体 Message 发布窗口的 SQLite 重启恢复。正式 V5 shared test 共 6/6，以真实 Engine E5-A、Vio 公共 HTTP、V1–V5、随机 loopback Provider 和临时双数据库验证确认恢复、Engine 最终回复落为唯一主体 Message、精确重放、双方重启及无直连边界；不访问公网、不使用真实密钥或产生费用。
+V5 公共轮次专项共 19 项，覆盖 `022` fresh/`001–021` upgrade/失败回滚、固定 Profile 幂等准备、公共创建/查询/恢复、Engine 禁用前置失败、幂等/范围冲突、单主体活动轮次、确认/预算/deny/retry/UNKNOWN、query-first，以及 V1 前后、V2 完成后和主体 Message 发布窗口的 SQLite 重启恢复。新增 HTTP 回归真实调用旧 PATCH 与 regeneration，使 Message 的 `currentVersionId` 发生变化，并验证 GET、幂等重放、终态 resumption 与重启仍精确返回账本锁定的原始 user/subject MessageVersion，且不重复 Provider、V1、V2 或主体 Message；另以临时损坏数据确认锁定版本身份不一致时 fail closed。正式 V5 shared test 共 6/6，以真实 Engine E5-A、Vio 公共 HTTP、V1–V5、随机 loopback Provider 和临时双数据库验证上述版本锁定、确认恢复、Engine 最终回复、精确重放、双方重启及无直连边界；不访问公网、不使用真实密钥或产生费用。
 
 test-only 共享专项 6/6 通过，固定核对 Engine `7a32a99` 与 Vio `97874ee` 基线、三份 Schema 解析结构、真实 V1 SQLite 请求、A/B/C revision 0→1→1、四类真实错误、同进程/双方重启幂等、UTF-8 JSONL、异常/超时/非法输出失败和应用/HTTP/前端零注册。该测试仍使用 Engine 内确定性 test double 和临时双数据库，不是正式网络入口。
 

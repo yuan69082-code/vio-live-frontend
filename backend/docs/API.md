@@ -510,6 +510,8 @@ V5 只允许已由 `pnpm run prepare:local-chat` 准备的固定本地 Profile�
 
 V5 首先原子保存用户 Message/MessageVersion、脱敏 `message_created` Event 与轮次计划，再持久化唯一 V1 request。V3/V4/V2 完成后，主体正文只能来自 V2 中 Engine `FirstRoundSuccessResult.response.content`；Provider `responseCandidate` 永不直接成为 Message。轮次账本先关联稳定 operation/response，再保存唯一主体 Message，并在独立完成标记前允许崩溃恢复，因此重启不会复制请求、Provider 调用、result、projection、receipt 或回复。
 
+Turn 是不可变执行事实。公共投影中的用户正文、主体正文、`senderType` 和 `messageVersionId` 均从 `continuity_conversation_turns` 锁定的 `user_message_version_id` / `subject_message_version_id` 精确读取；Message 行只提供原始 `createdAt` 和 `sequenceNumber`。通用 Message API 后续追加 `edited` 或 `regenerated` 版本、并改变 `currentVersionId`，不会改写历史 Turn。锁定版本缺失或复合归属、发送者类型不一致时 fail closed，绝不回退到当前版本；调用方提供的 regenerated 主体正文也不能替代该 Turn 已验证的 Engine/V2 回复。
+
 ### 对话软件事件
 
 Event 当前共十八类：

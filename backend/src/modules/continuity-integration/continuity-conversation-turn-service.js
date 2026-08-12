@@ -76,6 +76,8 @@ export function createContinuityConversationTurnService({
   turnRepository,
   conversationService,
   messageService,
+  messageRepository,
+  messageVersionRepository,
   eventRepository,
   requestService,
   resultService,
@@ -105,18 +107,46 @@ export function createContinuityConversationTurnService({
 
   function messageFor(record, kind) {
     const messageId = kind === 'user' ? record.userMessageId : record.subjectMessageId;
+    const messageVersionId = kind === 'user'
+      ? record.userMessageVersionId
+      : record.subjectMessageVersionId;
     if (!messageId) return null;
-    const message = messageService.getMessage(
+    const expectedSenderType = kind === 'user' ? 'user' : 'subject';
+    const message = messageRepository.findById(
       record.userId,
       record.assistantId,
       record.conversationId,
       messageId,
     );
+    const version = messageVersionRepository.findById(
+      record.userId,
+      record.assistantId,
+      record.conversationId,
+      messageId,
+      messageVersionId,
+    );
+    if (
+      !message
+      || !version
+      || message.userId !== record.userId
+      || message.subjectId !== record.assistantId
+      || message.conversationId !== record.conversationId
+      || message.messageId !== messageId
+      || message.senderType !== expectedSenderType
+      || version.userId !== record.userId
+      || version.subjectId !== record.assistantId
+      || version.conversationId !== record.conversationId
+      || version.messageId !== messageId
+      || version.messageVersionId !== messageVersionId
+      || version.senderType !== expectedSenderType
+    ) {
+      throw new ConflictError('Conversation turn message version does not match its immutable ledger fact.');
+    }
     return {
       messageId: message.messageId,
-      messageVersionId: message.currentVersionId,
-      senderType: message.senderType,
-      content: message.content,
+      messageVersionId: version.messageVersionId,
+      senderType: version.senderType,
+      content: version.content,
       sequenceNumber: message.sequenceNumber,
       createdAt: message.createdAt,
     };

@@ -130,10 +130,10 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
 - 第一轮三份 Draft 2020-12 机器契约 Schema 的封闭本地 registry、严格未知字段/禁止状态字段校验、RFC 8785 与三项固定 SHA-256 conformance hash
 - 固定 SubjectBinding 测试装载、Vio 归属/来源验证、规范化逻辑请求构造，以及 requestId/createdAt/requestHash 跨重启恢复
 - Vio V3 正式本机 HTTP transport、delivery/outbox/attempt、timeout 后查询、`completed` / `recovery_required` / `not_found` 恢复、启动重放与 `disabled` / `ready` / `degraded` 健康状态
-- `pnpm test` 当前 176/176 通过，覆盖既有平台能力、Vio V1–V5、RFC 8785、021/022 迁移、loopback Provider、门控、轮次幂等、隔离、事务和重启恢复边界
+- `pnpm test` 当前 178/178 通过，覆盖既有平台能力、Vio V1–V5、RFC 8785、021/022 迁移、loopback Provider、门控、轮次幂等、锁定版本投影、隔离、事务和重启恢复边界
 - S2/S3 正式本机 HTTP shared tests 15/15 通过；Vio V1 + RFC 8785 + V2 + V3 为 64/64，Engine crash-recovery 15/15、E4 67/67、全量 301/301 通过
 
-Vio V1 生成并保存逻辑请求，V2 严格保存 Engine 结果/投影，V3 负责可靠交付，V4 负责受控 Capability 执行与回传。V5 只编排现有能力：先原子保存用户 Message 与轮次计划，再持久化 V1 请求并驱动 V3/V4；完成时从 V2 首次稳定结果读取 Engine `response.content`，原子保存一条主体 Message 后标记轮次完成。Provider 候选不能绕过 Engine。等待确认、预算、重试和 outcome unknown 均为可查询状态；恢复不会新建 requestId、重复 Provider 调用或复制回复。前端 `src`、页面与 mock 未修改。
+Vio V1 生成并保存逻辑请求，V2 严格保存 Engine 结果/投影，V3 负责可靠交付，V4 负责受控 Capability 执行与回传。V5 只编排现有能力：先原子保存用户 Message 与轮次计划，再持久化 V1 请求并驱动 V3/V4；完成时从 V2 首次稳定结果读取 Engine `response.content`，原子保存一条主体 Message 后标记轮次完成。Turn 投影始终读取账本锁定的精确 user/subject MessageVersion，不跟随通用 Message `currentVersionId`，因此后续编辑或 regeneration 不会改写历史轮次。Provider 候选不能绕过 Engine。等待确认、预算、重试和 outcome unknown 均为可查询状态；恢复不会新建 requestId、重复 Provider 调用或复制回复。前端 `src`、页面与 mock 未修改。
 
 ## 运行要求
 

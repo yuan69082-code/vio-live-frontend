@@ -431,6 +431,8 @@ export function createApplication({
     turnRepository: continuityConversationTurnRepository,
     conversationService,
     messageService,
+    messageRepository,
+    messageVersionRepository,
     eventRepository,
     requestService: continuityRequestService,
     resultService: continuityResultService,
