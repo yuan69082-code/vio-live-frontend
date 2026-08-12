@@ -1,18 +1,4 @@
-import {
-  ConversationMessage,
-  MessageAction,
-} from '../../data/conversationMock'
-import ConversationIcon, { ConversationIconName } from './ConversationIcon'
-
-const actionDetails: Record<
-  MessageAction,
-  { label: string; icon: ConversationIconName }
-> = {
-  edit: { label: '编辑消息', icon: 'edit' },
-  regenerate: { label: '重新生成', icon: 'regenerate' },
-  delete: { label: '删除', icon: 'delete' },
-  branch: { label: '创建新分支', icon: 'branch' },
-}
+import type { ConversationMessage } from '../../api'
 
 type MessageBubbleProps = {
   message: ConversationMessage
@@ -20,7 +6,12 @@ type MessageBubbleProps = {
 }
 
 function MessageBubble({ message, agentAvatar }: MessageBubbleProps) {
-  const isUser = message.sender === 'user'
+  const isUser = message.senderType === 'user'
+  const time = new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(message.createdAt))
 
   return (
     <article className={`message-row ${isUser ? 'is-user' : 'is-assistant'}`}>
@@ -33,23 +24,9 @@ function MessageBubble({ message, agentAvatar }: MessageBubbleProps) {
       <div className="message-content">
         <div className="message-meta">
           <span>{isUser ? '你' : 'Vio'}</span>
-          <time dateTime={`2026-07-23T${message.time}:00+08:00`}>
-            {message.time}
-          </time>
+          <time dateTime={message.createdAt}>{time}</time>
         </div>
         <p className="message-bubble">{message.content}</p>
-        <div className="message-actions" aria-label="消息操作">
-          {message.actions.map((action) => {
-            const details = actionDetails[action]
-
-            return (
-              <button key={action} type="button" aria-label={details.label}>
-                <ConversationIcon name={details.icon} />
-                <span>{details.label}</span>
-              </button>
-            )
-          })}
-        </div>
       </div>
     </article>
   )

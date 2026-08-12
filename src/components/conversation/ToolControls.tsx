@@ -1,19 +1,12 @@
-type ToolControlsProps = {
-  models: string[]
-  contextModes: string[]
-}
+const contextModes = ['精简', '标准', '完整', '自定义']
 
-function ToolControls({ models, contextModes }: ToolControlsProps) {
+function ToolControls() {
   return (
     <section className="conversation-controls" aria-label="对话工具控制">
       <label className="model-control">
         <span>当前模型</span>
-        <select defaultValue={models[0]} aria-label="选择当前模型">
-          {models.map((model) => (
-            <option key={model} value={model}>
-              {model}
-            </option>
-          ))}
+        <select value="由后端路由" aria-label="当前模型由后端路由" disabled>
+          <option value="由后端路由">由后端路由</option>
         </select>
       </label>
 
@@ -27,6 +20,7 @@ function ToolControls({ models, contextModes }: ToolControlsProps) {
                 name="conversation-context"
                 value={mode}
                 defaultChecked={mode === '标准'}
+                disabled
               />
               <span>{mode}</span>
             </label>

@@ -20,8 +20,13 @@ function ConversationHeader({
         <span>{agentName}</span>
         <h1>{sessionName}</h1>
       </div>
-      <button className="session-switch" type="button">
-        切换会话
+      <button
+        className="session-switch"
+        type="button"
+        disabled
+        title="当前仅开放固定本地试聊会话"
+      >
+        本地试聊
         <ConversationIcon name="chevron" />
       </button>
     </header>

@@ -1474,10 +1474,10 @@ input[type="text"]:focus {
 }
 
 .conversation-page {
-  display: grid;
+  display: flex;
   height: 100%;
   min-height: 0;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  flex-direction: column;
   background:
     radial-gradient(circle at 90% 6%, rgba(209, 195, 247, 0.28), transparent 25%),
     rgba(250, 248, 253, 0.5);
@@ -1551,6 +1551,12 @@ input[type="text"]:focus {
   cursor: pointer;
 }
 
+.session-switch:disabled {
+  color: #8b8195;
+  background: rgba(244, 240, 253, 0.62);
+  cursor: not-allowed;
+}
+
 .conversation-icon {
   width: 17px;
   height: 17px;
@@ -1609,6 +1615,12 @@ input[type="text"]:focus {
   font-weight: 650;
 }
 
+.model-control select:disabled {
+  color: #766b7f;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
 .context-options {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1622,6 +1634,10 @@ input[type="text"]:focus {
 .context-options label {
   min-width: 0;
   cursor: pointer;
+}
+
+.context-options label:has(input:disabled) {
+  cursor: not-allowed;
 }
 
 .context-options input {
@@ -1683,6 +1699,11 @@ input[type="text"]:focus {
   cursor: pointer;
 }
 
+.session-context-bar button:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
 .session-context-icon {
   display: grid;
   width: 24px;
@@ -1724,6 +1745,7 @@ input[type="text"]:focus {
 }
 
 .message-list {
+  flex: 1;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -1731,6 +1753,98 @@ input[type="text"]:focus {
   overscroll-behavior: contain;
   scrollbar-color: rgba(130, 105, 186, 0.28) transparent;
   scrollbar-width: thin;
+}
+
+.conversation-empty {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  gap: 5px;
+  padding: 30px 20px;
+  color: #918797;
+  text-align: center;
+}
+
+.conversation-empty strong {
+  color: #5a4c68;
+  font-size: 12px;
+}
+
+.conversation-empty span {
+  max-width: 240px;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.conversation-status {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 7px 12px 0;
+  padding: 8px 9px;
+  border: 1px solid rgba(150, 126, 204, 0.2);
+  border-radius: 12px;
+  color: #665675;
+  background: rgba(245, 241, 252, 0.9);
+  box-shadow: 0 7px 20px rgba(68, 50, 99, 0.045);
+}
+
+.conversation-status.is-warning {
+  border-color: rgba(191, 142, 64, 0.25);
+  background: rgba(255, 249, 235, 0.94);
+}
+
+.conversation-status.is-danger {
+  border-color: rgba(183, 83, 109, 0.23);
+  background: rgba(255, 242, 246, 0.94);
+}
+
+.conversation-status > div:first-child {
+  min-width: 0;
+}
+
+.conversation-status strong,
+.conversation-status span {
+  display: block;
+}
+
+.conversation-status strong {
+  margin-bottom: 2px;
+  color: #574366;
+  font-size: 9px;
+}
+
+.conversation-status span {
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.conversation-status-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.conversation-status button {
+  min-height: 27px;
+  padding: 0 8px;
+  border: 1px solid rgba(117, 84, 197, 0.2);
+  border-radius: 9px;
+  color: #6f50b7;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.conversation-status button:disabled {
+  color: #aaa1af;
+  cursor: wait;
 }
 
 .message-list::-webkit-scrollbar {
@@ -1910,6 +2024,11 @@ input[type="text"]:focus {
   box-shadow: 0 0 0 4px rgba(130, 99, 202, 0.09);
 }
 
+.conversation-composer textarea:disabled {
+  color: #9b929f;
+  cursor: not-allowed;
+}
+
 .composer-toolbar {
   display: flex;
   align-items: center;
@@ -1932,6 +2051,12 @@ input[type="text"]:focus {
   color: #82758d;
   background: rgba(249, 247, 251, 0.9);
   cursor: pointer;
+}
+
+.attachment-actions button:disabled {
+  color: #b4adb9;
+  background: rgba(246, 244, 248, 0.74);
+  cursor: not-allowed;
 }
 
 .attachment-actions .conversation-icon {
@@ -1960,9 +2085,24 @@ input[type="text"]:focus {
   height: 14px;
 }
 
+.conversation-send:disabled {
+  color: rgba(255, 255, 255, 0.78);
+  background: linear-gradient(135deg, #b3a7ca, #aaa0bc);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.composer-count {
+  margin-left: auto;
+  color: #a59cac;
+  font-size: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
 .conversation-composer button:focus-visible,
 .session-context-bar button:focus-visible,
-.message-actions button:focus-visible {
+.message-actions button:focus-visible,
+.conversation-status button:focus-visible {
   outline: 3px solid rgba(118, 87, 199, 0.18);
   outline-offset: 1px;
 }
