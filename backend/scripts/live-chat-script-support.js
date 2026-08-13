@@ -3,9 +3,13 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { loadConfig } from '../src/config.js';
 
+export function normalizeScriptArguments(argv) {
+  return argv[0] === '--' ? argv.slice(1) : [...argv];
+}
+
 export function parseFlags(argv, allowed) {
   const flags = new Set();
-  for (const value of argv) {
+  for (const value of normalizeScriptArguments(argv)) {
     if (!allowed.includes(value)) throw new Error(`Unsupported argument: ${value}`);
     if (flags.has(value)) throw new Error(`Duplicate argument: ${value}`);
     flags.add(value);

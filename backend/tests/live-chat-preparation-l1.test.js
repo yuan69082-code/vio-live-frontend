@@ -58,6 +58,18 @@ function runScript(script, args, env) {
   });
 }
 
+function runPnpm(scriptName, args, env) {
+  return spawnSync('pnpm', [
+    'run', scriptName, '--', ...args,
+  ], {
+    cwd: backendRoot,
+    env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+    windowsHide: true,
+  });
+}
+
 function count(connection, table) {
   return connection.prepare(`SELECT COUNT(*) count FROM ${table}`).get().count;
 }
@@ -259,6 +271,74 @@ test('Binding export is the formal fixture, exact hash, idempotent and refuses m
     );
     assert.notEqual(repositoryTarget.status, 0);
     assert.equal(existsSync(resolve(import.meta.dirname, '..', 'binding.json')), false);
+  } finally {
+    database.remove();
+  }
+});
+
+test('documented pnpm separators reach export, plan and apply without weakening their behavior', async () => {
+  const database = createTestDatabasePath();
+  const target = join(database.directory, 'pnpm-binding.json');
+  const env = environment(database.databasePath);
+  try {
+    const exported = runPnpm('export:local-chat-binding', ['--output', target], env);
+    assert.equal(exported.status, 0, exported.stderr);
+    assert.equal(exported.stdout.includes('Unsupported argument: --'), false);
+    assert.deepEqual(JSON.parse(readFileSync(target, 'utf8')), fixedSubjectBindingFixture());
+    assert.match(exported.stdout, new RegExp(EXPECTED_BINDING_FIXTURE_HASH.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
+
+    const planned = runPnpm('prepare:live-chat', ['--plan'], env);
+    assert.equal(planned.status, 2);
+    assert.equal(planned.stdout.includes('"mode": "plan"'), true);
+    assert.equal(planned.stdout.includes('Unsupported argument: --'), false);
+    assert.equal(planned.stderr.includes('Unsupported argument: --'), false);
+
+    const applied = runPnpm('prepare:live-chat', [
+      '--apply',
+      '--acknowledge-external-provider',
+      '--acknowledge-possible-charges',
+    ], env);
+    assert.equal(applied.status, 0, applied.stderr);
+    assert.equal(applied.stdout.includes('"mode": "apply"'), true);
+    assert.equal(applied.stdout.includes('Unsupported argument: --'), false);
+    assert.equal(applied.stderr.includes('Unsupported argument: --'), false);
+    const application = createL1Application(database.databasePath, env);
+    assert.equal(count(application.database.connection, 'api_providers'), 1);
+    assert.equal(count(application.database.connection, 'models'), 1);
+    assert.equal(count(application.database.connection, 'model_routing_rules'), 1);
+    assert.equal(count(application.database.connection, 'token_budgets'), 1);
+    assert.equal(count(application.database.connection, 'api_provider_credential_bindings'), 1);
+    await application.stop();
+  } finally {
+    database.remove();
+  }
+});
+
+test('direct arguments remain supported while unknown, duplicate and multiple separators fail closed', () => {
+  const database = createTestDatabasePath();
+  const env = environment(database.databasePath);
+  const directTarget = join(database.directory, 'direct-binding.json');
+  try {
+    assert.equal(runScript(scripts.exportBinding, ['--output', directTarget], env).status, 0);
+    assert.equal(runScript(scripts.prepare, ['--plan'], env).status, 2);
+
+    for (const args of [
+      ['--unknown'],
+      ['--plan', '--plan'],
+      ['--', '--', '--plan'],
+    ]) {
+      const result = runScript(scripts.prepare, args, env);
+      assert.notEqual(result.status, 0);
+    }
+    for (const args of [
+      ['--'],
+      ['--', '--', '--output', join(database.directory, 'multiple.json')],
+      ['--', '--output'],
+      ['--', '--unknown', directTarget],
+    ]) {
+      const result = runScript(scripts.exportBinding, args, env);
+      assert.notEqual(result.status, 0);
+    }
   } finally {
     database.remove();
   }

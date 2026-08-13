@@ -8,17 +8,21 @@ import {
 } from '../src/modules/continuity-integration/first-round-contract.js';
 import { calculateBindingFixtureHash } from '../src/modules/continuity-integration/first-round-hashing.js';
 import { validateFixedSubjectBindingFixture } from '../src/modules/continuity-integration/first-round-validator.js';
-import { writeJson } from './live-chat-script-support.js';
+import {
+  normalizeScriptArguments,
+  writeJson,
+} from './live-chat-script-support.js';
 
 function outputPath(argv) {
-  const index = argv.indexOf('--output');
-  if (index === -1 || !argv[index + 1] || argv.length !== 2) {
+  const normalized = normalizeScriptArguments(argv);
+  const index = normalized.indexOf('--output');
+  if (index === -1 || !normalized[index + 1] || normalized.length !== 2) {
     throw new Error('Usage: pnpm run export:local-chat-binding -- --output <absolute-runtime-path>');
   }
-  if (!isAbsolute(argv[index + 1])) {
+  if (!isAbsolute(normalized[index + 1])) {
     throw new Error('Binding output must use an absolute path outside the repository.');
   }
-  return resolve(argv[index + 1]);
+  return resolve(normalized[index + 1]);
 }
 
 const target = outputPath(process.argv.slice(2));
