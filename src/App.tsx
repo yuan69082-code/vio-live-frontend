@@ -123,6 +123,11 @@ function App() {
           <p>登录或注册，继续与你的智能体相遇。</p>
         </header>
 
+        <aside className="local-acceptance-notice" aria-label="本机验收模式说明">
+          <strong>本机验收模式</strong>
+          <span>当前登录为演示入口，尚未连接真实账号系统。</span>
+        </aside>
+
         <button
           className="google-button"
           type="button"

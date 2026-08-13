@@ -147,6 +147,29 @@ button {
   line-height: 1.6;
 }
 
+.local-acceptance-notice {
+  display: grid;
+  gap: 3px;
+  margin: -7px 0 18px;
+  padding: 11px 13px;
+  border: 1px solid rgba(118, 87, 199, 0.18);
+  border-radius: 14px;
+  color: #746989;
+  background: rgba(241, 236, 255, 0.68);
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.local-acceptance-notice strong {
+  color: #6549ad;
+  font-size: 13px;
+}
+
+.local-acceptance-notice span {
+  overflow-wrap: anywhere;
+}
+
 .google-button,
 .submit-button {
   width: 100%;
@@ -8928,6 +8951,21 @@ input[type="text"]:focus {
   .body-ai-actions button > span {
     width: 28px;
     height: 28px;
+  }
+}
+
+@media (max-width: 360px) {
+  .login-card {
+    padding-inline: 18px;
+  }
+
+  .verification-row {
+    grid-template-columns: minmax(0, 1fr) 96px;
+    gap: 8px;
+  }
+
+  .code-button {
+    padding-inline: 4px;
   }
 }
 
