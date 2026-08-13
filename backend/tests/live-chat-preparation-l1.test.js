@@ -17,6 +17,8 @@ import {
 import {
   LIVE_CHAT_CONFIGURATION,
   doctorLiveChat,
+  inspectLiveChatEnvironment,
+  inspectLiveChatRuntime,
 } from '../src/modules/continuity-integration/live-chat-preparation-service.js';
 import { createTestDatabasePath } from '../test-support/test-application.js';
 
@@ -26,6 +28,22 @@ const scripts = Object.freeze({
   doctor: join(backendRoot, 'scripts', 'doctor-live-chat.js'),
   exportBinding: join(backendRoot, 'scripts', 'export-local-chat-binding.js'),
 });
+
+const LIVE_CHAT_ENVIRONMENT_NAMES = Object.freeze([
+  'VIO_LIVE_PROVIDER_BASE_URL',
+  'VIO_LIVE_MODEL_NAME',
+  'VIO_LIVE_DAILY_TOKEN_LIMIT',
+  'VIO_LIVE_SESSION_TOKEN_LIMIT',
+  'VIO_MODEL_API_KEY_LIVE',
+  'VIO_LIVE_BINDING_FILE',
+  'VIO_LIVE_ENGINE_DATA_DIR',
+  'VIO_LIVE_ENGINE_CYCLE_ID',
+  'VIO_LIVE_ENGINE_THINKING_MODE',
+  'VIO_CONTINUITY_ENGINE_ENABLED',
+  'VIO_CONTINUITY_ENGINE_BASE_URL',
+  'VIO_CONTINUITY_ENGINE_TOKEN',
+  'CONTINUITY_ENGINE_INTEGRATION_TOKEN',
+]);
 
 function environment(databasePath, overrides = {}) {
   return {
@@ -38,6 +56,18 @@ function environment(databasePath, overrides = {}) {
     VIO_MODEL_API_KEY_LIVE: randomBytes(32).toString('base64url'),
     ...overrides,
   };
+}
+
+function emptyLiveEnvironment(databasePath, overrides = {}) {
+  const result = { ...process.env, VIO_BACKEND_DB_PATH: databasePath };
+  for (const name of LIVE_CHAT_ENVIRONMENT_NAMES) delete result[name];
+  return { ...result, ...overrides };
+}
+
+function clearLiveEnvironmentValues(environment) {
+  const result = { ...environment };
+  for (const name of LIVE_CHAT_ENVIRONMENT_NAMES) delete result[name];
+  return result;
 }
 
 function createL1Application(databasePath, env) {
@@ -68,6 +98,24 @@ function runPnpm(scriptName, args, env) {
     shell: process.platform === 'win32',
     windowsHide: true,
   });
+}
+
+function runPnpmWithoutSeparator(scriptName, env) {
+  return spawnSync('pnpm', ['run', scriptName], {
+    cwd: backendRoot,
+    env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+    windowsHide: true,
+  });
+}
+
+function parseCommandJson(stdout) {
+  const start = stdout.indexOf('{');
+  const end = stdout.lastIndexOf('}');
+  assert.notEqual(start, -1);
+  assert.ok(end >= start);
+  return JSON.parse(stdout.slice(start, end + 1));
 }
 
 function count(connection, table) {
@@ -422,6 +470,167 @@ test('doctor reports ready, missing, conflict and unsafe without displaying secr
   }
 });
 
+test('an entirely absent or whitespace-only live environment is missing and stays read-only', () => {
+  for (const whitespace of [undefined, '']) {
+    const database = createTestDatabasePath();
+    const overrides = whitespace === undefined
+      ? {}
+      : Object.fromEntries(LIVE_CHAT_ENVIRONMENT_NAMES
+        .filter((name) => name !== 'VIO_BACKEND_DB_PATH')
+        .map((name) => [name, whitespace]));
+    const env = emptyLiveEnvironment(database.databasePath, overrides);
+    try {
+      const plan = runPnpm('prepare:live-chat', ['--plan'], env);
+      assert.equal(plan.status, 2);
+      assert.equal(existsSync(database.databasePath), false);
+      assert.equal(plan.stdout.includes('Unsupported argument: --'), false);
+      assert.equal(plan.stderr.includes('Unsupported argument: --'), false);
+      const planOutput = parseCommandJson(plan.stdout);
+      assert.equal(planOutput.status, 'missing');
+      assert.equal(planOutput.mode, 'plan');
+
+      const doctor = runPnpmWithoutSeparator('doctor:live-chat', env);
+      assert.equal(doctor.status, 2);
+      assert.equal(existsSync(database.databasePath), false);
+      const doctorOutput = parseCommandJson(doctor.stdout);
+      assert.equal(doctorOutput.status, 'missing');
+      assert.equal(doctorOutput.modelCall, 'not_performed');
+      assert.equal(doctorOutput.providerCharge, 'not_incurred');
+      assert.equal(doctorOutput.items.every(({ status }) => status === 'missing'), true);
+    } finally {
+      database.remove();
+    }
+  }
+});
+
+test('Provider environment distinguishes missing values from unsafe supplied values without exposing secrets', () => {
+  const missing = inspectLiveChatEnvironment({
+    VIO_LIVE_PROVIDER_BASE_URL: ' ',
+    VIO_LIVE_MODEL_NAME: '',
+    VIO_MODEL_API_KEY_LIVE: '   ',
+  });
+  assert.deepEqual(missing.issues, [
+    'provider_base_url_missing',
+    'model_name_missing',
+    'provider_key_missing',
+  ]);
+  assert.equal(missing.keyStatus, 'missing');
+
+  for (const baseUrl of [
+    'not-a-url',
+    'http://provider.example.test/v1',
+    'https://user:password@provider.example.test/v1',
+    'https://provider.example.test/v1?secret=value',
+    'https://provider.example.test/v1#fragment',
+  ]) {
+    const inspected = inspectLiveChatEnvironment({
+      VIO_LIVE_PROVIDER_BASE_URL: baseUrl,
+      VIO_LIVE_MODEL_NAME: 'model',
+      VIO_MODEL_API_KEY_LIVE: 'credential',
+    });
+    assert.equal(inspected.issues.includes('provider_base_url_unsafe'), true);
+  }
+
+  const longModelName = inspectLiveChatEnvironment({
+    VIO_LIVE_PROVIDER_BASE_URL: 'https://provider.example.test/v1',
+    VIO_LIVE_MODEL_NAME: 'm'.repeat(161),
+    VIO_MODEL_API_KEY_LIVE: 'credential',
+  });
+  assert.equal(longModelName.issues.includes('model_name_invalid'), true);
+  assert.equal(longModelName.issues.includes('model_name_missing'), false);
+
+  const unsafeKey = `credential\nnot-safe`;
+  const keyResult = inspectLiveChatEnvironment({
+    VIO_LIVE_PROVIDER_BASE_URL: 'https://provider.example.test/v1',
+    VIO_LIVE_MODEL_NAME: 'model',
+    VIO_MODEL_API_KEY_LIVE: unsafeKey,
+  });
+  assert.equal(keyResult.keyStatus, 'unsafe');
+  assert.equal(JSON.stringify(keyResult).includes(unsafeKey), false);
+});
+
+test('Engine runtime readiness distinguishes absent, unsafe and conflicting supplied values', () => {
+  const absent = inspectLiveChatRuntime({});
+  assert.equal(absent.every(({ status }) => status === 'missing'), true);
+  const whitespace = inspectLiveChatRuntime(Object.fromEntries([
+    'VIO_LIVE_BINDING_FILE',
+    'VIO_LIVE_ENGINE_DATA_DIR',
+    'VIO_LIVE_ENGINE_CYCLE_ID',
+    'VIO_LIVE_ENGINE_THINKING_MODE',
+    'VIO_CONTINUITY_ENGINE_ENABLED',
+    'VIO_CONTINUITY_ENGINE_BASE_URL',
+    'VIO_CONTINUITY_ENGINE_TOKEN',
+    'CONTINUITY_ENGINE_INTEGRATION_TOKEN',
+  ].map((name) => [name, '   '])));
+  assert.equal(whitespace.every(({ status }) => status === 'missing'), true);
+
+  const conflicting = inspectLiveChatRuntime({
+    VIO_LIVE_BINDING_FILE: 'C:\\does-not-exist\\binding.json',
+    VIO_LIVE_ENGINE_DATA_DIR: 'C:\\does-not-exist\\engine-data',
+    VIO_LIVE_ENGINE_CYCLE_ID: 'c'.repeat(129),
+    VIO_LIVE_ENGINE_THINKING_MODE: 'deterministic',
+    VIO_CONTINUITY_ENGINE_ENABLED: 'false',
+    VIO_CONTINUITY_ENGINE_TOKEN: 'only-one-side'.repeat(3),
+  });
+  assert.equal(conflicting.find(({ component }) => component === 'binding_file').status, 'conflict');
+  assert.equal(conflicting.find(({ component }) => component === 'engine_data_dir').status, 'conflict');
+  assert.equal(conflicting.find(({ component }) => component === 'engine_cycle_id').status, 'conflict');
+  assert.equal(conflicting.find(({ component }) => component === 'engine_thinking_mode').status, 'conflict');
+  assert.equal(conflicting.find(({ component }) => component === 'continuity_enabled').status, 'conflict');
+  assert.equal(conflicting.find(({ component }) => component === 'engine_base_url').status, 'missing');
+  assert.equal(conflicting.find(({ component }) => component === 'service_tokens').status, 'conflict');
+
+  for (const baseUrl of [
+    'not-a-url',
+    'https://127.0.0.1:8766',
+    'http://localhost:8766',
+    'http://127.0.0.1:8766?secret=value',
+    'http://127.0.0.1:8766#fragment',
+    'http://user:password@127.0.0.1:8766',
+  ]) {
+    const item = inspectLiveChatRuntime({ VIO_CONTINUITY_ENGINE_BASE_URL: baseUrl })
+      .find(({ component }) => component === 'engine_base_url');
+    assert.equal(item.status, 'unsafe');
+  }
+  assert.equal(inspectLiveChatRuntime({ VIO_CONTINUITY_ENGINE_BASE_URL: 'http://127.0.0.1:8766' })
+    .find(({ component }) => component === 'engine_base_url').status, 'ready');
+});
+
+test('doctor applies unsafe over conflict over missing over ready without leaking credentials', async () => {
+  const database = createTestDatabasePath();
+  const token = randomBytes(32).toString('hex');
+  const key = randomBytes(32).toString('base64url');
+  try {
+    const application = createL1Application(database.databasePath, environment(database.databasePath));
+    const connection = application.database.connection;
+    const missing = doctorLiveChat({ connection, environment: emptyLiveEnvironment(database.databasePath) });
+    assert.equal(missing.status, 'missing');
+
+    const conflict = doctorLiveChat({ connection, environment: emptyLiveEnvironment(database.databasePath, {
+      VIO_LIVE_ENGINE_THINKING_MODE: 'deterministic',
+    }) });
+    assert.equal(conflict.status, 'conflict');
+
+    const unsafe = doctorLiveChat({ connection, environment: emptyLiveEnvironment(database.databasePath, {
+      VIO_LIVE_ENGINE_THINKING_MODE: 'deterministic',
+      VIO_CONTINUITY_ENGINE_BASE_URL: 'http://0.0.0.0:8766',
+      VIO_CONTINUITY_ENGINE_TOKEN: token,
+      CONTINUITY_ENGINE_INTEGRATION_TOKEN: `${token}x`,
+      VIO_MODEL_API_KEY_LIVE: key,
+    }) });
+    assert.equal(unsafe.status, 'unsafe');
+    const output = JSON.stringify(unsafe);
+    assert.equal(output.includes(token), false);
+    assert.equal(output.includes(key), false);
+    assert.equal(output.includes('authorization'), false);
+    assert.equal(output.includes('length'), false);
+    assert.equal(output.includes('digest'), false);
+    await application.stop();
+  } finally {
+    database.remove();
+  }
+});
+
 test('doctor remains accurate after database restart', async () => {
   const database = createTestDatabasePath();
   const bindingFile = join(database.directory, 'binding.json');
@@ -493,11 +702,11 @@ test('formal openai_compatible adapter still uses real loopback HTTP without pub
 test('command output uses failing exit codes for missing doctor inputs without leaking inference', () => {
   const database = createTestDatabasePath();
   try {
-    const env = environment(database.databasePath, { VIO_MODEL_API_KEY_LIVE: '' });
+    const env = clearLiveEnvironmentValues(environment(database.databasePath));
     const result = runScript(scripts.doctor, [], env);
     assert.equal(result.status, 2);
     const output = JSON.parse(result.stdout);
-    assert.equal(output.status, 'unsafe');
+    assert.equal(output.status, 'missing');
     assert.equal(output.items.find(({ component }) => component === 'provider_api_key').status, 'missing');
     assert.equal(Object.hasOwn(output.items.find(({ component }) => component === 'provider_api_key'), 'length'), false);
   } finally {

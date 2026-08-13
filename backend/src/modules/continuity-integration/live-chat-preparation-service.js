@@ -70,8 +70,39 @@ function item(component, status, action, reason = null) {
   return Object.freeze({ component, status, action, reason });
 }
 
+const READINESS_PRIORITY = Object.freeze(['unsafe', 'conflict', 'missing']);
+
+const ENVIRONMENT_ISSUE_STATUS = Object.freeze({
+  provider_base_url_missing: 'missing',
+  provider_base_url_unsafe: 'unsafe',
+  model_name_missing: 'missing',
+  model_name_invalid: 'unsafe',
+  daily_token_limit_invalid: 'unsafe',
+  session_token_limit_invalid: 'unsafe',
+  session_token_limit_exceeds_daily: 'conflict',
+  provider_key_missing: 'missing',
+  provider_key_unsafe: 'unsafe',
+});
+
+function highestReadinessStatus(statuses, successStatus) {
+  return READINESS_PRIORITY.find((status) => statuses.includes(status)) ?? successStatus;
+}
+
+function issueStatus(issue) {
+  return ENVIRONMENT_ISSUE_STATUS[issue] ?? 'conflict';
+}
+
+function highestIssueStatus(issues, successStatus = 'ready') {
+  return highestReadinessStatus(issues.map(issueStatus), successStatus);
+}
+
+function firstIssueForStatus(issues, status) {
+  return issues.find((issue) => issueStatus(issue) === status) ?? null;
+}
+
 function parseBudget(value, fallback, name) {
-  const raw = value === undefined || value === '' ? String(fallback) : String(value);
+  const supplied = value === undefined || value === null ? '' : String(value).trim();
+  const raw = supplied === '' ? String(fallback) : supplied;
   if (!/^[1-9][0-9]*$/u.test(raw)) {
     return { value: null, issue: `${name}_invalid` };
   }
@@ -84,7 +115,9 @@ function parseBudget(value, fallback, name) {
 
 export function inspectLiveChatEnvironment(environment = process.env) {
   const issues = [];
-  const rawBaseUrl = environment.VIO_LIVE_PROVIDER_BASE_URL?.trim() ?? '';
+  const rawBaseUrl = typeof environment.VIO_LIVE_PROVIDER_BASE_URL === 'string'
+    ? environment.VIO_LIVE_PROVIDER_BASE_URL.trim()
+    : '';
   let providerBaseUrl = null;
   if (!rawBaseUrl) {
     issues.push('provider_base_url_missing');
@@ -106,8 +139,10 @@ export function inspectLiveChatEnvironment(environment = process.env) {
     }
   }
 
-  const modelName = environment.VIO_LIVE_MODEL_NAME?.trim() ?? '';
-  if (!modelName || modelName.length > 160) issues.push('model_name_missing_or_invalid');
+  const rawModelName = environment.VIO_LIVE_MODEL_NAME;
+  const modelName = typeof rawModelName === 'string' ? rawModelName.trim() : '';
+  if (!modelName) issues.push('model_name_missing');
+  else if (modelName.length > 160) issues.push('model_name_invalid');
 
   const daily = parseBudget(
     environment.VIO_LIVE_DAILY_TOKEN_LIMIT,
@@ -125,17 +160,25 @@ export function inspectLiveChatEnvironment(environment = process.env) {
     issues.push('session_token_limit_exceeds_daily');
   }
 
-  const keyPresent = typeof environment.VIO_MODEL_API_KEY_LIVE === 'string'
-    && environment.VIO_MODEL_API_KEY_LIVE.length > 0
-    && environment.VIO_MODEL_API_KEY_LIVE.length <= 8192;
-  if (!keyPresent) issues.push('provider_key_missing');
+  const rawKey = environment.VIO_MODEL_API_KEY_LIVE;
+  let keyStatus = 'missing';
+  if (typeof rawKey === 'string' && rawKey.trim() !== '') {
+    keyStatus = rawKey === rawKey.trim()
+      && rawKey.length <= 8192
+      && !/[\u0000-\u001f\u007f]/u.test(rawKey)
+      ? 'ready'
+      : 'unsafe';
+  }
+  if (keyStatus === 'missing') issues.push('provider_key_missing');
+  else if (keyStatus === 'unsafe') issues.push('provider_key_unsafe');
 
   return Object.freeze({
     providerBaseUrl,
     modelName: modelName || null,
     dailyTokenLimit: daily.value,
     sessionTokenLimit: session.value,
-    keyPresent,
+    keyPresent: keyStatus === 'ready',
+    keyStatus,
     issues: Object.freeze(issues),
   });
 }
@@ -414,8 +457,9 @@ export function createLiveChatPreparationService({
 }) {
   function plan() {
     const settings = inspectLiveChatEnvironment(environment);
-    if (settings.issues.some((issue) => issue.endsWith('_unsafe') || issue.endsWith('_invalid'))) {
-      return Object.freeze({ status: 'conflict', issues: settings.issues, configuration: null, items: Object.freeze([]) });
+    const issueReadiness = highestIssueStatus(settings.issues, 'configured');
+    if (issueReadiness === 'unsafe' || issueReadiness === 'conflict') {
+      return Object.freeze({ status: issueReadiness, issues: settings.issues, configuration: null, items: Object.freeze([]) });
     }
     if (!settings.providerBaseUrl || !settings.modelName || settings.dailyTokenLimit === null || settings.sessionTokenLimit === null) {
       return Object.freeze({ status: 'missing', issues: settings.issues, configuration: null, items: Object.freeze([]) });
@@ -670,8 +714,10 @@ function inspectInitializedEngineData(engineDataDir, cycleId) {
 export function inspectLiveChatRuntime(environment = process.env) {
   const items = [];
   const bindingFile = environment.VIO_LIVE_BINDING_FILE?.trim() ?? '';
-  if (!bindingFile || !existsSync(bindingFile)) {
+  if (!bindingFile) {
     items.push(runtimeItem('binding_file', 'missing', 'binding_file_missing'));
+  } else if (!existsSync(bindingFile)) {
+    items.push(runtimeItem('binding_file', 'conflict', 'binding_file_unavailable'));
   } else {
     try {
       const fixture = JSON.parse(readFileSync(bindingFile, 'utf8'));
@@ -693,79 +739,110 @@ export function inspectLiveChatRuntime(environment = process.env) {
   const cycleId = environment.VIO_LIVE_ENGINE_CYCLE_ID?.trim() ?? '';
   let engineDataStatus = 'missing';
   let engineDataReason = 'engine_data_dir_missing';
-  if (engineDataDir && existsSync(engineDataDir)) {
-    try {
-      const reason = inspectInitializedEngineData(engineDataDir, cycleId);
-      if (reason === null) {
-        engineDataStatus = 'ready';
-        engineDataReason = null;
-      } else {
-        engineDataStatus = 'conflict';
-        engineDataReason = reason;
-      }
-    } catch {
+  if (engineDataDir) {
+    if (!existsSync(engineDataDir)) {
       engineDataStatus = 'conflict';
-      engineDataReason = 'engine_runtime_binding_missing_or_invalid';
+      engineDataReason = 'engine_data_dir_unavailable';
+    } else {
+      try {
+        const reason = inspectInitializedEngineData(engineDataDir, cycleId);
+        if (reason === null) {
+          engineDataStatus = 'ready';
+          engineDataReason = null;
+        } else {
+          engineDataStatus = 'conflict';
+          engineDataReason = reason;
+        }
+      } catch {
+        engineDataStatus = 'conflict';
+        engineDataReason = 'engine_runtime_binding_missing_or_invalid';
+      }
     }
   }
   items.push(runtimeItem('engine_data_dir', engineDataStatus, engineDataReason));
   items.push(runtimeItem(
     'engine_cycle_id',
-    cycleId && cycleId.length <= 128 ? 'ready' : 'missing',
-    cycleId && cycleId.length <= 128 ? null : 'engine_cycle_id_missing',
+    !cycleId ? 'missing' : cycleId.length <= 128 ? 'ready' : 'conflict',
+    !cycleId ? 'engine_cycle_id_missing' : cycleId.length <= 128 ? null : 'engine_cycle_id_invalid',
   ));
+  const thinkingMode = environment.VIO_LIVE_ENGINE_THINKING_MODE?.trim() ?? '';
   items.push(runtimeItem(
     'engine_thinking_mode',
-    environment.VIO_LIVE_ENGINE_THINKING_MODE === 'capability' ? 'ready' : 'conflict',
-    environment.VIO_LIVE_ENGINE_THINKING_MODE === 'capability' ? null : 'capability_mode_required',
+    !thinkingMode ? 'missing' : thinkingMode === 'capability' ? 'ready' : 'conflict',
+    !thinkingMode ? 'engine_thinking_mode_missing' : thinkingMode === 'capability' ? null : 'capability_mode_required',
   ));
+  const continuityEnabled = environment.VIO_CONTINUITY_ENGINE_ENABLED?.trim() ?? '';
   items.push(runtimeItem(
     'continuity_enabled',
-    environment.VIO_CONTINUITY_ENGINE_ENABLED === 'true' ? 'ready' : 'missing',
-    environment.VIO_CONTINUITY_ENGINE_ENABLED === 'true' ? null : 'continuity_not_enabled',
+    !continuityEnabled ? 'missing' : continuityEnabled === 'true' ? 'ready' : 'conflict',
+    !continuityEnabled ? 'continuity_enabled_missing' : continuityEnabled === 'true' ? null : 'continuity_must_be_enabled',
   ));
 
+  const rawEngineBaseUrl = environment.VIO_CONTINUITY_ENGINE_BASE_URL?.trim() ?? '';
   let baseUrlReady = false;
-  try {
-    const url = new URL(environment.VIO_CONTINUITY_ENGINE_BASE_URL ?? '');
-    baseUrlReady = url.protocol === 'http:'
-      && url.hostname === '127.0.0.1'
-      && !url.username && !url.password && !url.search && !url.hash
-      && (url.pathname === '/' || url.pathname === '');
-  } catch {}
+  if (rawEngineBaseUrl) {
+    try {
+      const url = new URL(rawEngineBaseUrl);
+      baseUrlReady = url.protocol === 'http:'
+        && url.hostname === '127.0.0.1'
+        && Boolean(url.port)
+        && !url.username && !url.password && !url.search && !url.hash
+        && (url.pathname === '/' || url.pathname === '');
+    } catch {}
+  }
   items.push(runtimeItem(
     'engine_base_url',
-    baseUrlReady ? 'ready' : 'unsafe',
-    baseUrlReady ? null : 'loopback_engine_url_required',
+    !rawEngineBaseUrl ? 'missing' : baseUrlReady ? 'ready' : 'unsafe',
+    !rawEngineBaseUrl ? 'engine_base_url_missing' : baseUrlReady ? null : 'loopback_engine_url_required',
   ));
 
   const vioToken = environment.VIO_CONTINUITY_ENGINE_TOKEN;
   const engineToken = environment.CONTINUITY_ENGINE_INTEGRATION_TOKEN;
-  const tokensPresent = typeof vioToken === 'string' && vioToken.length >= 32
-    && typeof engineToken === 'string' && engineToken.length >= 32;
+  const vioTokenPresent = typeof vioToken === 'string' && vioToken.trim() !== '';
+  const engineTokenPresent = typeof engineToken === 'string' && engineToken.trim() !== '';
+  const tokensMissing = !vioTokenPresent && !engineTokenPresent;
+  const tokenFormatValid = vioTokenPresent && engineTokenPresent
+    && vioToken.length >= 32 && vioToken.length <= 8192
+    && engineToken.length >= 32 && engineToken.length <= 8192
+    && vioToken === vioToken.trim() && engineToken === engineToken.trim()
+    && !/[\u0000-\u001f\u007f]/u.test(vioToken)
+    && !/[\u0000-\u001f\u007f]/u.test(engineToken);
+  const tokenStatus = tokensMissing
+    ? 'missing'
+    : !tokenFormatValid || vioToken !== engineToken
+      ? 'conflict'
+      : 'ready';
   items.push(runtimeItem(
     'service_tokens',
-    !tokensPresent ? 'missing' : vioToken === engineToken ? 'ready' : 'conflict',
-    !tokensPresent ? 'service_tokens_missing' : vioToken === engineToken ? null : 'service_tokens_mismatch',
+    tokenStatus,
+    tokenStatus === 'missing'
+      ? 'service_tokens_missing'
+      : tokenStatus === 'ready'
+        ? null
+        : !vioTokenPresent || !engineTokenPresent
+          ? 'service_tokens_incomplete'
+          : !tokenFormatValid
+            ? 'service_tokens_invalid'
+            : 'service_tokens_mismatch',
   ));
   return Object.freeze(items);
 }
 
 export function doctorLiveChat({ connection, environment = process.env }) {
   const settings = inspectLiveChatEnvironment(environment);
-  const unsafeEnvironment = settings.issues.some(
-    (issue) => issue.includes('unsafe') || issue.includes('invalid'),
-  );
+  const providerIssues = settings.issues.filter((issue) => !issue.startsWith('provider_key_'));
+  const providerStatus = highestIssueStatus(providerIssues);
   const environmentItems = [
     runtimeItem(
       'provider_environment',
-      unsafeEnvironment
-        ? 'unsafe'
-        : settings.providerBaseUrl && settings.modelName
-          ? 'ready'
-          : 'missing',
+      providerStatus,
+      firstIssueForStatus(providerIssues, providerStatus),
     ),
-    runtimeItem('provider_api_key', settings.keyPresent ? 'ready' : 'missing'),
+    runtimeItem(
+      'provider_api_key',
+      settings.keyStatus,
+      settings.keyStatus === 'ready' ? null : `provider_key_${settings.keyStatus}`,
+    ),
   ];
   const database = settings.providerBaseUrl && settings.modelName
     && settings.dailyTokenLimit !== null && settings.sessionTokenLimit !== null
@@ -780,12 +857,6 @@ export function doctorLiveChat({ connection, environment = process.env }) {
     ...database,
     ...inspectLiveChatRuntime(environment),
   ]);
-  const status = items.some(({ status: value }) => value === 'unsafe')
-    ? 'unsafe'
-    : items.some(({ status: value }) => value === 'conflict')
-      ? 'conflict'
-      : items.some(({ status: value }) => value === 'missing')
-        ? 'missing'
-        : 'ready';
+  const status = highestReadinessStatus(items.map(({ status: value }) => value), 'ready');
   return Object.freeze({ status, items, modelCall: 'not_performed', providerCharge: 'not_incurred' });
 }
