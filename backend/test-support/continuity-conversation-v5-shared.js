@@ -16,7 +16,7 @@ import { EXPECTED_BINDING_FIXTURE_HASH, fixedSubjectBindingFixture } from '../sr
 import { configureV4Execution } from './continuity-capability-v4-fixtures.js';
 
 export const VIO_V5_PARENT = '0b68e3209cd11c662d4cb973084a18825ed3d03e';
-export const ENGINE_E5A_BASELINE = 'cba52126db2fb5eca57d9b5c0c80884693c59a6f';
+export const ENGINE_E5A_BASELINE = '7a1dacae9401e1742aaf6ddbaa26f1b456880383';
 
 function git(root, ...args) {
   return execFileSync('git', ['-c', `safe.directory=${root}`, ...args], {

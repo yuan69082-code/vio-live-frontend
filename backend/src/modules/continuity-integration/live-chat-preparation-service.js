@@ -10,6 +10,7 @@ import {
 } from './first-round-contract.js';
 import { calculateBindingFixtureHash } from './first-round-hashing.js';
 import { validateFixedSubjectBindingFixture } from './first-round-validator.js';
+import { inspectLiveChatSandbox } from './live-chat-sandbox-service.js';
 
 export const LIVE_CHAT_CONFIGURATION = Object.freeze({
   providerDisplayName: 'Vio Live OpenAI-Compatible Provider',
@@ -852,7 +853,13 @@ export function doctorLiveChat({ connection, environment = process.env }) {
       entry.reason,
     ))
     : [];
+  const sandbox = inspectLiveChatSandbox(environment);
   const items = Object.freeze([
+    runtimeItem(
+      's4_live_sandbox',
+      sandbox.status,
+      sandbox.reason,
+    ),
     ...environmentItems,
     ...database,
     ...inspectLiveChatRuntime(environment),

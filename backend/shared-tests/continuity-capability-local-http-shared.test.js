@@ -30,7 +30,7 @@ import {
 const TEST_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const BACKEND_ROOT = resolve(TEST_DIRECTORY, '..');
 const VIO_BASELINE = '7054577fb55bcc26a28a9c9a90201f5f07f0c0ee';
-const ENGINE_BASELINE = 'cba52126db2fb5eca57d9b5c0c80884693c59a6f';
+const ENGINE_BASELINE = '7a1dacae9401e1742aaf6ddbaa26f1b456880383';
 
 function requireEngineRepository(value = process.env.CONTINUITY_ENGINE_REPO) {
   if (typeof value !== 'string' || value.trim().length === 0) {

@@ -4,6 +4,8 @@
 
 长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON 与 S4 Capability 双仓共享验收也已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 新增 Binding 导出、live-chat plan/apply 和只读 doctor，允许用户在不落盘真实 Key 的前提下准备首次真实 `openai_compatible` 试聊；自动化测试仍只使用随机 loopback Provider，真实供应商 live smoke 尚未执行。
 
+S4-Live 可销毁沙箱通过严格 `sandbox.manifest.json` 把固定 `user-001 / assistant-001 / subject-001 / conversation-001 / binding-001` 标记为一次性验收身份（`promotionAllowed=false`）。`create:live-chat-sandbox` 只在仓库外创建同根 Binding/Vio data/Engine data 骨架；doctor 要求清单及三类路径完全一致；`cleanup:live-chat-sandbox` 只支持双确认后的整根删除，不提供逐表、逐行、逐 JSON 或 revision 回滚。
+
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
 API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一响应

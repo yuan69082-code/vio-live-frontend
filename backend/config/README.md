@@ -31,6 +31,7 @@
 | `VIO_LIVE_DAILY_TOKEN_LIMIT` | `50000` | L1 有限每日预算；正整数，禁止无限值 |
 | `VIO_LIVE_SESSION_TOKEN_LIMIT` | `10000` | L1 有限会话预算；正整数且不得超过每日预算 |
 | `VIO_LIVE_BINDING_FILE` | 无 | doctor 检查的仓库外正式 Binding fixture 文件 |
+| `VIO_LIVE_SANDBOX_MANIFEST` | 无 | S4-Live 可销毁沙箱严格清单绝对路径；doctor 要求 Binding、Vio DB 与 Engine data 同属该清单的 canonical root |
 | `VIO_LIVE_ENGINE_DATA_DIR` | 无 | doctor 检查的仓库外 Engine 数据目录 |
 | `VIO_LIVE_ENGINE_CYCLE_ID` | 无 | Engine `init` 使用的稳定 cycle ID |
 | `VIO_LIVE_ENGINE_THINKING_MODE` | 无 | 首次真实试聊必须显式为 `capability` |

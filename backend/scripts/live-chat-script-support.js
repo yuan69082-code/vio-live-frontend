@@ -17,6 +17,30 @@ export function parseFlags(argv, allowed) {
   return flags;
 }
 
+export function parseStrictArguments(argv, { valueOptions = [], flags = [] } = {}) {
+  const normalized = normalizeScriptArguments(argv);
+  const values = new Map();
+  const parsedFlags = new Set();
+  for (let index = 0; index < normalized.length; index += 1) {
+    const argument = normalized[index];
+    if (valueOptions.includes(argument)) {
+      if (values.has(argument)) throw new Error(`Duplicate argument: ${argument}`);
+      const value = normalized[index + 1];
+      if (!value || value.startsWith('--')) throw new Error(`Missing value for argument: ${argument}`);
+      values.set(argument, value);
+      index += 1;
+      continue;
+    }
+    if (flags.includes(argument)) {
+      if (parsedFlags.has(argument)) throw new Error(`Duplicate argument: ${argument}`);
+      parsedFlags.add(argument);
+      continue;
+    }
+    throw new Error(`Unsupported argument: ${argument}`);
+  }
+  return Object.freeze({ values, flags: parsedFlags });
+}
+
 function missingConnection() {
   return Object.freeze({
     prepare() {
@@ -42,9 +66,9 @@ export function writeJson(value, stream = process.stdout) {
 
 export function publicError(error) {
   return Object.freeze({
-    status: 'conflict',
+    status: error?.status ?? 'conflict',
     error: error?.code ?? 'preparation_failed',
     message: error instanceof Error ? error.message : 'Live chat preparation failed.',
-    details: error?.details ?? null,
+    details: error?.details ?? (error?.reason ? { reason: error.reason } : null),
   });
 }

@@ -19,16 +19,19 @@
 
 以下值均为占位符。请使用仓库外运行目录；不要把真实 Key 或 token 写进 `.env`、JSON、SQLite、日志、文档、Git 或可复用的命令文件。
 
-1. 在 Vio 后端终端准备非秘密路径与稳定 ID，并导出正式 Binding：
+固定 v1.1 身份只能用于 `s4-live-acceptance` 可销毁验收，身份类型为 `disposable_test` 且 `promotionAllowed=false`。正式主体必须使用另一组身份、新 Binding、新 Vio 数据库和新 Engine 数据目录，禁止将本测试主体晋升为正式主体。
+
+1. 在 Vio 后端终端创建全新的仓库外沙箱；它会导出 Binding 和严格 manifest，但不会创建业务记录或初始化 Engine：
 
 ```powershell
 cd "C:\Users\Administrator\Documents\vio   live\backend"
-$runtimeRoot = "<仓库外运行目录>"
+$runtimeRoot = "C:\Users\Administrator\Documents\VioRuntime\s4-live-sandboxes\<全新sandboxId>"
+pnpm run create:live-chat-sandbox -- --root $runtimeRoot
+$env:VIO_LIVE_SANDBOX_MANIFEST = Join-Path $runtimeRoot "sandbox.manifest.json"
 $bindingFile = Join-Path $runtimeRoot "binding.json"
+$vioDatabase = Join-Path $runtimeRoot "vio-data\vio-live.sqlite"
 $engineData = Join-Path $runtimeRoot "engine-data"
 $cycleId = "vio-live-first-chat-cycle-001"
-New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
-pnpm run export:local-chat-binding -- --output $bindingFile
 ```
 
 2. 在 Engine 终端只读使用 Engine 代码，把数据写到上述仓库外目录并初始化：
@@ -57,7 +60,8 @@ python -m continuity_engine.integration_server serve `
 
 ```powershell
 cd "C:\Users\Administrator\Documents\vio   live\backend"
-$env:VIO_BACKEND_DB_PATH = "<仓库外运行目录>\vio-live.sqlite"
+$env:VIO_BACKEND_DB_PATH = "<仓库外运行目录>\vio-data\vio-live.sqlite"
+$env:VIO_LIVE_SANDBOX_MANIFEST = "<仓库外运行目录>\sandbox.manifest.json"
 $env:VIO_CONTINUITY_ENGINE_ENABLED = "true"
 $env:VIO_CONTINUITY_ENGINE_BASE_URL = "http://127.0.0.1:8766"
 $env:VIO_CONTINUITY_ENGINE_TOKEN = "<与Engine完全相同的service-token>"
@@ -92,5 +96,16 @@ pnpm dev
 ```
 
 7. 打开 F1 对话页发送消息。若页面显示安全确认、预算确认或受控重试，必须由用户明确点击。Provider 原始候选先形成 CapabilityResult 回到 Engine；只有 Engine 最终主体回复能够进入 assistant Message。
+
+8. 验收结束后先停止前端、Vio 与 Engine，再只读查看清理计划并双确认整套删除：
+
+```powershell
+pnpm run cleanup:live-chat-sandbox -- --manifest $env:VIO_LIVE_SANDBOX_MANIFEST --plan
+pnpm run cleanup:live-chat-sandbox -- --manifest $env:VIO_LIVE_SANDBOX_MANIFEST --apply `
+  --acknowledge-services-stopped `
+  --acknowledge-destroy-entire-sandbox
+```
+
+清理唯一目标是 `canonicalSandboxRoot`。禁止手工删除 SQLite 行、单个 Engine JSON 或修改/回退 revision。清理完成后若要正式使用，必须重新创建正式身份、Binding、Vio 数据库与 Engine 数据目录。
 
 `prepare:live-chat` 与 `doctor:live-chat` 都不调用模型。只有页面发送消息且必要确认完成后，才可能产生真实 Provider 调用和费用。关闭终端会清除当前进程秘密，之后必须重新设置。Engine 与 Vio 数据库始终独立，Vio 不读取 Engine 数据库；前端始终只连接 Vio 后端。

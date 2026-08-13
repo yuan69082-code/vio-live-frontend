@@ -20,6 +20,7 @@ import {
   inspectLiveChatEnvironment,
   inspectLiveChatRuntime,
 } from '../src/modules/continuity-integration/live-chat-preparation-service.js';
+import { createLiveChatSandbox } from '../src/modules/continuity-integration/live-chat-sandbox-service.js';
 import { createTestDatabasePath } from '../test-support/test-application.js';
 
 const backendRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -35,6 +36,7 @@ const LIVE_CHAT_ENVIRONMENT_NAMES = Object.freeze([
   'VIO_LIVE_DAILY_TOKEN_LIMIT',
   'VIO_LIVE_SESSION_TOKEN_LIMIT',
   'VIO_MODEL_API_KEY_LIVE',
+  'VIO_LIVE_SANDBOX_MANIFEST',
   'VIO_LIVE_BINDING_FILE',
   'VIO_LIVE_ENGINE_DATA_DIR',
   'VIO_LIVE_ENGINE_CYCLE_ID',
@@ -435,11 +437,13 @@ function initializeEngineRuntime(root, cycleId) {
 
 test('doctor reports ready, missing, conflict and unsafe without displaying secrets', async () => {
   const database = createTestDatabasePath();
-  const bindingFile = join(database.directory, 'binding.json');
-  const engineData = join(database.directory, 'engine-data');
+  const sandbox = createLiveChatSandbox({ root: join(database.directory, 'sandbox') });
+  const bindingFile = sandbox.bindingFile;
+  const engineData = sandbox.engineDataDir;
   const cycleId = 'vio-live-first-chat-cycle-001';
   const token = randomBytes(32).toString('hex');
-  const env = environment(database.databasePath, {
+  const env = environment(sandbox.vioDatabasePath, {
+    VIO_LIVE_SANDBOX_MANIFEST: sandbox.manifestPath,
     VIO_LIVE_BINDING_FILE: bindingFile,
     VIO_LIVE_ENGINE_DATA_DIR: engineData,
     VIO_LIVE_ENGINE_CYCLE_ID: cycleId,
@@ -452,7 +456,6 @@ test('doctor reports ready, missing, conflict and unsafe without displaying secr
   const application = createL1Application(database.databasePath, env);
   try {
     apply(application);
-    writeFileSync(bindingFile, JSON.stringify(fixedSubjectBindingFixture()), 'utf8');
     initializeEngineRuntime(engineData, cycleId);
     const ready = doctorLiveChat({ connection: application.database.connection, environment: env });
     assert.equal(ready.status, 'ready');
@@ -633,11 +636,13 @@ test('doctor applies unsafe over conflict over missing over ready without leakin
 
 test('doctor remains accurate after database restart', async () => {
   const database = createTestDatabasePath();
-  const bindingFile = join(database.directory, 'binding.json');
-  const engineData = join(database.directory, 'engine-data');
+  const sandbox = createLiveChatSandbox({ root: join(database.directory, 'sandbox') });
+  const bindingFile = sandbox.bindingFile;
+  const engineData = sandbox.engineDataDir;
   const cycleId = 'vio-live-first-chat-cycle-001';
   const token = randomBytes(32).toString('hex');
-  const env = environment(database.databasePath, {
+  const env = environment(sandbox.vioDatabasePath, {
+    VIO_LIVE_SANDBOX_MANIFEST: sandbox.manifestPath,
     VIO_LIVE_BINDING_FILE: bindingFile,
     VIO_LIVE_ENGINE_DATA_DIR: engineData,
     VIO_LIVE_ENGINE_CYCLE_ID: cycleId,
@@ -650,7 +655,6 @@ test('doctor remains accurate after database restart', async () => {
   let application = createL1Application(database.databasePath, env);
   try {
     apply(application);
-    writeFileSync(bindingFile, JSON.stringify(fixedSubjectBindingFixture()), 'utf8');
     initializeEngineRuntime(engineData, cycleId);
     await application.stop();
     application = createL1Application(database.databasePath, env);

@@ -1,5 +1,12 @@
 # Vio Live 后端 ADR 决策记录
 
+## BE-ADR-036：S4-Live 固定身份只能存在于可销毁同根沙箱
+
+- 状态：接受
+- 决定：固定 v1.1 身份登记为 `s4-live-acceptance / disposable_test / promotionAllowed=false`；Binding、Vio SQLite 与 Engine data 必须同属严格 manifest 的仓库外 canonical root。
+- 清理：只允许服务停止后的整根删除，禁止逐行、逐 JSON 或 revision 回滚；仓库、默认数据目录、用户目录、Documents 与磁盘根均为保护路径。
+- 边界：不改变 V1–V5、Engine 权威、Capability Schema 或公共 API。正式主体不得复用该身份或数据。
+
 ## 使用规则
 
 - 本文件记录只影响 `backend/` 的工程与技术决策。
