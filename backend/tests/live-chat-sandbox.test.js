@@ -203,7 +203,9 @@ test('create rejects an atomic temporary path over budget even when the final pa
   } finally { fixture.remove(); }
 });
 
-test('legacy over-budget manifest and doctor fail closed as unsafe', () => {
+test('legacy over-budget manifest and doctor fail closed while cleanup plan stays eligible', {
+  skip: process.platform !== 'win32',
+}, () => {
   const source = temporary();
   const target = rootForBudget(({ atomicTemporaryPathLength }) => (
     atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
@@ -212,9 +214,7 @@ test('legacy over-budget manifest and doctor fail closed as unsafe', () => {
     const sourceSandbox = createLiveChatSandbox({ root: source.root });
     const legacy = materializeLegacyManifest(sourceSandbox, target.root);
     assert.throws(
-      () => readAndValidateLiveChatSandboxManifest(legacy.manifestPath, {
-        platform: 'win32',
-      }),
+      () => readAndValidateLiveChatSandboxManifest(legacy.manifestPath),
       (error) => error.status === 'unsafe'
         && error.reason === 'engine_persistence_path_budget_exceeded',
     );
@@ -224,7 +224,7 @@ test('legacy over-budget manifest and doctor fail closed as unsafe', () => {
         manifestPath: legacy.manifestPath,
       }),
     };
-    const inspection = inspectLiveChatSandbox(env, { platform: 'win32' });
+    const inspection = inspectLiveChatSandbox(env);
     assert.deepEqual(inspection, {
       status: 'unsafe',
       reason: 'engine_persistence_path_budget_exceeded',
@@ -232,7 +232,6 @@ test('legacy over-budget manifest and doctor fail closed as unsafe', () => {
     const doctor = doctorLiveChat({
       connection: null,
       environment: env,
-      sandboxInspectionOptions: { platform: 'win32' },
     });
     assert.equal(doctor.status, 'unsafe');
     assert.deepEqual(
@@ -245,6 +244,18 @@ test('legacy over-budget manifest and doctor fail closed as unsafe', () => {
     );
     assert.equal(doctor.modelCall, 'not_performed');
     assert.equal(doctor.providerCharge, 'not_incurred');
+    const beforeManifest = readFileSync(legacy.manifestPath);
+    const beforeBinding = readFileSync(legacy.bindingFile);
+    const plan = planLiveChatSandboxCleanup({ manifestPath: legacy.manifestPath });
+    assert.equal(plan.status, 'ready');
+    assert.equal(plan.mode, 'plan');
+    assert.equal(plan.cleanupEligible, true);
+    assert.equal(plan.legacyUnsafeReason, 'engine_persistence_path_budget_exceeded');
+    assert.deepEqual(plan.deleteTargets, [target.root]);
+    assert.equal(plan.externalCall, 'not_performed');
+    assert.equal(plan.providerCharge, 'not_incurred');
+    assert.deepEqual(readFileSync(legacy.manifestPath), beforeManifest);
+    assert.deepEqual(readFileSync(legacy.bindingFile), beforeBinding);
   } finally {
     source.remove();
     target.remove();
@@ -385,6 +396,190 @@ test('cleanup removes only the complete sandbox root and preserves sibling/prote
   }
 });
 
+test('legacy over-budget cleanup requires both acknowledgements and removes only the complete root', {
+  skip: process.platform !== 'win32',
+}, () => {
+  const source = temporary();
+  const target = rootForBudget(({ atomicTemporaryPathLength }) => (
+    atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+  ));
+  const sibling = join(target.directory, 'legacy-sibling-canary.txt');
+  const protectedCanary = join(repositoryRoot, 'README.md');
+  const protectedBefore = readFileSync(protectedCanary);
+  try {
+    const sourceSandbox = createLiveChatSandbox({ root: source.root });
+    const legacy = materializeLegacyManifest(sourceSandbox, target.root);
+    writeFileSync(sibling, 'keep legacy sibling', 'utf8');
+    writeFileSync(legacy.vioDatabasePath, 'legacy database placeholder', 'utf8');
+    for (const acknowledgements of [
+      {},
+      { acknowledgeServicesStopped: true },
+      { acknowledgeDestroyEntireSandbox: true },
+    ]) {
+      assert.throws(
+        () => cleanupLiveChatSandbox({
+          manifestPath: legacy.manifestPath,
+          ...acknowledgements,
+        }),
+        /acknowledgements/u,
+      );
+      assert.equal(existsSync(target.root), true);
+    }
+    const result = cleanupLiveChatSandbox({
+      manifestPath: legacy.manifestPath,
+      acknowledgeServicesStopped: true,
+      acknowledgeDestroyEntireSandbox: true,
+    });
+    assert.equal(result.status, 'completed');
+    assert.equal(result.cleanupEligible, true);
+    assert.equal(result.legacyUnsafeReason, 'engine_persistence_path_budget_exceeded');
+    assert.equal(result.deletedRoot, target.root);
+    assert.equal(existsSync(target.root), false);
+    assert.equal(readFileSync(sibling, 'utf8'), 'keep legacy sibling');
+    assert.deepEqual(readFileSync(protectedCanary), protectedBefore);
+  } finally {
+    source.remove();
+    target.remove();
+  }
+});
+
+test('legacy cleanup rejects manifest, binding and canonical path tampering', {
+  skip: process.platform !== 'win32',
+}, () => {
+  const manifestScenarios = [
+    (manifest) => ({ ...manifest, unknown: true }),
+    (manifest) => ({ ...manifest, promotionAllowed: true }),
+    (manifest) => ({ ...manifest, bindingFixtureHash: `sha256:${'0'.repeat(64)}` }),
+    (manifest) => ({
+      ...manifest,
+      canonicalEngineDataDir: join(manifest.canonicalSandboxRoot, 'other-engine-data'),
+    }),
+  ];
+  for (const change of manifestScenarios) {
+    const source = temporary();
+    const target = rootForBudget(({ atomicTemporaryPathLength }) => (
+      atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+    ));
+    try {
+      const sourceSandbox = createLiveChatSandbox({ root: source.root });
+      const legacy = materializeLegacyManifest(sourceSandbox, target.root);
+      const manifest = JSON.parse(readFileSync(legacy.manifestPath, 'utf8'));
+      writeFileSync(legacy.manifestPath, `${JSON.stringify(change(manifest), null, 2)}\n`, 'utf8');
+      assert.throws(() => planLiveChatSandboxCleanup({ manifestPath: legacy.manifestPath }));
+      assert.equal(existsSync(target.root), true);
+    } finally {
+      source.remove();
+      target.remove();
+    }
+  }
+
+  const duplicateSource = temporary();
+  const duplicateTarget = rootForBudget(({ atomicTemporaryPathLength }) => (
+    atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+  ));
+  try {
+    const sourceSandbox = createLiveChatSandbox({ root: duplicateSource.root });
+    const legacy = materializeLegacyManifest(sourceSandbox, duplicateTarget.root);
+    const text = readFileSync(legacy.manifestPath, 'utf8');
+    writeFileSync(legacy.manifestPath, text.replace(
+      '"schemaVersion": "vio-live-s4-live-sandbox/v1",',
+      '"schemaVersion": "vio-live-s4-live-sandbox/v1",\n  "schemaVersion": "vio-live-s4-live-sandbox/v1",',
+    ), 'utf8');
+    assert.throws(
+      () => planLiveChatSandboxCleanup({ manifestPath: legacy.manifestPath }),
+      /Duplicate JSON property/u,
+    );
+    assert.equal(existsSync(duplicateTarget.root), true);
+  } finally {
+    duplicateSource.remove();
+    duplicateTarget.remove();
+  }
+
+  const source = temporary();
+  const target = rootForBudget(({ atomicTemporaryPathLength }) => (
+    atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+  ));
+  try {
+    const sourceSandbox = createLiveChatSandbox({ root: source.root });
+    const legacy = materializeLegacyManifest(sourceSandbox, target.root);
+    const binding = JSON.parse(readFileSync(legacy.bindingFile, 'utf8'));
+    writeFileSync(legacy.bindingFile, `${JSON.stringify({ ...binding, subjectId: 'subject-tampered' }, null, 2)}\n`, 'utf8');
+    assert.throws(() => planLiveChatSandboxCleanup({ manifestPath: legacy.manifestPath }));
+    assert.equal(existsSync(target.root), true);
+  } finally {
+    source.remove();
+    target.remove();
+  }
+});
+
+test('legacy cleanup rejects reparse content and non-budget unsafe sandboxes', {
+  skip: process.platform !== 'win32',
+}, () => {
+  const source = temporary();
+  const target = rootForBudget(({ atomicTemporaryPathLength }) => (
+    atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+  ));
+  try {
+    const sourceSandbox = createLiveChatSandbox({ root: source.root });
+    const legacy = materializeLegacyManifest(sourceSandbox, target.root);
+    const externalEngine = join(target.directory, 'external-engine');
+    mkdirSync(externalEngine);
+    rmSync(legacy.engineDataDir, { recursive: true, force: true });
+    symlinkSync(externalEngine, legacy.engineDataDir, 'junction');
+    assert.throws(
+      () => planLiveChatSandboxCleanup({ manifestPath: legacy.manifestPath }),
+      /reparse|symlink|junction/iu,
+    );
+    assert.equal(existsSync(target.root), true);
+  } finally {
+    source.remove();
+    target.remove();
+  }
+
+  const short = temporary();
+  try {
+    const sandbox = createLiveChatSandbox({ root: short.root });
+    const manifest = JSON.parse(readFileSync(sandbox.manifestPath, 'utf8'));
+    writeFileSync(sandbox.manifestPath, `${JSON.stringify({ ...manifest, purpose: 'tampered' }, null, 2)}\n`, 'utf8');
+    assert.throws(() => planLiveChatSandboxCleanup({ manifestPath: sandbox.manifestPath }));
+    assert.equal(existsSync(short.root), true);
+  } finally { short.remove(); }
+});
+
+test('legacy cleanup still rejects an occupied sandbox', {
+  skip: process.platform !== 'win32',
+}, async () => {
+  const source = temporary();
+  const target = rootForBudget(({ atomicTemporaryPathLength }) => (
+    atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+  ));
+  let child;
+  try {
+    const sourceSandbox = createLiveChatSandbox({ root: source.root });
+    const legacy = materializeLegacyManifest(sourceSandbox, target.root);
+    writeFileSync(legacy.vioDatabasePath, 'occupied legacy database', 'utf8');
+    child = spawn(process.execPath, ['-e', 'process.chdir(process.argv[1]); setTimeout(() => {}, 10000)', target.root], {
+      windowsHide: true,
+      stdio: 'ignore',
+    });
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    assert.equal(child.exitCode, null);
+    assert.throws(() => cleanupLiveChatSandbox({
+      manifestPath: legacy.manifestPath,
+      acknowledgeServicesStopped: true,
+      acknowledgeDestroyEntireSandbox: true,
+    }), /in use/u);
+    assert.equal(existsSync(target.root), true);
+  } finally {
+    if (child && child.exitCode === null) {
+      child.kill();
+      await new Promise((resolve) => child.once('exit', resolve));
+    }
+    source.remove();
+    target.remove();
+  }
+});
+
 test('cleanup fails safely when the sandbox root is occupied on Windows', { skip: process.platform !== 'win32' }, async () => {
   const fixture = temporary();
   let child;
@@ -442,4 +637,49 @@ test('public CLI performs create, read-only plan and whole-root apply with no na
     assert.equal(parseJsonOutput(cleaned.stdout).sandboxRemoved, true);
     assert.equal(existsSync(fixture.root), false);
   } finally { fixture.remove(); }
+});
+
+test('public CLI plans and deletes only a fully validated legacy over-budget sandbox', {
+  skip: process.platform !== 'win32',
+}, () => {
+  const source = temporary();
+  const target = rootForBudget(({ atomicTemporaryPathLength }) => (
+    atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+  ));
+  try {
+    const sourceSandbox = createLiveChatSandbox({ root: source.root });
+    const legacy = materializeLegacyManifest(sourceSandbox, target.root);
+    const planProcess = runPnpm('cleanup:live-chat-sandbox', [
+      '--manifest', legacy.manifestPath, '--plan',
+    ]);
+    assert.equal(planProcess.status, 0, planProcess.stderr);
+    const plan = parseJsonOutput(planProcess.stdout);
+    assert.equal(plan.cleanupEligible, true);
+    assert.equal(plan.legacyUnsafeReason, 'engine_persistence_path_budget_exceeded');
+    assert.deepEqual(plan.deleteTargets, [target.root]);
+    assert.equal(plan.externalCall, 'not_performed');
+    assert.equal(plan.providerCharge, 'not_incurred');
+    assert.equal(existsSync(target.root), true);
+
+    const missingAcknowledgement = runPnpm('cleanup:live-chat-sandbox', [
+      '--manifest', legacy.manifestPath, '--apply', '--acknowledge-services-stopped',
+    ]);
+    assert.equal(missingAcknowledgement.status, 2);
+    assert.equal(existsSync(target.root), true);
+
+    const applyProcess = runPnpm('cleanup:live-chat-sandbox', [
+      '--manifest', legacy.manifestPath, '--apply',
+      '--acknowledge-services-stopped', '--acknowledge-destroy-entire-sandbox',
+    ]);
+    assert.equal(applyProcess.status, 0, applyProcess.stderr);
+    const applied = parseJsonOutput(applyProcess.stdout);
+    assert.equal(applied.cleanupEligible, true);
+    assert.equal(applied.legacyUnsafeReason, 'engine_persistence_path_budget_exceeded');
+    assert.equal(applied.deletedRoot, target.root);
+    assert.equal(existsSync(target.root), false);
+    assert.doesNotMatch(`${planProcess.stdout}${planProcess.stderr}${applyProcess.stdout}${applyProcess.stderr}`, /api.?key|authorization|service.?token|message.?content/iu);
+  } finally {
+    source.remove();
+    target.remove();
+  }
 });

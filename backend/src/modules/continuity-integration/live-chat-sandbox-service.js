@@ -51,6 +51,7 @@ const VIO_DATABASE_FILE = 'vio-live.sqlite';
 const ENGINE_DATA_DIRECTORY = 'engine-data';
 const SHA_PATTERN = /^[0-9a-f]{40}$/u;
 const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
+const LEGACY_OVER_BUDGET_CLEANUP_VALIDATION = Symbol('legacy-over-budget-cleanup-validation');
 
 export const WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET = Object.freeze({
   maximumPathLength: 240,
@@ -397,7 +398,7 @@ function assertEnginePersistencePathBudget(engineDataDir, options) {
   return budget;
 }
 
-function validateManifestValues(manifest, manifestPath, pathBudgetOptions) {
+function validateManifestValues(manifest, manifestPath, validationMode) {
   exactObjectFields(manifest, MANIFEST_FIELDS);
   const binding = fixedSubjectBindingFixture();
   const canonicalManifestPath = canonicalizeProspectivePath(manifestPath);
@@ -405,7 +406,17 @@ function validateManifestValues(manifest, manifestPath, pathBudgetOptions) {
   const paths = expectedPaths(root);
   const expectedProtected = protectedPaths();
   assertSafeSandboxRoot(root, expectedProtected);
-  assertEnginePersistencePathBudget(paths.canonicalEngineDataDir, pathBudgetOptions);
+  const pathBudget = inspectEnginePersistencePathBudget(paths.canonicalEngineDataDir);
+  if (validationMode === LEGACY_OVER_BUDGET_CLEANUP_VALIDATION) {
+    if (!pathBudget.applies || pathBudget.safe) {
+      fail('Legacy cleanup validation requires an over-budget Windows Engine path.', {
+        status: 'unsafe',
+        reason: 'legacy_cleanup_not_over_budget',
+      });
+    }
+  } else {
+    assertEnginePersistencePathBudget(paths.canonicalEngineDataDir);
+  }
   const exactValues = {
     schemaVersion: LIVE_CHAT_SANDBOX.schemaVersion,
     purpose: LIVE_CHAT_SANDBOX.purpose,
@@ -476,7 +487,7 @@ function validateTopLevelEntries(root) {
   }
 }
 
-export function readAndValidateLiveChatSandboxManifest(manifestPath, pathBudgetOptions) {
+function readAndValidateLiveChatSandboxManifestInternal(manifestPath, validationMode) {
   if (typeof manifestPath !== 'string' || manifestPath.trim() === '' || !isAbsolute(manifestPath)) {
     fail('Sandbox manifest path must be an absolute path.', {
       status: manifestPath ? 'unsafe' : 'missing',
@@ -489,11 +500,7 @@ export function readAndValidateLiveChatSandboxManifest(manifestPath, pathBudgetO
     fail('Sandbox manifest does not exist.', { status: 'missing', reason: 'sandbox_manifest_missing' });
   }
   const manifest = strictJsonParse(readFileSync(canonicalManifestPath, 'utf8'));
-  const validated = validateManifestValues(
-    manifest,
-    canonicalManifestPath,
-    pathBudgetOptions,
-  );
+  const validated = validateManifestValues(manifest, canonicalManifestPath, validationMode);
   if (!existsSync(validated.paths.canonicalSandboxRoot)) {
     fail('Sandbox root does not exist.', { status: 'missing', reason: 'sandbox_root_missing' });
   }
@@ -516,6 +523,33 @@ export function readAndValidateLiveChatSandboxManifest(manifestPath, pathBudgetO
     fail('Sandbox Binding hash does not match.', { reason: 'sandbox_binding_hash_mismatch' });
   }
   return Object.freeze({ ...validated, binding: structuredClone(binding) });
+}
+
+export function readAndValidateLiveChatSandboxManifest(manifestPath) {
+  return readAndValidateLiveChatSandboxManifestInternal(manifestPath);
+}
+
+function readAndValidateLiveChatSandboxForCleanup(manifestPath) {
+  try {
+    return Object.freeze({
+      validated: readAndValidateLiveChatSandboxManifest(manifestPath),
+      legacyUnsafeReason: null,
+    });
+  } catch (error) {
+    if (!(error instanceof LiveChatSandboxError)
+      || error.status !== 'unsafe'
+      || error.reason !== 'engine_persistence_path_budget_exceeded') {
+      throw error;
+    }
+  }
+  const validated = readAndValidateLiveChatSandboxManifestInternal(
+    manifestPath,
+    LEGACY_OVER_BUDGET_CLEANUP_VALIDATION,
+  );
+  return Object.freeze({
+    validated,
+    legacyUnsafeReason: 'engine_persistence_path_budget_exceeded',
+  });
 }
 
 export function createLiveChatSandbox({ root, clock = () => new Date(), uuid = randomUUID } = {}) {
@@ -613,12 +647,12 @@ function environmentPath(environment, name) {
   return canonicalizeProspectivePath(value.trim());
 }
 
-export function inspectLiveChatSandbox(environment = process.env, pathBudgetOptions) {
+export function inspectLiveChatSandbox(environment = process.env) {
   const manifestPath = environment.VIO_LIVE_SANDBOX_MANIFEST?.trim() ?? '';
   if (!manifestPath) return Object.freeze({ status: 'missing', reason: 'sandbox_manifest_missing' });
   let validated;
   try {
-    validated = readAndValidateLiveChatSandboxManifest(manifestPath, pathBudgetOptions);
+    validated = readAndValidateLiveChatSandboxManifest(manifestPath);
   } catch (error) {
     return Object.freeze({
       status: error instanceof LiveChatSandboxError ? error.status : 'conflict',
@@ -652,10 +686,13 @@ export function inspectLiveChatSandbox(environment = process.env, pathBudgetOpti
 }
 
 export function planLiveChatSandboxCleanup({ manifestPath } = {}) {
-  const validated = readAndValidateLiveChatSandboxManifest(manifestPath);
+  const cleanupValidation = readAndValidateLiveChatSandboxForCleanup(manifestPath);
+  const { validated, legacyUnsafeReason } = cleanupValidation;
   return Object.freeze({
     status: 'ready',
     mode: 'plan',
+    cleanupEligible: true,
+    legacyUnsafeReason,
     sandboxId: validated.manifest.sandboxId,
     deleteTargets: Object.freeze([validated.paths.canonicalSandboxRoot]),
     protectedPaths: validated.protectedPaths,
@@ -704,7 +741,8 @@ export function cleanupLiveChatSandbox({
       reason: 'cleanup_acknowledgements_required',
     });
   }
-  const validated = readAndValidateLiveChatSandboxManifest(manifestPath);
+  const cleanupValidation = readAndValidateLiveChatSandboxForCleanup(manifestPath);
+  const { validated, legacyUnsafeReason } = cleanupValidation;
   const root = validated.paths.canonicalSandboxRoot;
   assertSafeSandboxRoot(root, validated.protectedPaths);
   assertDeletionPreflight(root, validated.paths.canonicalVioDatabasePath);
@@ -712,6 +750,8 @@ export function cleanupLiveChatSandbox({
   if (existsSync(root)) fail('Sandbox cleanup did not remove the root.', { reason: 'sandbox_cleanup_incomplete' });
   return Object.freeze({
     status: 'completed',
+    cleanupEligible: true,
+    legacyUnsafeReason,
     sandboxRemoved: true,
     deletedRoot: root,
     protectedPathsTargeted: Object.freeze([]),

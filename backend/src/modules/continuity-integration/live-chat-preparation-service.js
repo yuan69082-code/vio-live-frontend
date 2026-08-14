@@ -832,7 +832,6 @@ export function inspectLiveChatRuntime(environment = process.env) {
 export function doctorLiveChat({
   connection,
   environment = process.env,
-  sandboxInspectionOptions,
 }) {
   const settings = inspectLiveChatEnvironment(environment);
   const providerIssues = settings.issues.filter((issue) => !issue.startsWith('provider_key_'));
@@ -857,7 +856,7 @@ export function doctorLiveChat({
       entry.reason,
     ))
     : [];
-  const sandbox = inspectLiveChatSandbox(environment, sandboxInspectionOptions);
+  const sandbox = inspectLiveChatSandbox(environment);
   const items = Object.freeze([
     runtimeItem(
       's4_live_sandbox',

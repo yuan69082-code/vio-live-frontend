@@ -41,4 +41,4 @@
 
 L1 不使用 `.env` 文件。关闭 PowerShell 后，`VIO_MODEL_API_KEY_LIVE` 和两个 service token 必须重新设置；文档、命令输出、SQLite 和 Git 中只会出现非秘密配置、脱敏状态及 credential reference，不会保存真实值。
 
-Windows S4-Live 必须使用全新、仓库外的短绝对沙箱路径，推荐 `C:\VioS4\first-001`。创建和 doctor 会同时预算 Engine `awakening/sessions/<64字符subject hash>/<64字符session hash>.json` 及其原子临时文件名；代表性最坏路径超过 240 字符即返回 `unsafe / engine_persistence_path_budget_exceeded`。系统不会自动截断、搬移路径，也不会用 `subst`、junction、symlink 或 reparse point 绕过门禁。
+Windows S4-Live 必须使用全新、仓库外的短绝对沙箱路径，推荐 `C:\VioS4\first-001`。创建和 doctor 会同时预算 Engine `awakening/sessions/<64字符subject hash>/<64字符session hash>.json` 及其原子临时文件名；代表性最坏路径超过 240 字符即返回 `unsafe / engine_persistence_path_budget_exceeded`。系统不会自动截断、搬移路径，也不会用 `subst`、junction、symlink 或 reparse point 绕过门禁。门禁上线前的超预算 Manifest 在 doctor 中仍为 unsafe；只有 cleanup 可以在该原因是唯一问题、其余严格校验全部通过时计划并双确认整根删除。

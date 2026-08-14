@@ -106,6 +106,6 @@ pnpm run cleanup:live-chat-sandbox -- --manifest $env:VIO_LIVE_SANDBOX_MANIFEST 
   --acknowledge-destroy-entire-sandbox
 ```
 
-清理唯一目标是 `canonicalSandboxRoot`。禁止手工删除 SQLite 行、单个 Engine JSON 或修改/回退 revision。清理完成后若要正式使用，必须重新创建正式身份、Binding、Vio 数据库与 Engine 数据目录。
+清理唯一目标是 `canonicalSandboxRoot`。门禁上线前创建、且唯一不安全原因是 `engine_persistence_path_budget_exceeded` 的旧沙箱，doctor 仍会返回 unsafe，但 cleanup plan 会在全部其他严格校验通过后返回 `cleanupEligible=true`、`legacyUnsafeReason=engine_persistence_path_budget_exceeded` 和唯一整根删除目标；apply 仍必须提供上述双确认。Manifest/Binding 篡改、路径错配、保护路径、reparse、未知内容、占用或其他错误不会进入兼容路径。禁止手工删除 SQLite 行、单个 Engine JSON 或修改/回退 revision。清理完成后若要正式使用，必须重新创建正式身份、Binding、Vio 数据库与 Engine 数据目录。
 
 `prepare:live-chat` 与 `doctor:live-chat` 都不调用模型。只有页面发送消息且必要确认完成后，才可能产生真实 Provider 调用和费用。关闭终端会清除当前进程秘密，之后必须重新设置。Engine 与 Vio 数据库始终独立，Vio 不读取 Engine 数据库；前端始终只连接 Vio 后端。
