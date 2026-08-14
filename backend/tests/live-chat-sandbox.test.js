@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -15,12 +17,15 @@ import { fileURLToPath } from 'node:url';
 
 import {
   LIVE_CHAT_SANDBOX,
+  WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET,
   cleanupLiveChatSandbox,
   createLiveChatSandbox,
+  inspectEnginePersistencePathBudget,
   inspectLiveChatSandbox,
   planLiveChatSandboxCleanup,
   readAndValidateLiveChatSandboxManifest,
 } from '../src/modules/continuity-integration/live-chat-sandbox-service.js';
+import { doctorLiveChat } from '../src/modules/continuity-integration/live-chat-preparation-service.js';
 import {
   EXPECTED_BINDING_FIXTURE_HASH,
   fixedSubjectBindingFixture,
@@ -31,11 +36,57 @@ const repositoryRoot = resolve(backendRoot, '..');
 const engineRoot = resolve(repositoryRoot, '..', 'continuity-engine');
 
 function temporary() {
-  const directory = mkdtempSync(join(tmpdir(), 'vio-s4-live-sandbox-'));
+  const directory = mkdtempSync(join(tmpdir(), 'vs4-'));
   return Object.freeze({
     directory,
-    root: join(directory, 'sandbox'),
+    root: join(directory, 's'),
     remove() { rmSync(directory, { recursive: true, force: true }); },
+  });
+}
+
+function rootForBudget(predicate) {
+  const directory = mkdtempSync(join(tmpdir(), 'vpb-'));
+  const canonicalDirectory = realpathSync.native(directory);
+  for (let length = 1; length <= 180; length += 1) {
+    const root = join(canonicalDirectory, `r${'x'.repeat(length)}`);
+    const budget = inspectEnginePersistencePathBudget(join(root, 'engine-data'), {
+      platform: 'win32',
+    });
+    if (predicate(budget)) {
+      return Object.freeze({
+        directory,
+        root,
+        budget,
+        remove() { rmSync(directory, { recursive: true, force: true }); },
+      });
+    }
+  }
+  rmSync(directory, { recursive: true, force: true });
+  throw new Error('Unable to construct a path for the requested budget case.');
+}
+
+function materializeLegacyManifest(sourceSandbox, targetRoot) {
+  const canonicalRoot = resolve(targetRoot);
+  const bindingFile = join(canonicalRoot, 'binding.json');
+  const vioDatabasePath = join(canonicalRoot, 'vio-data', 'vio-live.sqlite');
+  const engineDataDir = join(canonicalRoot, 'engine-data');
+  const manifestPath = join(canonicalRoot, 'sandbox.manifest.json');
+  mkdirSync(dirname(vioDatabasePath), { recursive: true });
+  mkdirSync(engineDataDir);
+  writeFileSync(bindingFile, readFileSync(sourceSandbox.bindingFile));
+  const manifest = JSON.parse(readFileSync(sourceSandbox.manifestPath, 'utf8'));
+  writeFileSync(manifestPath, `${JSON.stringify({
+    ...manifest,
+    canonicalSandboxRoot: canonicalRoot,
+    canonicalBindingFile: bindingFile,
+    canonicalVioDatabasePath: vioDatabasePath,
+    canonicalEngineDataDir: engineDataDir,
+  }, null, 2)}\n`, 'utf8');
+  return Object.freeze({
+    manifestPath,
+    bindingFile,
+    vioDatabasePath,
+    engineDataDir,
   });
 }
 
@@ -89,6 +140,7 @@ test('create builds a strict disposable identity sandbox without business data o
     assert.equal(created.cycleId, LIVE_CHAT_SANDBOX.cycleId);
     assert.equal(created.externalCall, 'not_performed');
     assert.equal(created.providerCharge, 'not_incurred');
+    assert.equal(inspectEnginePersistencePathBudget(created.engineDataDir).safe, true);
     assert.deepEqual(validated.binding, fixedSubjectBindingFixture());
     assert.equal(existsSync(created.vioDatabasePath), false);
     assert.deepEqual(validated.manifest.protectedPaths.includes(repositoryRoot), true);
@@ -96,6 +148,107 @@ test('create builds a strict disposable identity sandbox without business data o
     const persisted = `${readFileSync(created.manifestPath, 'utf8')}\n${readFileSync(created.bindingFile, 'utf8')}`;
     assert.doesNotMatch(persisted, /api.?key|authorization|service.?token|message.?content/iu);
   } finally { fixture.remove(); }
+});
+
+test('Windows budget models the incident WakeSession and atomic temporary paths exactly', () => {
+  const incidentEngineDataDir = 'C:\\Users\\Administrator\\Documents\\VioRuntime\\s4-live-sandboxes\\4e0cbb0a-926e-4c68-a158-c31573261113\\engine-data';
+  const windows = inspectEnginePersistencePathBudget(incidentEngineDataDir, {
+    platform: 'win32',
+  });
+  assert.equal(incidentEngineDataDir.length, 110);
+  assert.equal(windows.maximumPathLength, 240);
+  assert.equal(windows.wakeSessionPathLength, 264);
+  assert.equal(windows.atomicTemporaryPathLength, 273);
+  assert.equal(windows.safe, false);
+  const nonWindows = inspectEnginePersistencePathBudget(incidentEngineDataDir, {
+    platform: 'linux',
+  });
+  assert.equal(nonWindows.applies, false);
+  assert.equal(nonWindows.safe, true);
+});
+
+test('create rejects a WakeSession final path over budget before leaving a sandbox root', () => {
+  const fixture = rootForBudget(({ wakeSessionPathLength }) => (
+    wakeSessionPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+  ));
+  try {
+    assert.equal(fixture.budget.wakeSessionPathLength > 240, true);
+    if (process.platform === 'win32') {
+      assert.throws(
+        () => createLiveChatSandbox({ root: fixture.root }),
+        (error) => error.status === 'unsafe'
+          && error.reason === 'engine_persistence_path_budget_exceeded',
+      );
+      assert.equal(existsSync(fixture.root), false);
+    }
+  } finally { fixture.remove(); }
+});
+
+test('create rejects an atomic temporary path over budget even when the final path fits', () => {
+  const fixture = rootForBudget(({ wakeSessionPathLength, atomicTemporaryPathLength }) => (
+    wakeSessionPathLength <= WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+    && atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+  ));
+  try {
+    assert.equal(fixture.budget.wakeSessionPathLength <= 240, true);
+    assert.equal(fixture.budget.atomicTemporaryPathLength > 240, true);
+    if (process.platform === 'win32') {
+      assert.throws(
+        () => createLiveChatSandbox({ root: fixture.root }),
+        (error) => error.status === 'unsafe'
+          && error.reason === 'engine_persistence_path_budget_exceeded',
+      );
+      assert.equal(existsSync(fixture.root), false);
+    }
+  } finally { fixture.remove(); }
+});
+
+test('legacy over-budget manifest and doctor fail closed as unsafe', () => {
+  const source = temporary();
+  const target = rootForBudget(({ atomicTemporaryPathLength }) => (
+    atomicTemporaryPathLength > WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength
+  ));
+  try {
+    const sourceSandbox = createLiveChatSandbox({ root: source.root });
+    const legacy = materializeLegacyManifest(sourceSandbox, target.root);
+    assert.throws(
+      () => readAndValidateLiveChatSandboxManifest(legacy.manifestPath, {
+        platform: 'win32',
+      }),
+      (error) => error.status === 'unsafe'
+        && error.reason === 'engine_persistence_path_budget_exceeded',
+    );
+    const env = {
+      ...environment({
+        ...legacy,
+        manifestPath: legacy.manifestPath,
+      }),
+    };
+    const inspection = inspectLiveChatSandbox(env, { platform: 'win32' });
+    assert.deepEqual(inspection, {
+      status: 'unsafe',
+      reason: 'engine_persistence_path_budget_exceeded',
+    });
+    const doctor = doctorLiveChat({
+      connection: null,
+      environment: env,
+      sandboxInspectionOptions: { platform: 'win32' },
+    });
+    assert.equal(doctor.status, 'unsafe');
+    assert.deepEqual(
+      doctor.items.find(({ component }) => component === 's4_live_sandbox'),
+      {
+        component: 's4_live_sandbox',
+        status: 'unsafe',
+        reason: 'engine_persistence_path_budget_exceeded',
+      },
+    );
+    assert.equal(doctor.modelCall, 'not_performed');
+    assert.equal(doctor.providerCharge, 'not_incurred');
+  } finally {
+    source.remove();
+    target.remove();
+  }
 });
 
 test('create rejects existing, non-empty, repository and protected roots', () => {

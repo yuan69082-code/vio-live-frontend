@@ -17,7 +17,7 @@
 
 ## Windows PowerShell 首次真实试聊步骤
 
-以下值均为占位符。请使用仓库外运行目录；不要把真实 Key 或 token 写进 `.env`、JSON、SQLite、日志、文档、Git 或可复用的命令文件。
+以下值均为占位符。请使用全新、仓库外且足够短的绝对运行目录；Windows 推荐 `C:\VioS4\first-001`。沙箱创建会在任何写入前预算 Engine WakeSession 最终 JSON 与原子临时文件的最坏路径，超过 240 字符即以 `engine_persistence_path_budget_exceeded` 拒绝且不留目录。不要自动截断、移动旧沙箱或用 `subst`、junction、symlink/reparse point 绕过。不要把真实 Key 或 token 写进 `.env`、JSON、SQLite、日志、文档、Git 或可复用的命令文件。
 
 固定 v1.1 身份只能用于 `s4-live-acceptance` 可销毁验收，身份类型为 `disposable_test` 且 `promotionAllowed=false`。正式主体必须使用另一组身份、新 Binding、新 Vio 数据库和新 Engine 数据目录，禁止将本测试主体晋升为正式主体。
 
@@ -25,7 +25,7 @@
 
 ```powershell
 cd "C:\Users\Administrator\Documents\vio   live\backend"
-$runtimeRoot = "C:\Users\Administrator\Documents\VioRuntime\s4-live-sandboxes\<全新sandboxId>"
+$runtimeRoot = "C:\VioS4\first-001"
 pnpm run create:live-chat-sandbox -- --root $runtimeRoot
 $env:VIO_LIVE_SANDBOX_MANIFEST = Join-Path $runtimeRoot "sandbox.manifest.json"
 $bindingFile = Join-Path $runtimeRoot "binding.json"

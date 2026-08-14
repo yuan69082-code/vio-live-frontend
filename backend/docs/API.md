@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 v1.1 身份仅用于 `disposable_test` 验收且禁止晋升；doctor 只读校验 manifest 与同根路径，cleanup 只允许整根删除。
+S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 v1.1 身份仅用于 `disposable_test` 验收且禁止晋升；Windows 创建和 doctor 以同一 240 字符门禁验证 Engine WakeSession 最终/原子临时文件的最坏路径，超限返回 `unsafe / engine_persistence_path_budget_exceeded`；推荐新建 `C:\VioS4\first-001` 这类仓库外短路径。cleanup 只允许整根删除。
 
 - 当前阶段：Vio V5 已在固定本地试聊 Profile 下实现公共 Conversation Turn API，正式复用 V1 请求、V3 delivery、Engine E5-A、V4 Capability 和 V2 结果/投影账本，并只将 Engine 最终 response 保存为主体 Message；F1 已把现有对话页接到该公共 API。自动化测试只使用随机 loopback 受控 Provider；真实供应商 live smoke 尚未开始
 - 后端版本：`0.19.0`

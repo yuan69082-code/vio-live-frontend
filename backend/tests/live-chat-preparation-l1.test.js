@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -46,6 +55,14 @@ const LIVE_CHAT_ENVIRONMENT_NAMES = Object.freeze([
   'VIO_CONTINUITY_ENGINE_TOKEN',
   'CONTINUITY_ENGINE_INTEGRATION_TOKEN',
 ]);
+
+function createShortSandboxFixture() {
+  const directory = mkdtempSync(join(tmpdir(), 'vs4-'));
+  return Object.freeze({
+    sandbox: createLiveChatSandbox({ root: join(directory, 's') }),
+    remove() { rmSync(directory, { recursive: true, force: true }); },
+  });
+}
 
 function environment(databasePath, overrides = {}) {
   return {
@@ -437,7 +454,8 @@ function initializeEngineRuntime(root, cycleId) {
 
 test('doctor reports ready, missing, conflict and unsafe without displaying secrets', async () => {
   const database = createTestDatabasePath();
-  const sandbox = createLiveChatSandbox({ root: join(database.directory, 'sandbox') });
+  const sandboxFixture = createShortSandboxFixture();
+  const sandbox = sandboxFixture.sandbox;
   const bindingFile = sandbox.bindingFile;
   const engineData = sandbox.engineDataDir;
   const cycleId = 'vio-live-first-chat-cycle-001';
@@ -469,6 +487,7 @@ test('doctor reports ready, missing, conflict and unsafe without displaying secr
     assert.equal(doctorLiveChat({ connection: application.database.connection, environment: { ...env, VIO_LIVE_DAILY_TOKEN_LIMIT: 'unlimited' } }).status, 'unsafe');
   } finally {
     await application.stop();
+    sandboxFixture.remove();
     database.remove();
   }
 });
@@ -636,7 +655,8 @@ test('doctor applies unsafe over conflict over missing over ready without leakin
 
 test('doctor remains accurate after database restart', async () => {
   const database = createTestDatabasePath();
-  const sandbox = createLiveChatSandbox({ root: join(database.directory, 'sandbox') });
+  const sandboxFixture = createShortSandboxFixture();
+  const sandbox = sandboxFixture.sandbox;
   const bindingFile = sandbox.bindingFile;
   const engineData = sandbox.engineDataDir;
   const cycleId = 'vio-live-first-chat-cycle-001';
@@ -661,6 +681,7 @@ test('doctor remains accurate after database restart', async () => {
     assert.equal(doctorLiveChat({ connection: application.database.connection, environment: env }).status, 'ready');
   } finally {
     await application.stop();
+    sandboxFixture.remove();
     database.remove();
   }
 });

@@ -31,7 +31,7 @@
 | `VIO_LIVE_DAILY_TOKEN_LIMIT` | `50000` | L1 有限每日预算；正整数，禁止无限值 |
 | `VIO_LIVE_SESSION_TOKEN_LIMIT` | `10000` | L1 有限会话预算；正整数且不得超过每日预算 |
 | `VIO_LIVE_BINDING_FILE` | 无 | doctor 检查的仓库外正式 Binding fixture 文件 |
-| `VIO_LIVE_SANDBOX_MANIFEST` | 无 | S4-Live 可销毁沙箱严格清单绝对路径；doctor 要求 Binding、Vio DB 与 Engine data 同属该清单的 canonical root |
+| `VIO_LIVE_SANDBOX_MANIFEST` | 无 | S4-Live 可销毁沙箱严格清单绝对路径；doctor 要求 Binding、Vio DB 与 Engine data 同属该清单的 canonical root，并在 Windows 下验证 Engine 持久化最坏路径不超过 240 字符 |
 | `VIO_LIVE_ENGINE_DATA_DIR` | 无 | doctor 检查的仓库外 Engine 数据目录 |
 | `VIO_LIVE_ENGINE_CYCLE_ID` | 无 | Engine `init` 使用的稳定 cycle ID |
 | `VIO_LIVE_ENGINE_THINKING_MODE` | 无 | 首次真实试聊必须显式为 `capability` |
@@ -40,3 +40,5 @@
 配置值不会返回给前端。数据库路径可以迁移到其他适配器，但业务模块不得直接读取该环境变量。Continuity 集成默认关闭；启用时只连接本机，token 仅在进程内用于 `Authorization: Bearer ...`，不得写入 Git、SQLite、日志或错误响应。Provider secretRef 由独立 credential binding 保存，真实值仅在模型调用瞬间从环境读取；环境变量名称和 Base URL 都必须先通过严格校验。`/health` 只暴露 `disabled`、`ready`、`degraded`，不返回 token、密钥配置、完整 Engine URL、Binding 或请求正文。
 
 L1 不使用 `.env` 文件。关闭 PowerShell 后，`VIO_MODEL_API_KEY_LIVE` 和两个 service token 必须重新设置；文档、命令输出、SQLite 和 Git 中只会出现非秘密配置、脱敏状态及 credential reference，不会保存真实值。
+
+Windows S4-Live 必须使用全新、仓库外的短绝对沙箱路径，推荐 `C:\VioS4\first-001`。创建和 doctor 会同时预算 Engine `awakening/sessions/<64字符subject hash>/<64字符session hash>.json` 及其原子临时文件名；代表性最坏路径超过 240 字符即返回 `unsafe / engine_persistence_path_budget_exceeded`。系统不会自动截断、搬移路径，也不会用 `subst`、junction、symlink 或 reparse point 绕过门禁。

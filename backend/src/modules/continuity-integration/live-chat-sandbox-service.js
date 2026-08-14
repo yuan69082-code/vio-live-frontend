@@ -52,6 +52,13 @@ const ENGINE_DATA_DIRECTORY = 'engine-data';
 const SHA_PATTERN = /^[0-9a-f]{40}$/u;
 const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
 
+export const WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET = Object.freeze({
+  maximumPathLength: 240,
+  subjectHashLength: 64,
+  sessionHashLength: 64,
+  temporaryRandomNameLength: 8,
+});
+
 const MANIFEST_FIELDS = Object.freeze([
   'schemaVersion',
   'sandboxId',
@@ -337,7 +344,60 @@ function expectedPaths(root) {
   });
 }
 
-function validateManifestValues(manifest, manifestPath) {
+export function inspectEnginePersistencePathBudget(
+  engineDataDir,
+  {
+    platform = process.platform,
+    maximumPathLength = WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.maximumPathLength,
+  } = {},
+) {
+  if (typeof engineDataDir !== 'string' || engineDataDir.trim() === '') {
+    throw new TypeError('engineDataDir must be a non-empty string.');
+  }
+  if (!Number.isSafeInteger(maximumPathLength) || maximumPathLength <= 0) {
+    throw new TypeError('maximumPathLength must be a positive safe integer.');
+  }
+  const subjectHash = 's'.repeat(WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.subjectHashLength);
+  const sessionHash = 'w'.repeat(WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.sessionHashLength);
+  const sessionDirectory = join(
+    engineDataDir,
+    'awakening',
+    'sessions',
+    subjectHash,
+  );
+  const wakeSessionPath = join(sessionDirectory, `${sessionHash}.json`);
+  const atomicTemporaryPath = join(
+    sessionDirectory,
+    `.${sessionHash}.${'t'.repeat(WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET.temporaryRandomNameLength)}.tmp`,
+  );
+  const applies = platform === 'win32';
+  const wakeSessionPathLength = wakeSessionPath.length;
+  const atomicTemporaryPathLength = atomicTemporaryPath.length;
+  return Object.freeze({
+    platform,
+    applies,
+    maximumPathLength,
+    wakeSessionPathLength,
+    atomicTemporaryPathLength,
+    safe: !applies || (
+      wakeSessionPathLength <= maximumPathLength
+      && atomicTemporaryPathLength <= maximumPathLength
+    ),
+  });
+}
+
+function assertEnginePersistencePathBudget(engineDataDir, options) {
+  const budget = inspectEnginePersistencePathBudget(engineDataDir, options);
+  if (!budget.safe) {
+    fail('Engine persistence paths exceed the Windows safety budget.', {
+      status: 'unsafe',
+      reason: 'engine_persistence_path_budget_exceeded',
+    });
+  }
+  return budget;
+}
+
+function validateManifestValues(manifest, manifestPath, pathBudgetOptions) {
   exactObjectFields(manifest, MANIFEST_FIELDS);
   const binding = fixedSubjectBindingFixture();
   const canonicalManifestPath = canonicalizeProspectivePath(manifestPath);
@@ -345,6 +405,7 @@ function validateManifestValues(manifest, manifestPath) {
   const paths = expectedPaths(root);
   const expectedProtected = protectedPaths();
   assertSafeSandboxRoot(root, expectedProtected);
+  assertEnginePersistencePathBudget(paths.canonicalEngineDataDir, pathBudgetOptions);
   const exactValues = {
     schemaVersion: LIVE_CHAT_SANDBOX.schemaVersion,
     purpose: LIVE_CHAT_SANDBOX.purpose,
@@ -415,7 +476,7 @@ function validateTopLevelEntries(root) {
   }
 }
 
-export function readAndValidateLiveChatSandboxManifest(manifestPath) {
+export function readAndValidateLiveChatSandboxManifest(manifestPath, pathBudgetOptions) {
   if (typeof manifestPath !== 'string' || manifestPath.trim() === '' || !isAbsolute(manifestPath)) {
     fail('Sandbox manifest path must be an absolute path.', {
       status: manifestPath ? 'unsafe' : 'missing',
@@ -428,7 +489,11 @@ export function readAndValidateLiveChatSandboxManifest(manifestPath) {
     fail('Sandbox manifest does not exist.', { status: 'missing', reason: 'sandbox_manifest_missing' });
   }
   const manifest = strictJsonParse(readFileSync(canonicalManifestPath, 'utf8'));
-  const validated = validateManifestValues(manifest, canonicalManifestPath);
+  const validated = validateManifestValues(
+    manifest,
+    canonicalManifestPath,
+    pathBudgetOptions,
+  );
   if (!existsSync(validated.paths.canonicalSandboxRoot)) {
     fail('Sandbox root does not exist.', { status: 'missing', reason: 'sandbox_root_missing' });
   }
@@ -474,6 +539,7 @@ export function createLiveChatSandbox({ root, clock = () => new Date(), uuid = r
     fail('Sandbox root must not already exist.', { reason: 'sandbox_root_exists' });
   }
   const paths = expectedPaths(canonicalRoot);
+  assertEnginePersistencePathBudget(paths.canonicalEngineDataDir);
   const binding = fixedSubjectBindingFixture();
   const hash = calculateBindingFixtureHash(binding);
   validateFixedSubjectBindingFixture(binding, hash);
@@ -547,11 +613,13 @@ function environmentPath(environment, name) {
   return canonicalizeProspectivePath(value.trim());
 }
 
-export function inspectLiveChatSandbox(environment = process.env) {
+export function inspectLiveChatSandbox(environment = process.env, pathBudgetOptions) {
   const manifestPath = environment.VIO_LIVE_SANDBOX_MANIFEST?.trim() ?? '';
   if (!manifestPath) return Object.freeze({ status: 'missing', reason: 'sandbox_manifest_missing' });
   let validated;
-  try { validated = readAndValidateLiveChatSandboxManifest(manifestPath); } catch (error) {
+  try {
+    validated = readAndValidateLiveChatSandboxManifest(manifestPath, pathBudgetOptions);
+  } catch (error) {
     return Object.freeze({
       status: error instanceof LiveChatSandboxError ? error.status : 'conflict',
       reason: error instanceof LiveChatSandboxError ? error.reason : 'sandbox_manifest_invalid',

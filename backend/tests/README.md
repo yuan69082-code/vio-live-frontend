@@ -29,7 +29,7 @@ pnpm test
 
 L1 新增 `live-chat-preparation-l1.test.js`，18/18 覆盖只读 plan、双确认 apply、精确幂等、固定 Profile/Provider/Model/路由/Permission/Budget/credential 冲突、正式 Binding 导出、doctor 四态、秘密不落盘/不回显、零执行事实和真实 loopback adapter 回归。L1 完成后的后端全量基线为 196/196。
 
-S4-Live 新增 `live-chat-sandbox.test.js`，9/9 覆盖严格 manifest、测试专用固定身份、仓库外同根路径、symlink/junction/reparse 拒绝、doctor 沙箱门禁、只读 cleanup plan、双确认整根删除、占用失败以及 sibling/protected canary。当前 L1 为 24/24，后端全量为 211/211；全程不使用 API Key、不访问公网、不调用 Provider/模型且不产生费用。
+S4-Live `live-chat-sandbox.test.js` 当前 13/13：除严格 manifest、测试专用固定身份、仓库外同根路径、symlink/junction/reparse 拒绝、doctor 沙箱门禁、只读 cleanup plan、双确认整根删除、占用失败以及 sibling/protected canary 外，还覆盖事故 110/264/273 字符计算、WakeSession 最终路径超限、原子临时路径单独超限、创建零残留、已有超限 manifest/doctor fail closed 及显式非 Windows 语义。当前 L1 为 24/24，后端全量为 215/215；全程不使用 API Key、不访问公网、不调用 Provider/模型且不产生费用。
 
 独立 S4 双仓共享测试通过 7/7。该验收历史上基于 Engine E5-A `cba52126db2fb5eca57d9b5c0c80884693c59a6f` 完成；当前 `continuity-capability-local-http-shared.test.js` 固定要求其已接受的 S4-R 文档后继基线 `7a1dacae9401e1742aaf6ddbaa26f1b456880383`（相关生产与机器契约实现未改变）。测试显式读取 `CONTINUITY_ENGINE_REPO`，启动 capability 模式与随机 loopback Provider，通过 Vio V1 → V3 → V4 → Engine → V2 真实 HTTP 路径验证成功闭环、精确重放、双方重启、429 显式批准重试、400 终止、UNKNOWN fail closed 及身份/冲突隔离。运行命令为 `pnpm run test:continuity-capability-shared`；该命令不属于默认 `pnpm test`，不会访问公网或真实供应商。
 
