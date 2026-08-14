@@ -1,5 +1,14 @@
 # Vio Live 后端 ADR 决策记录
 
+## BE-ADR-038：首次真实供应商验收只能证明可销毁测试身份下的本机链路
+
+- 日期：2026-08-14
+- 状态：已采用，仅记录 S4-Live 首次正式验收
+- 决策：首次真实供应商试聊必须使用 `purpose=s4-live-acceptance`、`identityClass=disposable_test`、`promotionAllowed=false` 的固定测试身份，以及仓库外短路径独立沙箱。验收通过后只记录最小、脱敏的执行与权威边界事实，并由官方 cleanup 整根删除沙箱；该身份、Binding、Vio SQLite 和 Engine data 均不得晋升或复用为正式个人数据。
+- 验收事实：2026-08-14 在 `C:\VioS4\first-001` 使用 Alibaba Cloud Model Studio OpenAI-compatible Provider 与 `qwen-flash-2025-07-28` 完成一次 Provider execution；Provider 报告 177 input、9 output、186 total Token，finish reason 为 `stop`。CapabilityResult 为 `SUCCEEDED`，首次回传 HTTP 200，result outbox completed；Turn completed，最终主体表达“Vio首次真实试聊连接成功。”只来自 Engine `FirstRoundSuccessResult`。Engine 保持 `changed=false / revision=0`，没有内部 Event、StateMutation 或越权状态写入。
+- 费用与清理：Vio 账本只确认 `cost_status=not_reported`。验收时供应商费用概览显示 ¥0，但官方用量与账单可能延迟，因此不将其表述为永久最终费用为零。验收后 5173/8787/8766 均无监听，官方 cleanup 只删除完整 `C:\VioS4\first-001`，未命中 protected/repository path，最终路径不存在。
+- 边界：本决策不改变 v1.1、V1–V5、Engine 权威、Capability Schema、公共 API 或前端接口。一次 PASS 不代表通用身份/Binding、生产认证、多租户、加密密钥存储、备份或部署完成；当前只允许本机受控使用，不得公开部署。
+
 ## BE-ADR-036：S4-Live 固定身份只能存在于可销毁同根沙箱
 
 - 状态：接受

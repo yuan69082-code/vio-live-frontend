@@ -15,6 +15,12 @@
 
 建议的有限开发预算为每日 `50000`、每轮次 `10000` Token。可用 `VIO_LIVE_DAILY_TOKEN_LIMIT` 与 `VIO_LIVE_SESSION_TOKEN_LIMIT` 显式缩小或调整，但二者必须为有限正整数，session 不得超过 daily，超额策略固定为 `block`。
 
+## 2026-08-14 首次 S4-Live 验收归档
+
+首次真实供应商试聊已按下述正式流程在 `C:\VioS4\first-001` 完成，结论为 PASS。沙箱身份为 `purpose=s4-live-acceptance`、`identityClass=disposable_test`、`promotionAllowed=false`；Provider 为 Alibaba Cloud Model Studio OpenAI-compatible，模型为 `qwen-flash-2025-07-28`。Provider execution 恰好一次并报告 177 input、9 output、186 total Token；最终主体表达“Vio首次真实试聊连接成功。”由 Engine `FirstRoundSuccessResult` 产生，而不是把 Provider 原始候选直接写入 Message。Engine 保持 `changed=false / revision=0`，没有内部 Event 或 StateMutation。
+
+验收结束后三个服务均已停止，5173、8787、8766 无监听；官方 cleanup 返回 completed 并整根删除 `C:\VioS4\first-001`，没有命中 protected/repository path。Vio 账本费用状态为 `not_reported`；验收时供应商费用概览显示 ¥0，但官方用量与账单可能延迟。该归档不改变下面的安全运行步骤，也不授权复用测试身份或公开部署。
+
 ## Windows PowerShell 首次真实试聊步骤
 
 以下值均为占位符。请使用全新、仓库外且足够短的绝对运行目录；Windows 推荐 `C:\VioS4\first-001`。沙箱创建会在任何写入前预算 Engine WakeSession 最终 JSON 与原子临时文件的最坏路径，超过 240 字符即以 `engine_persistence_path_budget_exceeded` 拒绝且不留目录。不要自动截断、移动旧沙箱或用 `subst`、junction、symlink/reparse point 绕过。不要把真实 Key 或 token 写进 `.env`、JSON、SQLite、日志、文档、Git 或可复用的命令文件。

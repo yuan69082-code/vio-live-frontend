@@ -4,9 +4,11 @@ Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/`
 
 后端现可按用户保存 Security Policy 与安全偏好，并按 Permission → Policy → Confirmation 保护私域及生活数据。生活模块使用独立 User Space 表和 `life_data` 权限，提供本地确定性统计与受控记忆投影；不会支付、同步银行/健康设备或调用 AI。设备适配器仍只有未配置描述，扩展和设备均不执行真实操作。前端继续通过 Vite 同源代理访问 Vio 后端；除对话页的 V5 固定本地试聊接线外，其他页面尚未迁移到真实 API。
 
-[`Continuity Integration Contract v1.1`](docs/后端/14-continuity-engine连接契约v1.1.md) 已由 Continuity Engine 正式接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON 以及 S4 Capability 双仓共享验收均已通过。Vio V5 现已在固定本地试聊 Profile 下提供持久化公共 Conversation Turn API，把现有 Conversation/Message 串入 V1 → V3 → Engine E5-A → V4 → V2，并且只把 Engine 最终 `FirstRoundSuccessResult.response.content` 保存为主体 Message。F1 对话页只消费该公共 API：真实历史来自 Message 列表，发送、查询和显式恢复遵循 V5 状态机，超时或断线使用 `sessionStorage` 保留同一幂等事实。自动化共享验收只连接随机 loopback 受控 Provider，没有调用真实供应商、使用真实密钥或产生费用。**这仍不表示产品已经生产可用**：真实供应商 live smoke、通用 Binding、生产认证、多租户和部署均未完成。Continuity Engine 继续是 AI SubjectState 与最终主体表达的权威源，前端也仍只能连接 Vio 后端。
+[`Continuity Integration Contract v1.1`](docs/后端/14-continuity-engine连接契约v1.1.md) 已由 Continuity Engine 正式接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。Vio V5 在固定本地试聊 Profile 下提供持久化公共 Conversation Turn API，把现有 Conversation/Message 串入 V1 → V3 → Engine E5-A → V4 → V2，并且只把 Engine 最终 `FirstRoundSuccessResult.response.content` 保存为主体 Message。F1 对话页只消费该公共 API：真实历史来自 Message 列表，发送、查询和显式恢复遵循 V5 状态机，超时或断线使用 `sessionStorage` 保留同一幂等事实。首次真实验收使用可销毁测试身份、独立短路径沙箱和 Alibaba Cloud Model Studio 的 OpenAI-compatible Provider，结论为 PASS。**这仍不表示产品已经生产可用**：通用正式身份/Binding、生产认证、多租户、加密密钥存储、备份和部署均未完成。Continuity Engine 继续是 AI SubjectState 与最终主体表达的权威源，前端也仍只能连接 Vio 后端。
 
 S4-Live 首次真实试聊必须先创建可销毁验收沙箱：固定 v1.1 身份只登记为 `purpose=s4-live-acceptance`、`identityClass=disposable_test`、`promotionAllowed=false`，不得转为正式主体。Binding、Vio SQLite 和 Engine 数据必须位于同一个仓库外沙箱根；Windows 创建与 doctor 还会按 Engine WakeSession 原子写入的最坏路径执行 240 字符安全预算，超限以 `engine_persistence_path_budget_exceeded` 拒绝。应使用全新、仓库外的短绝对路径，例如 `C:\VioS4\first-001`；不得移动或缩写已有沙箱来绕过门禁。门禁上线前创建且唯一问题为超预算的旧沙箱仍可由官方 cleanup 在完整 Manifest/Binding/路径/保护校验和双确认后整根删除；doctor 继续判为 unsafe。清理禁止手工删数据库行、Engine JSON 或修改 revision。命令与完整顺序见 [`backend/scripts/README.md`](backend/scripts/README.md)。
+
+2026-08-14 的首次 S4-Live 正式验收在 `C:\VioS4\first-001` 完成：模型 `qwen-flash-2025-07-28` 只执行一次，Provider 报告 177 input、9 output、186 total Token，轮次最终返回“Vio首次真实试聊连接成功。”CapabilityResult 首次回传成功，Engine 保持 `changed=false / revision=0`，没有内部 Event、StateMutation 或越权状态写入。验收后服务全部停止，官方 cleanup 已整根删除沙箱；Vio 账本费用状态仍为 `not_reported`，验收时供应商概览显示 ¥0，但账单可能延迟，不能据此声明永久最终费用为零。
 
 L1 现提供三个安全准备入口：从正式 fixture/hash 导出仓库外 Binding、以只读 plan 或双确认 apply 幂等准备唯一 `openai_compatible` Provider/Model/路由/权限/有限预算/credential reference，以及在调用前只读运行 readiness doctor。L1 不调用真实供应商；API Key 只从当前进程环境读取，不进入 `.env`、SQLite、日志、输出、文档或 Git。完整 PowerShell 三端步骤见 [`backend/scripts/README.md`](backend/scripts/README.md)。
 
@@ -90,8 +92,8 @@ pnpm test
 - test-only JSONL Runner 仍只由独立共享测试显式启动，不会被应用、HTTP、前端或正式 transport 装配。S2/S3 已使用 Engine E4 正式 HTTP Server、Vio V3 正式 transport、V1/V2/V3 账本和临时双数据库完成 15/15 共享验收；正式 transport 仍默认关闭且没有公共或前端直连入口。
 - AI 助手全局设定只保存用户明确配置的长期身份与行为偏好，不能覆盖平台安全规则，也不会自动形成或修改 SubjectState。
 - 用户安全策略只能在已有 Permission 上继续收紧；`session_allow` 使用的开发期安全会话 ID 不是认证凭证，且只在明确确认后的精确范围内短时有效。
-- 没有通用 Memory，也没有在仓库、数据库或文档保存真实 API Key。V4 已具备生产可配置的 `openai_compatible` HTTP adapter，但真实供应商 live smoke 未执行；`anthropic_messages`、`glm_compatible` 和 `custom_http` 仍 fail closed。AI Private Space 只有显式输入的数据层、版本、权限安全联动、独立 Context 投影与导出清单预留，不包含意识、自主行为、开放判断或 continuity-engine 生成。MCP/Skill/Plugin/Tool 目前只有注册、权限投影和未执行准备记录；设备目前只有注册、能力描述、授权和未执行操作日志。没有真实 MCP 连接、插件安装、Tool/Skill 执行、设备连接或控制、厂商 API、支付、真实 AI 私域决策，真实供应商驱动的前端回复也尚未验收。
+- 没有通用 Memory，也没有在仓库、数据库或文档保存真实 API Key。V4 的 `openai_compatible` HTTP adapter 已通过一次可销毁 S4-Live 真实供应商试聊验收；这只是固定测试身份下的本机受控证据，不是生产 Provider、通用身份或公开部署验收。`anthropic_messages`、`glm_compatible` 和 `custom_http` 仍 fail closed。AI Private Space 只有显式输入的数据层、版本、权限安全联动、独立 Context 投影与导出清单预留，不包含意识、自主行为、开放判断或 continuity-engine 生成。MCP/Skill/Plugin/Tool 目前只有注册、权限投影和未执行准备记录；设备目前只有注册、能力描述、授权和未执行操作日志。没有真实 MCP 连接、插件安装、Tool/Skill 执行、设备连接或控制、厂商 API、支付或真实 AI 私域决策。
 - 生活管理只保存显式输入并进行本地统计；提醒不执行，AI 建议不生成，本地记忆不自动进入通用 Context。没有支付、银行同步、健康设备数据、医疗诊断、真实导出或自动数据删除。
 - 未认证后端不能直接公开部署。
 
-F1 固定本地 Profile 对话页接线已完成；真实供应商 live smoke、通用身份/Binding、生产认证、多租户与部署仍未开始，须等待后续独立任务。
+F1 固定本地 Profile 对话页接线与首次 S4-Live 真实供应商试聊验收已完成；本机个人日常使用化、通用身份/Binding、生产认证、多租户、加密密钥存储、备份与部署仍须等待后续独立任务。

@@ -4,13 +4,13 @@
 
 S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 v1.1 身份仅用于 `disposable_test` 验收且禁止晋升；Windows 创建和 doctor 以同一 240 字符门禁验证 Engine WakeSession 最终/原子临时文件的最坏路径，超限返回 `unsafe / engine_persistence_path_budget_exceeded`；推荐新建 `C:\VioS4\first-001` 这类仓库外短路径。cleanup 只允许整根删除：正常沙箱及唯一问题为历史路径超预算的旧沙箱均需通过其余全部严格校验，plan 返回 `cleanupEligible`、`legacyUnsafeReason` 和唯一 `deleteTargets=[canonicalSandboxRoot]`，apply 继续要求服务停止与整箱销毁双确认。
 
-- 当前阶段：Vio V5 已在固定本地试聊 Profile 下实现公共 Conversation Turn API，正式复用 V1 请求、V3 delivery、Engine E5-A、V4 Capability 和 V2 结果/投影账本，并只将 Engine 最终 response 保存为主体 Message；F1 已把现有对话页接到该公共 API。自动化测试只使用随机 loopback 受控 Provider；真实供应商 live smoke 尚未开始
+- 当前阶段：Vio V5 已在固定本地试聊 Profile 下实现公共 Conversation Turn API，正式复用 V1 请求、V3 delivery、Engine E5-A、V4 Capability 和 V2 结果/投影账本，并只将 Engine 最终 response 保存为主体 Message；F1 已把现有对话页接到该公共 API。2026-08-14 首次 S4-Live 真实供应商试聊已在可销毁测试身份和短路径沙箱中通过；该结果不是通用身份、生产认证或公开部署验收
 - 后端版本：`0.19.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
 
-前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。前端 `src`、页面和 mock 本阶段没有修改，也没有接入模型配置 API；当前真实页面连接仍只包含独立 API 客户端和应用启动健康握手。
+前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。F1 对话页已接入固定本地 Profile 的 V5 Turn/Message API；其余未接线页面继续保留开发期演示或 mock 边界，前端没有直接接入模型配置或 Continuity Engine。
 
 ## 统一返回结构
 
@@ -99,7 +99,8 @@ S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 
 | **Vio V5 已实现** | 固定本地 Profile 的公共轮次创建、纯查询、显式确认/重试恢复，以及 `022` 轮次幂等与消息发布账本 | 不修改 V4 候选边界；最终主体 Message 只取 V2 保存的 Engine response |
 | **第一轮明确排除** | CapabilityRequest/CapabilityResult、真实模型、Tool、MCP、设备和三层数据空间跨系统读写 | 三个确定性 test double 均位于 Continuity Engine 进程内，Vio 不实现 capability stub |
 | **已完成共享验收** | S4 双仓 Capability 本机共享验收 | 真实 Engine E5-A 进程、Vio V1–V4 正式后端路径与随机 loopback Provider 已验证；不代表真实供应商或产品入口验收 |
-| **未来产品/生产待共同决定** | 前端接线、真实供应商 live smoke、生产认证、多租户、部署、通用 Binding 和流式输出 | V5 仅为固定本地试聊 Profile，不等于通用或生产产品入口 |
+| **已完成受控真实验收** | S4-Live 首次真实供应商试聊 | 一次性 `disposable_test` 身份、`promotionAllowed=false`、短路径独立沙箱、真实 Alibaba Cloud Model Studio OpenAI-compatible Provider；最终 Message 仍只来自 Engine 稳定结果，验收后沙箱已整根删除 |
+| **未来产品/生产待共同决定** | 本机个人日常使用化、通用 Binding、生产认证、多租户、加密密钥存储、备份、部署和流式输出 | 首次 S4-Live PASS 只证明固定可销毁身份下的受控链路，不等于通用或生产产品入口 |
 
 ### Vio V3 正式本机传输（内部服务，不是公共路由）
 
@@ -125,7 +126,7 @@ V3 不新增外部可调用的 Vio 交付 API。未来对话 API 只能调用应
 - 无状态变化时 `changed=false`、revision 不变、`engineUpdateId=null`；有状态变化时 revision 只增加一次，`engineUpdateId=StateUpdateRecord.update_id`。第一轮只用最小 snapshot，不用 delta。
 - 第一轮摄取入口只能是 Continuity Engine 内独立、test-only 的 `ContractTestAdapter`；现有 `APIService.submit_message`、本地 HTTP、`UserInteractionService` 和 Vio 公共 API 均不是该入口。
 
-这些规则已经获得 Continuity Engine 正式确认。Vio V1 已落实严格请求构造/持久化，V2 已落实结果接收、幂等账本、投影隔离与恢复，V3 已落实默认关闭的正式本机 HTTP 交付与恢复，V5 固定本地 Turn API 已在应用内编排这些服务。test-only JSONL bridge 仍不是正式入口；前端尚未接入 V5，且始终只能调用 Vio 公共 API，不能直接连接引擎。
+这些规则已经获得 Continuity Engine 正式确认。Vio V1 已落实严格请求构造/持久化，V2 已落实结果接收、幂等账本、投影隔离与恢复，V3 已落实默认关闭的正式本机 HTTP 交付与恢复，V5 固定本地 Turn API 已在应用内编排这些服务。test-only JSONL bridge 仍不是正式入口；F1 对话页已接入 V5，但前端始终只能调用 Vio 公共 API，不能直接连接引擎。
 
 ### Vio V4 Capability 内部闭环（不是公共路由）
 
@@ -1318,6 +1319,6 @@ Device 注册启用
 - API 客户端位于 `src/api/`，页面组件不直接散落 `fetch`。
 - Vite 开发代理默认转发到 `http://127.0.0.1:8787`，可使用无秘密的 `VITE_BACKEND_PROXY_TARGET` 覆盖。
 - 应用入口启动时非阻塞访问 `/health`；后端不可用不会改变或阻断当前 mock 页面。
-- 当前页面仍未将登录、首次设置、工作台或对话展示替换为真实数据，mock 文件全部保留。
+- F1 对话页已切换到固定本地 Profile 的 V5 Turn/Message API；登录、首次设置、工作台和其余未接线页面仍保留开发期演示或 mock 边界。
 
 完整实际路由清单见 [`../README.md`](../README.md)；Event、Provider/Model、Permission、Security、Confirmation、AuditLog 与扩展能力的稳定规划契约见 [`../../docs/后端/12-API与事件契约.md`](../../docs/后端/12-API与事件契约.md) 和 [`../../docs/后端/07-扩展能力与设备适配.md`](../../docs/后端/07-扩展能力与设备适配.md)。

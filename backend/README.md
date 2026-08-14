@@ -2,9 +2,11 @@
 
 ## 当前状态
 
-长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON 与 S4 Capability 双仓共享验收也已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 新增 Binding 导出、live-chat plan/apply 和只读 doctor，允许用户在不落盘真实 Key 的前提下准备首次真实 `openai_compatible` 试聊；自动化测试仍只使用随机 loopback Provider，真实供应商 live smoke 尚未执行。
+长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 的 Binding 导出、live-chat plan/apply 和只读 doctor 已用于一次可销毁、短路径、固定测试身份的真实 `openai_compatible` 验收，结论为 PASS；该结论不等于通用身份或生产部署已完成。
 
 S4-Live 可销毁沙箱通过严格 `sandbox.manifest.json` 把固定 `user-001 / assistant-001 / subject-001 / conversation-001 / binding-001` 标记为一次性验收身份（`promotionAllowed=false`）。`create:live-chat-sandbox` 只在仓库外创建同根 Binding/Vio data/Engine data 骨架；Windows 下会在任何写入前按 Engine WakeSession 最终文件及 `NamedTemporaryFile` 原子临时文件的最坏路径执行 240 字符安全预算，超限以 `unsafe / engine_persistence_path_budget_exceeded` 拒绝且不留半成品。doctor 对已有 manifest 使用同一门禁。推荐每次使用全新短路径，例如 `C:\VioS4\first-001`；不得移动、截断或用链接绕过。`cleanup:live-chat-sandbox` 只对“唯一不安全原因是历史路径超预算”的旧沙箱提供受限兼容：重新执行全部严格校验，plan 明示兼容原因，apply 仍需双确认且只能整根删除；其他错误一律 fail closed。它不提供逐表、逐行、逐 JSON 或 revision 回滚。
+
+首次正式 S4-Live 于 2026-08-14 在 `C:\VioS4\first-001` 完成，使用 `purpose=s4-live-acceptance`、`identityClass=disposable_test`、`promotionAllowed=false` 和 Alibaba Cloud Model Studio OpenAI-compatible Provider。`qwen-flash-2025-07-28` 恰好执行一次并报告 177/9/186 Token，CapabilityResult 为 `SUCCEEDED`、首次回传 HTTP 200、result outbox 为 completed；Turn 为 completed，最终主体表达“Vio首次真实试聊连接成功。”来自 Engine `FirstRoundSuccessResult`。Engine 保持 `changed=false / revision=0`，未创建内部 Event/StateMutation；无 capability incident、outcome_unknown、重复 execution/result 或重复 Message。验收后 5173/8787/8766 均已停止监听，官方 cleanup 整根删除沙箱。Vio 保存 `cost_status=not_reported`；验收时供应商费用概览显示 ¥0，但账单可能延迟，不能表述为永久最终费用已确认。
 
 ```text
 React 启动 → Vite 同源代理 → 后端健康检查
@@ -134,7 +136,7 @@ L1 命令与完整 PowerShell 启动步骤见 [`scripts/README.md`](scripts/READ
 - 第一轮三份 Draft 2020-12 机器契约 Schema 的封闭本地 registry、严格未知字段/禁止状态字段校验、RFC 8785 与三项固定 SHA-256 conformance hash
 - 固定 SubjectBinding 测试装载、Vio 归属/来源验证、规范化逻辑请求构造，以及 requestId/createdAt/requestHash 跨重启恢复
 - Vio V3 正式本机 HTTP transport、delivery/outbox/attempt、timeout 后查询、`completed` / `recovery_required` / `not_found` 恢复、启动重放与 `disabled` / `ready` / `degraded` 健康状态
-- `pnpm test` 当前 178/178 通过，覆盖既有平台能力、Vio V1–V5、RFC 8785、021/022 迁移、loopback Provider、门控、轮次幂等、锁定版本投影、隔离、事务和重启恢复边界
+- 最近完整后端回归基线为 `pnpm test` 220/220，覆盖既有平台能力、Vio V1–V5、RFC 8785、021/022 迁移、loopback Provider、门控、轮次幂等、锁定版本投影、S4-Live 沙箱、隔离、事务和重启恢复边界
 - S2/S3 正式本机 HTTP shared tests 15/15 通过；Vio V1 + RFC 8785 + V2 + V3 为 64/64，Engine crash-recovery 15/15、E4 67/67、全量 301/301 通过
 
 Vio V1 生成并保存逻辑请求，V2 严格保存 Engine 结果/投影，V3 负责可靠交付，V4 负责受控 Capability 执行与回传。V5 只编排现有能力：先原子保存用户 Message 与轮次计划，再持久化 V1 请求并驱动 V3/V4；完成时从 V2 首次稳定结果读取 Engine `response.content`，原子保存一条主体 Message 后标记轮次完成。Turn 投影始终读取账本锁定的精确 user/subject MessageVersion，不跟随通用 Message `currentVersionId`，因此后续编辑或 regeneration 不会改写历史轮次。Provider 候选不能绕过 Engine。等待确认、预算、重试和 outcome unknown 均为可查询状态；恢复不会新建 requestId、重复 Provider 调用或复制回复。前端 `src`、页面与 mock 未修改。
@@ -466,8 +468,8 @@ backend/
 
 ## 系统边界
 
-平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context、唯一权威 SubjectState 和最终主体表达。V1–V4 及 S2/S3/S4 已验证机器契约、正式本机交付和 Capability；V5 在固定本地 Profile 下把公共轮次接入该链路，并只从 Engine 稳定结果发布主体 Message；F1 已让现有对话页消费 V5 公共 API。两边不合并数据库，Vio 不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。受控 loopback 验收不等于真实供应商 live smoke；真实登录、系统语音、外部存储、机器人、支付/银行、健康设备和生产部署仍未实现。
+平台后端与 continuity-engine 保持平行。Vio 负责用户、助手、会话、平台数据、权限安全、私域安全存储、Token 和外部能力安全通道；continuity-engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context、唯一权威 SubjectState 和最终主体表达。V1–V4 及 S2/S3/S4 已验证机器契约、正式本机交付和 Capability；V5 在固定本地 Profile 下把公共轮次接入该链路，并只从 Engine 稳定结果发布主体 Message；F1 已让现有对话页消费 V5 公共 API。S4-Live 又以一次可销毁测试身份验证了真实 OpenAI-compatible Provider，但没有改变双方数据库和权威边界：Vio 不创建引擎 Event/StateMutation，也不改写 legacy SubjectState。真实登录、系统语音、外部存储、机器人、支付/银行、健康设备和生产部署仍未实现。
 
-V5 固定本地 Profile 公共轮次 API、F1 前端接线与 L1 安全准备入口均已完成；真实供应商 live smoke 尚未执行，须由用户在当前进程提供真实 Provider 配置与秘密后另行明确发起。
+V5 固定本地 Profile 公共轮次 API、F1 前端接线、L1 安全准备入口与首次 S4-Live 真实供应商验收均已完成。本机个人日常使用化、通用正式身份/Binding、生产认证、多租户、加密密钥存储、备份和部署仍未开始，当前只允许本机受控使用，不得公开部署。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。
