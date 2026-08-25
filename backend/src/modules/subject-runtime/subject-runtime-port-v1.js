@@ -185,13 +185,26 @@ function oneOf(value, path, allowed) {
   return value;
 }
 
-function utcTimestamp(value, path) {
+function daysFromCivil(year, month, day) {
+  const adjustedYear = year - (month <= 2 ? 1 : 0);
+  const era = Math.floor(adjustedYear / 400);
+  const yearOfEra = adjustedYear - era * 400;
+  const adjustedMonth = month + (month > 2 ? -3 : 9);
+  const dayOfYear = Math.floor((153 * adjustedMonth + 2) / 5) + day - 1;
+  const dayOfEra = yearOfEra * 365
+    + Math.floor(yearOfEra / 4)
+    - Math.floor(yearOfEra / 100)
+    + dayOfYear;
+  return era * 146_097 + dayOfEra - 719_468;
+}
+
+function parseUtcTimestamp(value, path) {
   if (typeof value !== 'string') {
     fail(path, 'must be an RFC 3339 UTC timestamp ending in Z');
   }
   const match = utcPattern.exec(value);
   if (!match) fail(path, 'must be an RFC 3339 UTC timestamp ending in Z');
-  const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fraction = ''] = match;
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);
@@ -211,9 +224,27 @@ function utcTimestamp(value, path) {
   ) {
     fail(path, 'must contain a real UTC calendar date and time');
   }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) fail(path, 'must be a valid timestamp');
+  const epochSecond = BigInt(daysFromCivil(year, month, day)) * 86_400n
+    + BigInt(hour * 3_600 + minute * 60 + second);
+  return { value, epochSecond, fraction };
+}
+
+function utcTimestamp(value, path) {
+  parseUtcTimestamp(value, path);
   return value;
+}
+
+function deadlineMatchesTimeout(createdAt, deadlineAt, timeoutMs) {
+  const created = parseUtcTimestamp(createdAt, '$.createdAt');
+  const deadline = parseUtcTimestamp(deadlineAt, '$.timeout.deadlineAt');
+  const precision = Math.max(3, created.fraction.length, deadline.fraction.length);
+  const scale = 10n ** BigInt(precision);
+  const millisecondScale = scale / 1_000n;
+  const units = ({ epochSecond, fraction }) => (
+    epochSecond * scale
+    + BigInt((fraction || '0').padEnd(precision, '0'))
+  );
+  return units(deadline) - units(created) === BigInt(timeoutMs) * millisecondScale;
 }
 
 function jsonChildPath(path, key) {
@@ -483,8 +514,7 @@ export function validateSubjectRuntimeObservationInput(value) {
   });
   utcTimestamp(request.createdAt, '$.createdAt');
   utcTimestamp(timeout.deadlineAt, '$.timeout.deadlineAt');
-  if (new Date(timeout.deadlineAt).getTime() - new Date(request.createdAt).getTime()
-      !== timeout.timeoutMs) {
+  if (!deadlineMatchesTimeout(request.createdAt, timeout.deadlineAt, timeout.timeoutMs)) {
     fail('$.timeout', 'deadlineAt must equal createdAt plus timeoutMs');
   }
   return structuredClone(request);

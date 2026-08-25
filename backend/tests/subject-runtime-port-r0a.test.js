@@ -453,6 +453,39 @@ test('UTC timestamps reject normalized calendar dates and accept leap day and fr
   );
 });
 
+test('deadline comparison preserves every legal fractional digit and exact equivalent notation', () => {
+  const exactCases = [
+    ['2024-02-29T00:00:00.1234Z', 5_000, '2024-02-29T00:00:05.1234Z'],
+    ['2024-02-29T00:00:00.1Z', 5_000, '2024-02-29T00:00:05.1000Z'],
+    ['2024-02-29T23:59:59.9995Z', 1, '2024-03-01T00:00:00.0005Z'],
+  ];
+  for (const [createdAt, timeoutMs, deadlineAt] of exactCases) {
+    const input = observationInput({
+      createdAt,
+      timeout: { timeoutMs, deadlineAt },
+    });
+    assert.deepEqual(validateSubjectRuntimeObservationInput(input), input);
+  }
+});
+
+test('deadline comparison rejects sub-millisecond differences without truncation or rounding', () => {
+  const mismatchedCases = [
+    ['2024-02-29T00:00:00.1234Z', 5_000, '2024-02-29T00:00:05.1235Z'],
+    ['2024-02-29T23:59:59.9995Z', 1, '2024-03-01T00:00:00.0006Z'],
+  ];
+  for (const [createdAt, timeoutMs, deadlineAt] of mismatchedCases) {
+    const input = observationInput({
+      createdAt,
+      timeout: { timeoutMs, deadlineAt },
+    });
+    assertContractValidationError(
+      () => validateSubjectRuntimeObservationInput(input),
+      '$.timeout',
+      /deadlineAt must equal createdAt plus timeoutMs/,
+    );
+  }
+});
+
 test('non-completed results cannot smuggle expression or projection data', () => {
   const rule = SUBJECT_RUNTIME_ERROR_RULES.SUBJECT_RUNTIME_TIMEOUT;
   const result = {

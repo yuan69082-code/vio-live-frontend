@@ -28,7 +28,7 @@
 pnpm test
 ```
 
-R0-A 新增 `subject-runtime-port-r0a.test.js`，27/27 以纯本地方式验证 Vio Core/可选主体运行时责任、`none`/`external`、七态连接状态机、版本协商、严格观察/表达/投影/取消/恢复结构、状态与错误族绑定、None Adapter 以及 Continuity Engine/第三方适配器登记。该专项不启动或读取 Engine，不使用网络、模型、Provider、密钥或数据库；运行命令为 `node --test tests/subject-runtime-port-r0a.test.js`。
+R0-A `subject-runtime-port-r0a.test.js` 当前为 37/37，以纯本地方式验证 Vio Core/可选主体运行时责任、`none`/`external`、七态连接状态机、版本协商、严格观察/表达/投影/取消/恢复结构、状态与错误族绑定、None Adapter 以及 Continuity Engine/第三方适配器登记。投影 payload 回归覆盖纯 JSON 递归校验和 32768 UTF-8 字节边界；时间回归覆盖真实 UTC 公历、合法任意位小数秒、等价小数表示，以及 `deadlineAt = createdAt + timeoutMs` 的完整精度精确比较。该专项不启动或读取 Engine，不使用网络、模型、Provider、密钥或数据库；运行命令为 `node --test tests/subject-runtime-port-r0a.test.js`。
 
 L1 新增 `live-chat-preparation-l1.test.js`，18/18 覆盖只读 plan、双确认 apply、精确幂等、固定 Profile/Provider/Model/路由/Permission/Budget/credential 冲突、正式 Binding 导出、doctor 四态、秘密不落盘/不回显、零执行事实和真实 loopback adapter 回归。L1 完成后的后端全量基线为 196/196。
 
