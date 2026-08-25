@@ -4,7 +4,7 @@
 
 本目录依据《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》整理，用于描述平台后端的职责、数据边界、接口原则、安全约束和开发顺序。
 
-R0-A 已冻结 Vio `Subject Runtime Port v1` 后端合同：Vio Core 不以任何外部主体运行时为启动条件，`none` 是合法运行方式；Continuity Engine 仅登记为可选适配器，第三方适配器保留独立入口。当前聊天业务仍使用既有接线，尚未切换到该端口。R0 总阶段仍未完成，R1 尚未开始。
+R0-A 已冻结 Vio `Subject Runtime Port v1` 后端合同；R0-B 已默认装配 None Adapter，并提供 `GET /api/v1/subject-runtime/status` 与 `/health.subjectRuntime` 的通用只读状态。Vio Core 不以任何外部主体运行时为启动条件，`none / disconnected / not_configured` 是合法状态，平台仍为 `available`。Continuity Engine 在通用端口中仍仅登记为未接线的可选适配器，第三方适配器只保留受校验注入口。当前聊天业务继续使用既有接线，尚未切换到该端口。R0 总阶段仍未完成，R1 尚未开始。
 
 本目录记录稳定规划。仓库已完成可运行平台后端、开发数据库、账号与数据隔离、对话/平台事实投影、Event、模型路由、Permission/Security、扩展/设备/私域/生活数据、主动交互/Token 控制，以及版本化数据导出准备基础；前端已建立独立 API 客户端和真实健康握手。`Continuity Integration Contract v1.1` 已获接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON 和 S4 Capability 双仓共享验收均已通过。Vio V5 已在固定本地 Profile 下把公共 Conversation Turn API 接入 V1–V4 与 Engine E5-A，最终主体 Message 只来自 V2 保存的 Engine response。共享验收使用随机 loopback 受控 Provider，不是真实供应商；页面真实回复、真实供应商 live smoke、通用 Binding、真实认证、正式数据库及其他外部执行仍未完成。
 

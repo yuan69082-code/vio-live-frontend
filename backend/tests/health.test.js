@@ -33,7 +33,22 @@ test('service starts and reports a healthy development database', async () => {
       service: 'vio-live-backend',
       version: '0.19.0',
       database: 'ok',
+      subjectRuntime: {
+        portVersion: 'vio-subject-runtime-port/v1',
+        mode: 'none',
+        adapterId: 'none',
+        adapterKind: 'none',
+        state: 'disconnected',
+        platformStatus: 'available',
+        runtimeStatus: 'not_configured',
+        reason: 'external_runtime_not_configured',
+        externalCall: 'not_performed',
+      },
       continuityEngine: 'disabled',
+      continuityEngineCompatibility: {
+        scope: 'adapter_only_legacy',
+        status: 'disabled',
+      },
     });
   } finally {
     await context.application.stop();

@@ -99,6 +99,7 @@ export function createRouter({
   deviceService,
   continuityDeliveryService,
   continuityConversationTurnService,
+  subjectRuntimeStatusService,
   logger = console,
 }) {
   return async function route(request, response) {
@@ -120,15 +121,26 @@ export function createRouter({
       }
 
       if (request.method === 'GET' && url.pathname === '/health') {
+        const continuityEngineStatus = continuityDeliveryService.getHealthStatus();
         sendJson(response, 200, {
           data: {
             status: 'ok',
             service: config.serviceName,
             version: config.serviceVersion,
             database: database.ping() ? 'ok' : 'unavailable',
-            continuityEngine: continuityDeliveryService.getHealthStatus(),
+            subjectRuntime: subjectRuntimeStatusService.getHealthSummary(),
+            continuityEngine: continuityEngineStatus,
+            continuityEngineCompatibility: {
+              scope: 'adapter_only_legacy',
+              status: continuityEngineStatus,
+            },
           },
         });
+        return;
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/v1/subject-runtime/status') {
+        sendJson(response, 200, { data: subjectRuntimeStatusService.getStatus() });
         return;
       }
 

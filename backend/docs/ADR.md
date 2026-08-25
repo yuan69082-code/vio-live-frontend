@@ -3,11 +3,12 @@
 ## BE-ADR-039：Vio Core 只依赖通用 Subject Runtime Port，外部运行时为可选适配器
 
 - 日期：2026-08-25
-- 状态：已采用，仅完成 R0-A 合同冻结；R0 尚未完成，R1 尚未开始
+- 状态：已采用，R0-A 合同冻结与 R0-B 通用只读状态装配已完成；R0 尚未完成，R1 尚未开始
 - 决策：Vio Core 永久负责账号、助手、会话/消息、模型/Provider、MCP/Skill/Plugin/Tool、手机/设备、本地记忆、Context、权限安全、工作流/生活数据及费用/导出/备份恢复。可选外部主体运行时只通过 `vio-subject-runtime-port/v1` 提供主体状态、连续性或表达增强；没有外部运行时是合法 `none / disconnected` 状态，不能让 Vio 整体不可用。
 - 端口：v1 固定 Adapter Manifest、`none/external` 模式、能力清单、版本协商、严格观察输入、表达结果、外部状态投影、timeout/cancel/recovery、固定错误码和 `disconnected/connecting/ready/degraded/incompatible/paused/reconnecting` 状态机。None Adapter 不伪造 runtime 名称/版本、能力、expression、projection 或 revision；第三方实现只能通过受校验的 adapter 入口加入。
 - Continuity 限定：`continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 与 `conversation_response` 全部登记为 Continuity Engine Adapter 专用合同，不是 Vio Core 合同。BE-ADR-035 的 SubjectState/最终表达权威只在用户选择该适配器及其既有合同范围内继续成立；它不构成 Vio 的启动依赖。
-- 影响：本项新增纯本地合同、状态机、None Adapter、样例、兼容表和测试，不修改应用装配、聊天业务、V1—V5、数据库、HTTP API、前端或 Continuity Engine。现有聊天流程切换到新端口、独立模式真实对话及 Continuity Engine Adapter 映射属于 R1。
+- R0-A 影响：新增纯本地合同、状态机、None Adapter、样例、兼容表和测试，当时未修改应用装配、聊天业务、V1—V5、数据库、HTTP API、前端或 Continuity Engine。
+- R0-B 推进：应用默认装配 None Adapter；新增 `GET /api/v1/subject-runtime/status` 和 `/health.subjectRuntime`，只返回经 R0-A 校验并冻结的通用快照。旧 `continuityEngine` 健康值仅按 `adapter_only_legacy` 兼容保留。查询不执行运行时操作，不连接外部运行时。现有聊天流程切换到新端口、独立模式真实对话及 Continuity Engine Adapter 映射仍属于 R1。
 
 ## BE-ADR-038：首次真实供应商验收只能证明可销毁测试身份下的本机链路
 

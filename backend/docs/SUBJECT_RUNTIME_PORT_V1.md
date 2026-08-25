@@ -4,7 +4,7 @@
 
 - 施工项：`R0-A｜Vio 后端主体运行时端口与边界契约冻结`
 - 合同版本：`vio-subject-runtime-port/v1`
-- 当前状态：R0-A 合同、状态机、None Adapter、适配器登记与纯本地测试已实现
+- 当前状态：R0-A 合同基础与 R0-B 通用状态装配/只读查询已实现
 - 未完成：R0 其余子项、现有聊天业务切换、Standalone 对话执行、Continuity Engine 适配器接线、第三方运行时实现
 - 下一阶段边界：实际聊天编排按运行方式切换属于 R1，本文件不授权该施工
 
@@ -24,6 +24,34 @@
 | 费用、导出、备份与恢复 | 只通过已协商的适配器合同交互 |
 
 外部运行时是可选增强，不是 Vio 启动条件。每个主体未来最多选择零个或一个权威外部主体运行时；R0-A 只冻结接口，不实现选择、切换或业务接线。
+
+## R0-B 通用状态装配与只读查询
+
+`createApplication` 默认装配正式 None Adapter。`subject-runtime-status-service.js` 只读取并验证 Adapter Manifest、连接快照和版本协商结果，然后冻结一个可序列化的公共快照。查询阶段不再调用 Adapter 元数据方法，更不会调用 `submitObservation`、`cancel` 或 `recover`。
+
+公共入口为：
+
+- `GET /api/v1/subject-runtime/status`：返回完整通用状态与版本协商结果；
+- `GET /health` 的 `subjectRuntime`：返回同一状态的健康摘要；
+- `continuityEngine` 旧健康字段仅为历史调用方兼容保留，并由 `continuityEngineCompatibility.scope=adapter_only_legacy` 明确限定。
+
+公共状态固定包含 `portVersion`、`mode`、`adapterId`、`adapterKind`、`adapterVersion`、`state`、`platformStatus`、`runtimeStatus`、`runtimeName`、`runtimeVersion`、`capabilities`、`reason`、`versionNegotiation` 和 `externalCall`。所有值都来自本文件定义的 R0-A 合同；R0-B 不创建第二套模式、状态、能力或协商枚举。
+
+默认 None Adapter 的核心语义是：
+
+```text
+mode=none
+adapterId=none
+state=disconnected
+platformStatus=available
+runtimeStatus=not_configured
+capabilities=[]
+externalCall=not_performed
+```
+
+Manifest、连接快照、协商结果的未知字段、非法数据或交叉不一致会在应用装配阶段 fail closed。响应白名单不包含 URL、API Key、Authorization、service token、Provider 密钥、Binding 正文、数据库路径、请求正文、异常堆栈或适配器私有合同正文。
+
+R0-B 没有提供运行时选择、连接、断开、暂停或重连写入口，没有建立 Continuity Engine Adapter，也没有改变现有 V1—V5/S4/F1 聊天装配。实际适配与业务解耦属于 R1。
 
 ## 运行方式与适配器
 
@@ -246,4 +274,4 @@ node --test tests/subject-runtime-port-r0a.test.js
 
 测试不启动或读取 Engine，不使用网络、API Key、模型、Provider、MCP、Tool 或设备。R0-A 没有修改前端、迁移、公共 HTTP API、登录、记忆、Context、模型执行或部署。
 
-R0-A 完成不等于 R0 完成；R1 尚未开始。不得据此夸大为完整业务解耦或产品可用。
+R0-A 与 R0-B 完成不等于 R0 完成；R1 尚未开始。不得据此夸大为完整业务解耦或产品可用。

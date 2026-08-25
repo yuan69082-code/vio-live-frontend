@@ -29,6 +29,52 @@ None Adapter 返回 `platformStatus=available` 与 `runtimeStatus=not_configured
 
 `continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 和 `conversation_response` 继续由既有代码实现，但只属于 Continuity Engine Adapter；代码登记状态为 `registered_not_wired`。R0-A 没有改变这些合同、迁移、HTTP transport 或业务语义。R0 仍未完成，R1 尚未开始。
 
+## R0-B｜通用主体运行时状态（只读）
+
+### `GET /api/v1/subject-runtime/status`
+
+返回应用装配时从 Subject Runtime Port v1 Adapter 读取、严格校验并冻结的通用状态。接口不接收请求正文，不触发 `submitObservation`、`cancel`、`recover`、网络或费用，也不返回 URL、密钥、Token、Binding、数据库路径或专用适配器合同正文。
+
+默认 None Adapter 响应：
+
+```json
+{
+  "success": true,
+  "data": {
+    "portVersion": "vio-subject-runtime-port/v1",
+    "mode": "none",
+    "adapterId": "none",
+    "adapterKind": "none",
+    "adapterVersion": "none-adapter/v1",
+    "state": "disconnected",
+    "platformStatus": "available",
+    "runtimeStatus": "not_configured",
+    "runtimeName": null,
+    "runtimeVersion": null,
+    "capabilities": [],
+    "reason": "external_runtime_not_configured",
+    "versionNegotiation": {
+      "portVersion": "vio-subject-runtime-port/v1",
+      "adapterId": "none",
+      "status": "compatible",
+      "selectedVersion": "vio-subject-runtime-port/v1",
+      "reason": "version_match"
+    },
+    "externalCall": "not_performed"
+  },
+  "error": null,
+  "timestamp": "<server-generated-rfc3339-utc>"
+}
+```
+
+Adapter Manifest、连接快照或协商结果存在未知字段、非法状态、非法版本或相互不一致时，应用装配以 `validation_error` fail closed，不会静默修正或伪造状态。合法 `ready`、`degraded`、`incompatible`、`paused` 与 `reconnecting` 继续使用 R0-A 的同一套枚举。
+
+### `GET /health` 中的主体运行时摘要
+
+`subjectRuntime` 使用同一份已校验通用快照，默认返回 `platformStatus=available` 与 `runtimeStatus=not_configured`。历史 `continuityEngine` 值为兼容既有调用方而保留；新增 `continuityEngineCompatibility.scope=adapter_only_legacy` 明确它不是 Vio Core 的通用健康合同。
+
+R0-B 只增加通用状态装配和只读查询，没有运行时选择/连接/断开/重连写接口，没有创建 Continuity Engine Adapter，也没有切换 V1—V5/F1 聊天编排。R0 仍未完成，R1 尚未开始。
+
 ## 统一返回结构
 
 所有 JSON 响应至少包含以下四个字段：

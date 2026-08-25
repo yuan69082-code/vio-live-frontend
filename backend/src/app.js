@@ -76,6 +76,8 @@ import { createSecurityPolicyService } from './modules/security-policies/securit
 import { createSensitiveDataService } from './modules/sensitive-data/sensitive-data-service.js';
 import { createSubjectService } from './modules/subjects/subject-service.js';
 import { createSubjectStateService } from './modules/subject-states/subject-state-service.js';
+import { createNoneSubjectRuntimeAdapter } from './modules/subject-runtime/none-subject-runtime-adapter.js';
+import { createSubjectRuntimeStatusService } from './modules/subject-runtime/subject-runtime-status-service.js';
 import { createToolUsageService } from './modules/tool-usage/tool-usage-service.js';
 import { createUserService } from './modules/users/user-service.js';
 import { createUserSpaceService } from './modules/user-spaces/user-space-service.js';
@@ -88,7 +90,13 @@ export function createApplication({
   credentialStore: providedCredentialStore = null,
   modelExecutor: providedModelExecutor = null,
   conversationTurnFaultInjector = null,
+  subjectRuntimeAdapter: providedSubjectRuntimeAdapter = null,
 }) {
+  const subjectRuntimeAdapter = providedSubjectRuntimeAdapter
+    ?? createNoneSubjectRuntimeAdapter();
+  const subjectRuntimeStatusService = createSubjectRuntimeStatusService({
+    adapter: subjectRuntimeAdapter,
+  });
   const database = createSqliteDatabase(config);
   const userRepository = createSqliteUserRepository(database.connection);
   const userSpaceRepository = createSqliteUserSpaceRepository(database.connection);
@@ -493,6 +501,7 @@ export function createApplication({
     continuityDeliveryService,
     continuityCapabilityService,
     continuityConversationTurnService,
+    subjectRuntimeStatusService,
     logger,
   });
   const server = createServer((request, response) => {
@@ -508,6 +517,7 @@ export function createApplication({
     continuityDeliveryService,
     continuityCapabilityService,
     continuityConversationTurnService,
+    subjectRuntimeStatusService,
     fixedLocalChatProfileService,
     liveChatPreparationService,
     apiProviderService,

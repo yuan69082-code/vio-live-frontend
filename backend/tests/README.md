@@ -17,6 +17,7 @@
 - Wake、主动提示、Token 日/会话预算、后台策略和零执行边界
 - continuity-engine、模型和外部能力边界
 - Subject Runtime Port v1 严格合同、连接状态机、None Adapter 及适配器专用合同登记
+- Subject Runtime Port v1 默认装配、通用只读状态 API、健康摘要及第三方 Adapter 状态投影
 - Export Schema、十二类数据范围、完整性预检、安全确认、导出记录和未执行迁移契约
 - 错误结果不泄露密钥或其他用户数据
 
@@ -29,6 +30,8 @@ pnpm test
 ```
 
 R0-A `subject-runtime-port-r0a.test.js` 当前为 37/37，以纯本地方式验证 Vio Core/可选主体运行时责任、`none`/`external`、七态连接状态机、版本协商、严格观察/表达/投影/取消/恢复结构、状态与错误族绑定、None Adapter 以及 Continuity Engine/第三方适配器登记。投影 payload 回归覆盖纯 JSON 递归校验和 32768 UTF-8 字节边界；时间回归覆盖真实 UTC 公历、合法任意位小数秒、等价小数表示，以及 `deadlineAt = createdAt + timeoutMs` 的完整精度精确比较。该专项不启动或读取 Engine，不使用网络、模型、Provider、密钥或数据库；运行命令为 `node --test tests/subject-runtime-port-r0a.test.js`。
+
+R0-B `subject-runtime-status-r0b.test.js` 当前为 9/9，验证应用默认 None Adapter、平台可用/运行时未配置区分、完整公共响应、`/health.subjectRuntime`、第三方 Adapter 与七种合法状态、非法 Manifest/状态/版本/未知字段 fail closed、响应脱敏，以及查询不调用运行时操作。测试仅使用临时 SQLite 和本机随机端口，不读取 Engine、不访问公网、不调用模型或 Provider；运行命令为 `node --test tests/subject-runtime-status-r0b.test.js`。
 
 L1 新增 `live-chat-preparation-l1.test.js`，18/18 覆盖只读 plan、双确认 apply、精确幂等、固定 Profile/Provider/Model/路由/Permission/Budget/credential 冲突、正式 Binding 导出、doctor 四态、秘密不落盘/不回显、零执行事实和真实 loopback adapter 回归。L1 完成后的后端全量基线为 196/196。
 
