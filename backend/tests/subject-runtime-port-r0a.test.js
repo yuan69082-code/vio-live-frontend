@@ -116,6 +116,22 @@ function externalManifest(overrides = {}) {
   };
 }
 
+function completedRuntimeResult(payload) {
+  const result = subjectRuntimeContractExamples().validExpressionResult;
+  result.stateProjection.payload = arguments.length === 0
+    ? { summary: 'Strict JSON projection.' }
+    : payload;
+  return result;
+}
+
+function assertContractValidationError(callback, expectedPath, messagePattern) {
+  assert.throws(callback, (error) => (
+    error instanceof ValidationError
+    && error.details?.path === expectedPath
+    && messagePattern.test(error.message)
+  ));
+}
+
 test('R0-A freezes the exact Vio Core and optional subject runtime responsibility lists', () => {
   assert.deepEqual(VIO_CORE_RESPONSIBILITIES, [
     'accounts',
@@ -299,6 +315,142 @@ test('completed expression and opaque external state projection validate without
   assert.deepEqual(validateSubjectRuntimeResult(result), result);
   assert.equal(result.stateProjection.runtimeRevision, 'example-revision-a');
   assert.equal(Object.hasOwn(result.stateProjection, 'vioRevision'), false);
+});
+
+test('state projection payload must exist and be a plain JSON object', () => {
+  const missing = completedRuntimeResult();
+  delete missing.stateProjection.payload;
+  assertContractValidationError(
+    () => validateSubjectRuntimeResult(missing),
+    '$.stateProjection.payload',
+    /is required/,
+  );
+  for (const value of [undefined, null, [], 'text', 1, new Date('2026-08-25T00:00:00Z')]) {
+    assertContractValidationError(
+      () => validateSubjectRuntimeResult(completedRuntimeResult(value)),
+      '$.stateProjection.payload',
+      /plain JSON object/,
+    );
+  }
+});
+
+test('state projection payload rejects undefined properties at every nesting level', () => {
+  const cases = [
+    [{ illegal: undefined }, '$.stateProjection.payload.illegal'],
+    [{ nested: { deeper: { illegal: undefined } } }, '$.stateProjection.payload.nested.deeper.illegal'],
+    [{ items: ['legal', undefined] }, '$.stateProjection.payload.items[1]'],
+  ];
+  for (const [payload, path] of cases) {
+    assertContractValidationError(
+      () => validateSubjectRuntimeResult(completedRuntimeResult(payload)),
+      path,
+      /only JSON-compatible values/,
+    );
+  }
+});
+
+test('state projection payload rejects sparse arrays with the exact missing index path', () => {
+  const sparse = [];
+  sparse[1] = 'present';
+  assertContractValidationError(
+    () => validateSubjectRuntimeResult(completedRuntimeResult({ sparse })),
+    '$.stateProjection.payload.sparse[0]',
+    /sparse array element/,
+  );
+});
+
+test('state projection payload rejects every non-finite number recursively', () => {
+  for (const [key, value] of [['nan', NaN], ['positive', Infinity], ['negative', -Infinity]]) {
+    assertContractValidationError(
+      () => validateSubjectRuntimeResult(completedRuntimeResult({ [key]: value })),
+      `$.stateProjection.payload.${key}`,
+      /finite JSON number/,
+    );
+  }
+});
+
+test('state projection payload rejects non-JSON primitives and object implementations', () => {
+  class CustomProjectionValue {}
+  const cases = [
+    ['bigint', 1n, /only JSON-compatible values/],
+    ['functionValue', () => 'no', /only JSON-compatible values/],
+    ['symbolValue', Symbol('no'), /only JSON-compatible values/],
+    ['date', new Date('2026-08-25T00:00:00Z'), /plain JSON object/],
+    ['map', new Map([['key', 'value']]), /plain JSON object/],
+    ['set', new Set(['value']), /plain JSON object/],
+    ['buffer', Buffer.from('value'), /plain JSON object/],
+    ['instance', new CustomProjectionValue(), /plain JSON object/],
+  ];
+  for (const [key, value, pattern] of cases) {
+    assertContractValidationError(
+      () => validateSubjectRuntimeResult(completedRuntimeResult({ [key]: value })),
+      `$.stateProjection.payload.${key}`,
+      pattern,
+    );
+  }
+});
+
+test('state projection payload enforces the 32768 UTF-8 byte limit after strict validation', () => {
+  assertContractValidationError(
+    () => validateSubjectRuntimeResult(completedRuntimeResult({ text: '界'.repeat(11_000) })),
+    '$.stateProjection.payload',
+    /must not exceed 32768 bytes/,
+  );
+});
+
+test('valid complex JSON payload is returned intact without mutating caller data', () => {
+  const payload = {
+    nullable: null,
+    enabled: true,
+    count: 42,
+    fraction: 0.125,
+    text: '合法 JSON 😀',
+    nested: {
+      items: [false, 0, 'value', null, { leaf: 'kept' }],
+    },
+  };
+  const before = structuredClone(payload);
+  const input = completedRuntimeResult(payload);
+  const validated = validateSubjectRuntimeResult(input);
+  assert.deepEqual(payload, before);
+  assert.deepEqual(validated.stateProjection.payload, before);
+  assert.notEqual(validated.stateProjection.payload, payload);
+  assert.deepEqual(Object.keys(validated.stateProjection.payload), Object.keys(payload));
+});
+
+test('UTC timestamps reject normalized calendar dates and accept leap day and fractions', () => {
+  for (const invalid of [
+    '2026-02-30T00:00:00Z',
+    '2026-04-31T00:00:00Z',
+    '2025-02-29T00:00:00Z',
+  ]) {
+    const input = observationInput();
+    input.observation.occurredAt = invalid;
+    assertContractValidationError(
+      () => validateSubjectRuntimeObservationInput(input),
+      '$.observation.occurredAt',
+      /real UTC calendar date and time/,
+    );
+  }
+
+  const leapDay = observationInput();
+  leapDay.observation.occurredAt = '2024-02-29T00:00:00Z';
+  assert.deepEqual(validateSubjectRuntimeObservationInput(leapDay), leapDay);
+
+  const fractional = observationInput({
+    createdAt: '2024-02-29T00:00:00.125Z',
+    timeout: { timeoutMs: 5_000, deadlineAt: '2024-02-29T00:00:05.125Z' },
+  });
+  fractional.observation.occurredAt = '2024-02-29T00:00:00.125Z';
+  assert.deepEqual(validateSubjectRuntimeObservationInput(fractional), fractional);
+
+  const mismatchedDeadline = structuredClone(fractional);
+  mismatchedDeadline.timeout.deadlineAt = '2024-02-29T00:00:05.126Z';
+  assertContractValidationError(
+    () => validateSubjectRuntimeObservationInput(mismatchedDeadline),
+    '$.timeout',
+    /deadlineAt must equal createdAt plus timeoutMs/,
+  );
 });
 
 test('non-completed results cannot smuggle expression or projection data', () => {

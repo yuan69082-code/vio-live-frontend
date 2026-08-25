@@ -1,5 +1,4 @@
 import { ValidationError } from '../../core/errors.js';
-import { requirePlainObject } from '../../core/validation.js';
 
 export const SUBJECT_RUNTIME_PORT_VERSION = 'vio-subject-runtime-port/v1';
 
@@ -129,7 +128,8 @@ export const SUBJECT_RUNTIME_PORT_COMPATIBILITY = Object.freeze([
 
 const identifierPattern = /^[a-z][a-z0-9._-]{1,127}$/;
 const contractVersionPattern = /^[a-z][a-z0-9._-]*(?:\/[a-z0-9._-]+)+$/;
-const utcPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+const utcPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
+const MAX_STATE_PROJECTION_PAYLOAD_BYTES = 32_768;
 
 function fail(path, message) {
   throw new ValidationError(`Subject Runtime Port v1 validation failed at ${path}: ${message}`, {
@@ -186,11 +186,105 @@ function oneOf(value, path, allowed) {
 }
 
 function utcTimestamp(value, path) {
-  if (typeof value !== 'string' || !utcPattern.test(value)) {
+  if (typeof value !== 'string') {
     fail(path, 'must be an RFC 3339 UTC timestamp ending in Z');
+  }
+  const match = utcPattern.exec(value);
+  if (!match) fail(path, 'must be an RFC 3339 UTC timestamp ending in Z');
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysByMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (
+    month < 1
+    || month > 12
+    || day < 1
+    || day > daysByMonth[month - 1]
+    || hour > 23
+    || minute > 59
+    || second > 59
+  ) {
+    fail(path, 'must contain a real UTC calendar date and time');
   }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) fail(path, 'must be a valid timestamp');
+  return value;
+}
+
+function jsonChildPath(path, key) {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
+    ? `${path}.${key}`
+    : `${path}[${JSON.stringify(key)}]`;
+}
+
+function validateStrictJsonValue(value, path, ancestors) {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') return;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) fail(path, 'must be a finite JSON number');
+    return;
+  }
+  if (typeof value !== 'object') {
+    fail(path, 'must contain only JSON-compatible values');
+  }
+  if (ancestors.has(value)) fail(path, 'must not contain circular references');
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      const allowedKeys = new Set(['length']);
+      for (let index = 0; index < value.length; index += 1) {
+        const itemPath = `${path}[${index}]`;
+        if (!Object.hasOwn(value, index)) fail(itemPath, 'must not be a sparse array element');
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+          fail(itemPath, 'must be an enumerable JSON array element');
+        }
+        allowedKeys.add(String(index));
+        validateStrictJsonValue(descriptor.value, itemPath, ancestors);
+      }
+      for (const key of Reflect.ownKeys(value)) {
+        if (typeof key !== 'string' || !allowedKeys.has(key)) {
+          fail(path, 'must not contain non-JSON array properties');
+        }
+      }
+      return;
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      fail(path, 'must be a plain JSON object');
+    }
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== 'string') fail(path, 'must not contain symbol properties');
+      const childPath = jsonChildPath(path, key);
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+        fail(childPath, 'must be an enumerable JSON data property');
+      }
+      validateStrictJsonValue(descriptor.value, childPath, ancestors);
+    }
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+function validateStrictJsonObject(value, path) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    fail(path, 'must be a plain JSON object');
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    fail(path, 'must be a plain JSON object');
+  }
+  validateStrictJsonValue(value, path, new WeakSet());
+  const serialized = JSON.stringify(value);
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_STATE_PROJECTION_PAYLOAD_BYTES) {
+    fail(path, `must not exceed ${MAX_STATE_PROJECTION_PAYLOAD_BYTES} bytes`);
+  }
   return value;
 }
 
@@ -437,6 +531,15 @@ export function validateSubjectRuntimeRecoveryRequest(value) {
 }
 
 function validateProjection(value, expression, operationId) {
+  if (
+    value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+    && !Object.hasOwn(value, 'payload')
+  ) {
+    fail('$.stateProjection.payload', 'is required');
+  }
   const projection = exactObject(value, '$.stateProjection', [
     'projectionId',
     'subjectId',
@@ -457,7 +560,7 @@ function validateProjection(value, expression, operationId) {
     maxLength: 128,
   });
   text(projection.schemaVersion, '$.stateProjection.schemaVersion', { maxLength: 128 });
-  requirePlainObject(projection.payload, 'stateProjection.payload');
+  validateStrictJsonObject(projection.payload, '$.stateProjection.payload');
   utcTimestamp(projection.capturedAt, '$.stateProjection.capturedAt');
   if (expression && projection.subjectId !== expression.subjectId) {
     fail('$.stateProjection.subjectId', 'must match expression.subjectId');

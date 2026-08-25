@@ -183,6 +183,10 @@ Continuity Integration Contract `continuity-integration/v1.1` 不是本表中的
 - `payload`
 - `capturedAt`
 
+`payload` 是必填的纯 JSON object，递归内容只允许 `null`、boolean、有限 number、string、无空洞 array 和普通 object；`undefined`、function、symbol、bigint、非有限数、稀疏数组、Date、Map、Set、Buffer、类实例、访问器、symbol 属性和循环引用均按精确字段路径 fail closed。校验不会用序列化往返删除、替换或归一化字段，也不会修改调用者输入；通过严格校验后才计算 UTF-8 大小，固定上限为 32768 字节。
+
+合同中的时间必须是以 `Z` 结尾的 RFC 3339 UTC 时间。校验同时验证真实公历日期、时分秒和闰年规则，不接受 JavaScript 会自动归一化的不存在日期；合法闰日和小数秒继续受支持，`deadlineAt` 仍必须精确等于 `createdAt + timeoutMs`。
+
 Vio 不从该结构取得外部状态写权限，也不把 `runtimeRevision` 变成 Vio Core revision。None Adapter 永远不生成 expression、projection 或 revision。
 
 ## 取消与恢复
