@@ -15,6 +15,25 @@ export type {
 export { checkBackendConnection } from './connection'
 export type { BackendConnectionResult } from './connection'
 export { platformApi } from './platform-api'
+export {
+  SUBJECT_RUNTIME_PORT_VERSION,
+  SubjectRuntimeApiError,
+  createSubjectRuntimeApi,
+  subjectRuntimeApi,
+} from './subject-runtime-api'
+export type {
+  SubjectRuntimeAdapterKind,
+  SubjectRuntimeApi,
+  SubjectRuntimeApiErrorCode,
+  SubjectRuntimeCapability,
+  SubjectRuntimeConnectionState,
+  SubjectRuntimeMode,
+  SubjectRuntimeNegotiationStatus,
+  SubjectRuntimeStatus,
+  SubjectRuntimeStatusRead,
+  SubjectRuntimeStatusValue,
+  SubjectRuntimeVersionNegotiation,
+} from './subject-runtime-api'
 export type {
   ApiEnvelope,
   ApiErrorPayload,

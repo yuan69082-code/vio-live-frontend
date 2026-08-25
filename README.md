@@ -1,10 +1,10 @@
 # Vio Live
 
-Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。F1 已将现有对话页接入固定本地 Profile 的 Vio V5 公共 Conversation Turn API；其他前端页面仍保留原有 mock 数据。平台后端已完成账号/主体、全局设定/AI 私域、对话/摘要/状态/Context、事件、模型路由、权限安全、扩展与设备注册，以及管账、预算、月历、身体管理和本地记忆基础。
+Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。F1 已将现有对话页接入固定本地 Profile 的 Vio V5 公共 Conversation Turn API；R0-C 已让“我的”页通过正式只读 API 展示通用主体运行时状态；其他未接线前端模块仍保留原有 mock 数据。平台后端已完成账号/主体、全局设定/AI 私域、对话/摘要/状态/Context、事件、模型路由、权限安全、扩展与设备注册，以及管账、预算、月历、身体管理和本地记忆基础。
 
-R0-A 已冻结 Vio 自己的 [`Subject Runtime Port v1`](backend/docs/SUBJECT_RUNTIME_PORT_V1.md)：Vio Core 永久负责账号、助手、会话/消息、模型/Provider、扩展能力、设备、本地记忆、Context、权限安全、工作流/生活数据及费用/导出/备份恢复；外部主体运行时只是可选增强。R0-B 已将该端口的 Manifest、连接快照和版本协商结果装配为通用只读状态，默认正式使用 None Adapter，并提供 `GET /api/v1/subject-runtime/status` 与 `/health.subjectRuntime`。未配置外部运行时时，Vio 平台仍为 `available`，运行时明确为 `not_configured`。R0-A/R0-B **没有**切换现有聊天编排；Continuity Engine 在该通用端口中仍只是 `registered_not_wired` 的可选适配器，R0 总阶段仍未完成，R1 尚未开始。
+R0-A 已冻结 Vio 自己的 [`Subject Runtime Port v1`](backend/docs/SUBJECT_RUNTIME_PORT_V1.md)：Vio Core 永久负责账号、助手、会话/消息、模型/Provider、扩展能力、设备、本地记忆、Context、权限安全、工作流/生活数据及费用/导出/备份恢复；外部主体运行时只是可选增强。R0-B 已将该端口的 Manifest、连接快照和版本协商结果装配为通用只读状态，默认正式使用 None Adapter，并提供 `GET /api/v1/subject-runtime/status` 与 `/health.subjectRuntime`。R0-C 在“我的”设置页通过现有同源 `apiClient` 读取该正式接口，严格校验 Port v1 字段、状态、能力与版本协商，并提供一次进入读取、手动重新读取及卸载取消；没有自动轮询，也不会执行外部运行时操作。未配置外部运行时时，页面明确显示“Vio 可独立使用”和“未连接（正常）”，平台仍为 `available`。R0-A/B/C **没有**切换现有聊天编排；Continuity Engine 在该通用端口中仍只是 `registered_not_wired` 的可选适配器，R0 总阶段仍未完成，R1 尚未开始。
 
-后端现可按用户保存 Security Policy 与安全偏好，并按 Permission → Policy → Confirmation 保护私域及生活数据。生活模块使用独立 User Space 表和 `life_data` 权限，提供本地确定性统计与受控记忆投影；不会支付、同步银行/健康设备或调用 AI。设备适配器仍只有未配置描述，扩展和设备均不执行真实操作。前端继续通过 Vite 同源代理访问 Vio 后端；除对话页的 V5 固定本地试聊接线外，其他页面尚未迁移到真实 API。
+后端现可按用户保存 Security Policy 与安全偏好，并按 Permission → Policy → Confirmation 保护私域及生活数据。生活模块使用独立 User Space 表和 `life_data` 权限，提供本地确定性统计与受控记忆投影；不会支付、同步银行/健康设备或调用 AI。设备适配器仍只有未配置描述，扩展和设备均不执行真实操作。前端继续通过 Vite 同源代理访问 Vio 后端；除对话页的 V5 固定本地试聊接线和“我的”页的 R0-C 主体运行时只读状态外，其他页面尚未迁移到真实 API。
 
 [`Continuity Integration Contract v1.1`](docs/后端/14-continuity-engine连接契约v1.1.md) 已由 Continuity Engine 正式接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。Vio V5 在固定本地试聊 Profile 下提供持久化公共 Conversation Turn API，把现有 Conversation/Message 串入 V1 → V3 → Engine E5-A → V4 → V2，并且只把 Engine 最终 `FirstRoundSuccessResult.response.content` 保存为主体 Message。F1 对话页只消费该公共 API：真实历史来自 Message 列表，发送、查询和显式恢复遵循 V5 状态机，超时或断线使用 `sessionStorage` 保留同一幂等事实。首次真实验收使用可销毁测试身份、独立短路径沙箱和 Alibaba Cloud Model Studio 的 OpenAI-compatible Provider，结论为 PASS。**这仍不表示产品已经生产可用**：通用正式身份/Binding、生产认证、多租户、加密密钥存储、备份和部署均未完成。在现有 Continuity Engine Adapter 合同范围内，Continuity Engine 仍是该适配器的 AI SubjectState 与最终主体表达权威；该专用合同不再代表 Vio Core。前端也仍只能连接 Vio 后端。
 
@@ -81,7 +81,7 @@ pnpm test
 
 ## 当前边界
 
-- 对话页已停止使用 `conversationMock.messages`，只读取固定本地 Profile 的 V5 Message/Turn 公共投影；其余页面和未接线模块仍使用原有 `src/data/*Mock.ts` 原型数据。
+- 对话页已停止使用 `conversationMock.messages`，只读取固定本地 Profile 的 V5 Message/Turn 公共投影；“我的”页的主体运行时卡片只读取 `GET /api/v1/subject-runtime/status`，不会使用静态状态或旧 `continuityEngine` 健康字段。其余页面和未接线模块仍使用原有 `src/data/*Mock.ts` 原型数据。
 - 没有真实 Google/邮箱验证码登录或会话；`x-vio-user-id` 只用于开发期当前用户上下文。
 - 通用 Message 创建与重生成正文仍由开发调用方显式提交；唯一例外是 V5 固定本地 Turn API，它只把 V2 已保存的 Engine 最终 response 创建为主体 Message。
 - 摘要和 legacy/unverified `state_update` 仍由开发调用方显式提交；Context 只读投影不生成提示词或消耗 Token。正式本机连接不使用该旧写入口，Vio V2 通过独立投影账本保存 Engine 结果；现有 `state_update` 仍须收口或停用，Context 仍只作为平台事实来源。
@@ -98,4 +98,4 @@ pnpm test
 - 生活管理只保存显式输入并进行本地统计；提醒不执行，AI 建议不生成，本地记忆不自动进入通用 Context。没有支付、银行同步、健康设备数据、医疗诊断、真实导出或自动数据删除。
 - 未认证后端不能直接公开部署。
 
-F1 固定本地 Profile 对话页接线与首次 S4-Live 真实供应商试聊验收已完成。R0-A 已完成通用主体运行时端口和边界合同冻结，R0-B 已完成默认 None Adapter 状态装配与只读查询；R0 仍未完成，R1 的实际业务解耦尚未开始。本机个人日常使用化、通用身份/Binding、生产认证、多租户、加密密钥存储、备份与部署仍须等待后续独立任务。
+F1 固定本地 Profile 对话页接线与首次 S4-Live 真实供应商试聊验收已完成。R0-A 已完成通用主体运行时端口和边界合同冻结，R0-B 已完成默认 None Adapter 状态装配与只读查询，R0-C 已完成“我的”页通用状态读取与展示；R0 仍未完成，R1 的实际业务解耦尚未开始。本机个人日常使用化、通用身份/Binding、生产认证、多租户、加密密钥存储、备份与部署仍须等待后续独立任务。
