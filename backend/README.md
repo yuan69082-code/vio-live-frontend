@@ -4,6 +4,8 @@
 
 长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 的 Binding 导出、live-chat plan/apply 和只读 doctor 已用于一次可销毁、短路径、固定测试身份的真实 `openai_compatible` 验收，结论为 PASS；该结论不等于通用身份或生产部署已完成。
 
+R0-A 已新增 [`Subject Runtime Port v1`](docs/SUBJECT_RUNTIME_PORT_V1.md) 的纯后端合同模块、连接状态机、None Adapter、Continuity Engine 专用合同登记和第三方适配器入口。没有外部运行时现在被合同明确表达为合法的 `none / disconnected` 状态，且 Vio 平台状态保持 `available`。本项只冻结端口，没有把 V5、F1 或任何现有聊天业务切换到新端口；R0 总阶段仍未完成，R1 尚未开始。
+
 S4-Live 可销毁沙箱通过严格 `sandbox.manifest.json` 把固定 `user-001 / assistant-001 / subject-001 / conversation-001 / binding-001` 标记为一次性验收身份（`promotionAllowed=false`）。`create:live-chat-sandbox` 只在仓库外创建同根 Binding/Vio data/Engine data 骨架；Windows 下会在任何写入前按 Engine WakeSession 最终文件及 `NamedTemporaryFile` 原子临时文件的最坏路径执行 240 字符安全预算，超限以 `unsafe / engine_persistence_path_budget_exceeded` 拒绝且不留半成品。doctor 对已有 manifest 使用同一门禁。推荐每次使用全新短路径，例如 `C:\VioS4\first-001`；不得移动、截断或用链接绕过。`cleanup:live-chat-sandbox` 只对“唯一不安全原因是历史路径超预算”的旧沙箱提供受限兼容：重新执行全部严格校验，plan 明示兼容原因，apply 仍需双确认且只能整根删除；其他错误一律 fail closed。它不提供逐表、逐行、逐 JSON 或 revision 回滚。
 
 首次正式 S4-Live 于 2026-08-14 在 `C:\VioS4\first-001` 完成，使用 `purpose=s4-live-acceptance`、`identityClass=disposable_test`、`promotionAllowed=false` 和 Alibaba Cloud Model Studio OpenAI-compatible Provider。`qwen-flash-2025-07-28` 恰好执行一次并报告 177/9/186 Token，CapabilityResult 为 `SUCCEEDED`、首次回传 HTTP 200、result outbox 为 completed；Turn 为 completed，最终主体表达“Vio首次真实试聊连接成功。”来自 Engine `FirstRoundSuccessResult`。Engine 保持 `changed=false / revision=0`，未创建内部 Event/StateMutation；无 capability incident、outcome_unknown、重复 execution/result 或重复 Message。验收后 5173/8787/8766 均已停止监听，官方 cleanup 整根删除沙箱。Vio 保存 `cost_status=not_reported`；验收时供应商费用概览显示 ¥0，但账单可能延迟，不能表述为永久最终费用已确认。
@@ -32,11 +34,12 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
   正式本机链路（默认关闭；S2/S3 已通过）：V1 原请求 → HTTP/JSON → Engine E4 → V2 结果/投影 → V3 delivery 完成
   V4 Capability 闭环：Engine capability_required → 严格 inbox → Permission/Security/Budget → Model Router → Provider → durable Result outbox → Engine → V2
   V5 固定本地试聊：公共 Turn API → user Message/V1 → V3/V4/Engine/V2 → Engine 最终 response → subject Message
+  R0-A 通用边界（尚未接线）：Vio Core → Subject Runtime Port v1 → None / Continuity Engine / 第三方 Adapter
 ```
 
 L1 命令与完整 PowerShell 启动步骤见 [`scripts/README.md`](scripts/README.md)，环境变量治理见 [`config/README.md`](config/README.md)。准备与 doctor 不会调用模型或产生费用；只有用户在 F1 页面发送消息并完成必要确认后，才可能发生真实 Provider 调用。
 
-当前连接设计的权威入口是 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，最终接受证据见 [`14c`](../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。契约固定以下边界：
+Vio 的通用运行时边界入口是 [`Subject Runtime Port v1`](docs/SUBJECT_RUNTIME_PORT_V1.md)。现有 [`Continuity Integration Contract v1.1`](../docs/后端/14-continuity-engine连接契约v1.1.md) 及 [`14c`](../docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md) 只登记为 Continuity Engine Adapter 专用合同；在该适配器范围内继续固定以下边界：
 
 - continuity-engine 是 SubjectState 唯一权威源；Vio 只保存投影、快照、缓存和审计记录。
 - Vio Event 只能转换为不含状态修改的 Observation，由引擎决定是否影响主体。

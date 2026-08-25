@@ -16,6 +16,7 @@
 - 生活管理管账/预算/月历/身体/本地记忆、安全链、事件脱敏与隔离
 - Wake、主动提示、Token 日/会话预算、后台策略和零执行边界
 - continuity-engine、模型和外部能力边界
+- Subject Runtime Port v1 严格合同、连接状态机、None Adapter 及适配器专用合同登记
 - Export Schema、十二类数据范围、完整性预检、安全确认、导出记录和未执行迁移契约
 - 错误结果不泄露密钥或其他用户数据
 
@@ -26,6 +27,8 @@
 ```bash
 pnpm test
 ```
+
+R0-A 新增 `subject-runtime-port-r0a.test.js`，27/27 以纯本地方式验证 Vio Core/可选主体运行时责任、`none`/`external`、七态连接状态机、版本协商、严格观察/表达/投影/取消/恢复结构、状态与错误族绑定、None Adapter 以及 Continuity Engine/第三方适配器登记。该专项不启动或读取 Engine，不使用网络、模型、Provider、密钥或数据库；运行命令为 `node --test tests/subject-runtime-port-r0a.test.js`。
 
 L1 新增 `live-chat-preparation-l1.test.js`，18/18 覆盖只读 plan、双确认 apply、精确幂等、固定 Profile/Provider/Model/路由/Permission/Budget/credential 冲突、正式 Binding 导出、doctor 四态、秘密不落盘/不回显、零执行事实和真实 loopback adapter 回归。L1 完成后的后端全量基线为 196/196。
 

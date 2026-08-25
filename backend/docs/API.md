@@ -12,6 +12,23 @@ S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 
 
 前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。F1 对话页已接入固定本地 Profile 的 V5 Turn/Message API；其余未接线页面继续保留开发期演示或 mock 边界，前端没有直接接入模型配置或 Continuity Engine。
 
+## R0-A｜Subject Runtime Port v1（内部合同）
+
+R0-A 已实现 Vio 自己的 `vio-subject-runtime-port/v1`，详细字段、兼容表、状态转换、合法/非法样例和错误码见 [`SUBJECT_RUNTIME_PORT_V1.md`](SUBJECT_RUNTIME_PORT_V1.md)。这是进程内后端合同，**没有新增公共 HTTP 路由**，也没有把现有 V5/F1 聊天流程接到新端口。
+
+合同固定：
+
+- 模式：`none`、`external`
+- 状态：`disconnected`、`connecting`、`ready`、`degraded`、`incompatible`、`paused`、`reconnecting`
+- 能力：`observation_input`、`expression_result`、`state_projection`、`cancellation`、`recovery`
+- 操作：`submit_observation`、`cancel_operation`、`recover_operation`
+- 适配器：正式 None Adapter、Continuity Engine Adapter 专用合同登记、受校验第三方入口
+- 边界：Vio Core 始终拥有账号、会话、模型/工具/设备执行、数据、权限安全和费用；外部主体运行时只提供可选状态/连续性/表达增强
+
+None Adapter 返回 `platformStatus=available` 与 `runtimeStatus=not_configured`。运行时专用请求稳定返回 `unavailable / SUBJECT_RUNTIME_NOT_CONFIGURED / never`，且 `expression=null`、`stateProjection=null`，不伪造 revision。
+
+`continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 和 `conversation_response` 继续由既有代码实现，但只属于 Continuity Engine Adapter；代码登记状态为 `registered_not_wired`。R0-A 没有改变这些合同、迁移、HTTP transport 或业务语义。R0 仍未完成，R1 尚未开始。
+
 ## 统一返回结构
 
 所有 JSON 响应至少包含以下四个字段：

@@ -1,5 +1,14 @@
 # Vio Live 后端 ADR 决策记录
 
+## BE-ADR-039：Vio Core 只依赖通用 Subject Runtime Port，外部运行时为可选适配器
+
+- 日期：2026-08-25
+- 状态：已采用，仅完成 R0-A 合同冻结；R0 尚未完成，R1 尚未开始
+- 决策：Vio Core 永久负责账号、助手、会话/消息、模型/Provider、MCP/Skill/Plugin/Tool、手机/设备、本地记忆、Context、权限安全、工作流/生活数据及费用/导出/备份恢复。可选外部主体运行时只通过 `vio-subject-runtime-port/v1` 提供主体状态、连续性或表达增强；没有外部运行时是合法 `none / disconnected` 状态，不能让 Vio 整体不可用。
+- 端口：v1 固定 Adapter Manifest、`none/external` 模式、能力清单、版本协商、严格观察输入、表达结果、外部状态投影、timeout/cancel/recovery、固定错误码和 `disconnected/connecting/ready/degraded/incompatible/paused/reconnecting` 状态机。None Adapter 不伪造 runtime 名称/版本、能力、expression、projection 或 revision；第三方实现只能通过受校验的 adapter 入口加入。
+- Continuity 限定：`continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 与 `conversation_response` 全部登记为 Continuity Engine Adapter 专用合同，不是 Vio Core 合同。BE-ADR-035 的 SubjectState/最终表达权威只在用户选择该适配器及其既有合同范围内继续成立；它不构成 Vio 的启动依赖。
+- 影响：本项新增纯本地合同、状态机、None Adapter、样例、兼容表和测试，不修改应用装配、聊天业务、V1—V5、数据库、HTTP API、前端或 Continuity Engine。现有聊天流程切换到新端口、独立模式真实对话及 Continuity Engine Adapter 映射属于 R1。
+
 ## BE-ADR-038：首次真实供应商验收只能证明可销毁测试身份下的本机链路
 
 - 日期：2026-08-14
@@ -309,6 +318,7 @@
 - 接受结果：历史审核曾因第一轮机器契约歧义暂不接受；Vio 随后以纯文档修订固定三份严格 Schema、正式 conformance vector、SubjectBinding fixture、哈希、幂等/revision/错误/投影和独立 ContractTestAdapter 入口。Continuity Engine 在《Engine Contract Final Read-Only Short Confirmation v1》中确认现行差异闭合、未发现新的架构问题，并正式接受 v1.1；该确认没有改变长期权威边界。
 - 影响：Vio V1 已实现 PlatformObservation/fact/request 严格本地 Schema、固定 SubjectBinding/hash、RFC 8785 与输入持久化；Vio V2 已实现 operation/response/stateProjection 幂等接收、revision 隔离和投影账本；Vio V3 已实现正式本机 HTTP delivery/outbox。Engine E1—E4 与 crash-recovery 已实现，S2/S3 已证明正式本机链路在正常、机器错误、响应丢失、进程崩溃和双方重启后保持唯一 operation、Event、StateUpdateRecord、revision、result、projection 与 receipt。该实现没有改变 legacy `state_update`，也没有让 Vio 创建状态更新。真实模型/Capability、公共对话 API、前端接线、生产认证、多租户和部署仍需后续阶段。
 - 契约：当前权威设计见 `docs/后端/14-continuity-engine连接契约v1.1.md`，最终接受证据见 `docs/后端/14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md`。契约、正式本机连接与共享验收均不表示真实模型、公共对话 API、前端试用或生产部署已经完成。
+- R0-A 范围限定（2026-08-25）：本决策继续作为 Continuity Engine Adapter 专用权威规则保留，但不再定义 Vio Core 的通用主体运行时合同。Vio Core 只依赖 BE-ADR-039 的 `vio-subject-runtime-port/v1`；没有该适配器时，None Adapter 是合法状态，Vio 仍可运行。现有聊天切换尚未发生。
 
 ## BE-ADR-036｜Capability 模型执行采用独立可靠账本与 Engine 回传闭环
 

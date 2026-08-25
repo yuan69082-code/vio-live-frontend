@@ -3,7 +3,7 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：已建立统一响应、账号/数据隔离、对话/平台事实投影、Event、模型路由、扩展/设备/生活/私域、Permission/Security、主动交互/Token，以及版本化导出准备基础；Vio V1/V2/V3 与 Engine E4 已通过 S2/S3 真实 loopback HTTP/JSON 完成正式本机请求、结果投影、错误和崩溃恢复闭环，但没有新增公共连接 API
+- 实现状态：既有业务 API 和 Continuity Engine 专用连接合同保持不变；R0-A 已新增纯后端、无 HTTP 路由的 `Subject Runtime Port v1` 通用合同基础，尚未切换聊天业务
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
@@ -26,11 +26,22 @@
 - 生活管理数据
 - 数据导出、备份、恢复和删除入口
 
-### 平台后端与连续性引擎
+### 平台后端与可选主体运行时
 
-平台后端传递身份绑定、消息、来源、经权限筛选的平台事实包，以及由 Vio Event 转换且不含状态修改的 Observation；continuity-engine 负责最终认知 Context，返回回复、Observation 回执和唯一权威 SubjectState 的 revision/投影。
+平台后端使用 `Subject Runtime Port v1` 描述 `none` 或 `external` 运行方式、状态、能力、版本协商、观察输入、表达结果、状态投影、超时、取消、恢复和错误。没有外部主体运行时是合法状态，不降低 Vio Core 的可用性。适配器只能返回自己声明的能力，Vio 不伪造外部表达、revision 或状态。
 
-平台接口不暴露连续性引擎内部算法或存储结构。Vio 前端不得直连引擎，两边数据库不得合并。
+Continuity Engine 是一个可选适配器实现，其既有 SubjectBinding、PlatformObservation、FirstRoundSuccessResult、CapabilityRequest/CapabilityResult、`model.generate` 和 `conversation_response` 均属于该适配器专用合同，不是 Vio Core 合同。平台接口不暴露任一运行时内部算法或存储结构；前端不得直接连接外部运行时，数据库不得合并。
+
+## Subject Runtime Port v1
+
+- 核心合同版本：`vio-subject-runtime-port/v1`
+- 运行方式：`none`、`external`
+- 适配器类别：`none`、`continuity_engine`、`third_party`
+- 连接状态：`disconnected`、`connecting`、`ready`、`degraded`、`incompatible`、`paused`、`reconnecting`
+- 能力：`observation_input`、`expression_result`、`state_projection`、`cancellation`、`recovery`
+- 操作：`submit_observation`、`cancel_operation`、`recover_operation`
+
+该合同目前只在后端模块中供机器验证，没有新增公共 HTTP API，也没有接入现有 Conversation Turn 编排。None Adapter 对运行时专属操作稳定返回 `SUBJECT_RUNTIME_NOT_CONFIGURED / never`，且不制造表达或状态投影。完整字段、错误和兼容表见 [Subject Runtime Port v1](../../backend/docs/SUBJECT_RUNTIME_PORT_V1.md)。
 
 ### 平台后端与模型服务
 
@@ -40,9 +51,9 @@ continuity-engine 决定何时需要模型并组织最终认知 Context；Vio �
 
 平台后端负责适配、授权、调用和日志。MCP、Tool 和设备不能绕过平台权限层直接被前端或模型执行。
 
-## Continuity Integration Contract v1.1
+## Continuity Engine Adapter 专用合同
 
-长期架构和第一轮机器契约已经闭合并获 Continuity Engine 正式接受，详细文档见 [14-continuity-engine连接契约v1.1.md](14-continuity-engine连接契约v1.1.md)，接受证据见 [14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md](14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。接口状态必须严格区分：
+Continuity Integration Contract v1.1 及 Capability 合同已经闭合并获 Continuity Engine 接受，但它们只描述 `continuity_engine` 适配器，不定义 Vio Core 或第三方运行时。详细文档见 [14-continuity-engine连接契约v1.1.md](14-continuity-engine连接契约v1.1.md)，接受证据见 [14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md](14c-Engine-Contract-Final-Read-Only-Short-Confirmation-v1.md)。接口状态必须严格区分：
 
 | 状态 | 内容 |
 | --- | --- |
