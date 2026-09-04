@@ -1,6 +1,8 @@
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { discoverRuntimePaths } from './integrations/filesystem/runtime-paths.js';
+
 const backendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 function readPort(value) {
@@ -15,7 +17,7 @@ function readPort(value) {
 
 function readDatabasePath(value) {
   if (!value) {
-    return join(backendRoot, 'data', 'vio-live.dev.sqlite');
+    return discoverRuntimePaths().defaultVioDatabasePath;
   }
 
   if (value === ':memory:' || isAbsolute(value)) {

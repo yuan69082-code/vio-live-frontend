@@ -12,7 +12,7 @@ import {
 } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -31,6 +31,12 @@ import {
 } from '../src/modules/continuity-integration/live-chat-preparation-service.js';
 import { createLiveChatSandbox } from '../src/modules/continuity-integration/live-chat-sandbox-service.js';
 import { createTestDatabasePath } from '../test-support/test-application.js';
+import { discoverRuntimePaths } from '../src/integrations/filesystem/runtime-paths.js';
+import { requireIsolatedTestPaths } from '../test-support/isolated-test-environment.js';
+import { parseCliJsonOutput as parseCommandJson } from '../test-support/cli-json-output.js';
+
+const testPaths = requireIsolatedTestPaths();
+assert.deepEqual(discoverRuntimePaths(), testPaths, 'Test path loader must be active before L1 calls.');
 
 const backendRoot = fileURLToPath(new URL('..', import.meta.url));
 const scripts = Object.freeze({
@@ -127,14 +133,6 @@ function runPnpmWithoutSeparator(scriptName, env) {
     shell: process.platform === 'win32',
     windowsHide: true,
   });
-}
-
-function parseCommandJson(stdout) {
-  const start = stdout.indexOf('{');
-  const end = stdout.lastIndexOf('}');
-  assert.notEqual(start, -1);
-  assert.ok(end >= start);
-  return JSON.parse(stdout.slice(start, end + 1));
 }
 
 function count(connection, table) {
@@ -333,11 +331,11 @@ test('Binding export is the formal fixture, exact hash, idempotent and refuses m
     assert.notEqual(relativeTarget.status, 0);
     const repositoryTarget = runScript(
       scripts.exportBinding,
-      ['--output', resolve(import.meta.dirname, '..', 'binding.json')],
+      ['--output', join(testPaths.repositoryRoot, 'backend', 'binding.json')],
       process.env,
     );
     assert.notEqual(repositoryTarget.status, 0);
-    assert.equal(existsSync(resolve(import.meta.dirname, '..', 'binding.json')), false);
+    assert.equal(existsSync(join(testPaths.repositoryRoot, 'backend', 'binding.json')), false);
   } finally {
     database.remove();
   }

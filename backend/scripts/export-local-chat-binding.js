@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
+import { discoverRuntimePaths } from '../src/integrations/filesystem/runtime-paths.js';
+
 import {
   EXPECTED_BINDING_FIXTURE_HASH,
   fixedSubjectBindingFixture,
@@ -26,8 +28,7 @@ function outputPath(argv) {
 }
 
 const target = outputPath(process.argv.slice(2));
-const backendRoot = resolve(import.meta.dirname, '..');
-const repositoryRoot = resolve(backendRoot, '..');
+const { repositoryRoot } = discoverRuntimePaths();
 const relativeToRepository = relative(repositoryRoot, target);
 if (
   relativeToRepository === ''

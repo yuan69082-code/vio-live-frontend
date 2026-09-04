@@ -15,6 +15,10 @@ import { dirname, join, parse as parsePath, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { discoverRuntimePaths } from '../src/integrations/filesystem/runtime-paths.js';
+import { requireIsolatedTestPaths } from '../test-support/isolated-test-environment.js';
+import { parseCliJsonOutput as parseJsonOutput } from '../test-support/cli-json-output.js';
+
 import {
   LIVE_CHAT_SANDBOX,
   WINDOWS_ENGINE_PERSISTENCE_PATH_BUDGET,
@@ -32,8 +36,9 @@ import {
 } from '../src/modules/continuity-integration/first-round-contract.js';
 
 const backendRoot = fileURLToPath(new URL('..', import.meta.url));
-const repositoryRoot = resolve(backendRoot, '..');
-const engineRoot = resolve(repositoryRoot, '..', 'continuity-engine');
+const testPaths = requireIsolatedTestPaths();
+assert.deepEqual(discoverRuntimePaths(), testPaths, 'Test path loader must be active before sandbox calls.');
+const { repositoryRoot, engineRepositoryRoot: engineRoot } = testPaths;
 
 function temporary() {
   const directory = mkdtempSync(join(tmpdir(), 'vs4-'));
@@ -109,13 +114,6 @@ function runPnpm(script, args) {
     shell: process.platform === 'win32',
     windowsHide: true,
   });
-}
-
-function parseJsonOutput(output) {
-  const start = output.indexOf('{');
-  const end = output.lastIndexOf('}');
-  assert.ok(start >= 0 && end > start, output);
-  return JSON.parse(output.slice(start, end + 1));
 }
 
 test('create builds a strict disposable identity sandbox without business data or secrets', () => {

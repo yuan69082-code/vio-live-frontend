@@ -4,7 +4,7 @@
   "version": "0.19.0",
   "type": "module",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.23.1 <23.0.0"
   },
   "packageManager": "pnpm@11.9.0",
   "scripts": {
@@ -16,7 +16,7 @@
     "doctor:live-chat": "node scripts/doctor-live-chat.js",
     "create:live-chat-sandbox": "node scripts/create-live-chat-sandbox.js",
     "cleanup:live-chat-sandbox": "node scripts/cleanup-live-chat-sandbox.js",
-    "test": "node --test \"tests/*.test.js\"",
+    "test": "node scripts/run-tests.js",
     "test:continuity-shared": "node --test shared-tests/continuity-integration-shared.test.js",
     "test:continuity-capability-shared": "node --test shared-tests/continuity-capability-local-http-shared.test.js",
     "test:continuity-conversation-shared": "node --test shared-tests/continuity-conversation-local-http-shared.test.js"

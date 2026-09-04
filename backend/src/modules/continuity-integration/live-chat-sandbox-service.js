@@ -14,7 +14,6 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { homedir } from 'node:os';
 import {
   dirname,
   isAbsolute,
@@ -25,6 +24,8 @@ import {
   sep,
 } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+
+import { discoverRuntimePaths } from '../../integrations/filesystem/runtime-paths.js';
 
 import {
   EXPECTED_BINDING_FIXTURE_HASH,
@@ -177,31 +178,32 @@ function assertNoReparseTree(root) {
 }
 
 function repositoryRoot() {
-  return resolve(import.meta.dirname, '..', '..', '..', '..');
+  return discoverRuntimePaths().repositoryRoot;
 }
 
 function engineRepositoryRoot() {
-  return resolve(repositoryRoot(), '..', 'continuity-engine');
+  return discoverRuntimePaths().engineRepositoryRoot;
 }
 
 function defaultVioDatabasePath() {
-  return resolve(repositoryRoot(), 'backend', 'data', 'vio-live.dev.sqlite');
+  return discoverRuntimePaths().defaultVioDatabasePath;
 }
 
 function protectedPaths() {
+  const discovered = discoverRuntimePaths();
   const repo = canonicalizeProspectivePath(repositoryRoot());
   const engine = canonicalizeProspectivePath(engineRepositoryRoot());
   let home;
   let documents;
-  try { home = canonicalizeProspectivePath(homedir()); } catch { home = resolve(homedir()); }
-  try { documents = canonicalizeProspectivePath(join(homedir(), 'Documents')); } catch {
-    documents = resolve(homedir(), 'Documents');
+  try { home = canonicalizeProspectivePath(discovered.userHome); } catch { home = resolve(discovered.userHome); }
+  try { documents = canonicalizeProspectivePath(discovered.documentsDirectory); } catch {
+    documents = resolve(discovered.documentsDirectory);
   }
   const values = [
     repo,
     engine,
     canonicalizeProspectivePath(defaultVioDatabasePath()),
-    canonicalizeProspectivePath(join(engine, '.continuity-data')),
+    canonicalizeProspectivePath(discovered.defaultEngineDataDir),
     home,
     documents,
     parsePath(repo).root,
@@ -217,7 +219,7 @@ function protectedPaths() {
 function assertSafeSandboxRoot(root, protectedValues = protectedPaths()) {
   const repo = repositoryRoot();
   const engine = engineRepositoryRoot();
-  const defaultEngineData = join(engine, '.continuity-data');
+  const defaultEngineData = discoverRuntimePaths().defaultEngineDataDir;
   const defaultDatabase = defaultVioDatabasePath();
   if (
     samePath(root, repo) || isInside(root, repo)
@@ -327,7 +329,9 @@ function strictJsonParse(text) {
 
 function currentVioCommitSha() {
   const value = execFileSync('git', ['rev-parse', 'HEAD'], {
-    cwd: repositoryRoot(),
+    // The source checkout supplies provenance; protected runtime paths are a
+    // separate dependency and may be test canaries, not a copied Git checkout.
+    cwd: resolve(import.meta.dirname, '..', '..', '..', '..'),
     encoding: 'utf8',
     windowsHide: true,
   }).trim();
