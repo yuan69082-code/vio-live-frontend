@@ -104,9 +104,15 @@ function SubjectRuntimeSettings({ api = subjectRuntimeApi }: { api?: SubjectRunt
   }, [api])
 
   useEffect(() => {
+    let active = true
     mountedRef.current = true
-    void readStatus()
+    // Defer only to the microtask boundary: StrictMode's discarded setup can
+    // cancel before any request starts. Each real entry has its own setup.
+    queueMicrotask(() => {
+      if (active) void readStatus()
+    })
     return () => {
+      active = false
       mountedRef.current = false
       controllerRef.current?.abort()
       controllerRef.current = null
