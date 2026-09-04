@@ -321,3 +321,79 @@ R0-A/B/C 已完成并推送，不等于 R0 整体验收通过；R2、R1 尚未�
 最近历史后端全量为 266 项，265 通过、0 失败、1 条既有条件跳过：`Vio and Engine 7a1daca produce identical canonical UTF-8 and SHA-256 for independent corpus`，当次因显式不存在的隔离路径未执行。R0-C 首次测试自动发现真实 Engine、读取 HEAD/规范化实现后失败，以及随后获准的有限目录元数据检查，均在原日志保留；后续跳过不能抹掉首次事实，有限授权也不成为长期许可。
 
 本轮未执行：R0-A/B/C 专项、前后端全量及组合回归、TypeScript/构建/语法验证、迁移 fresh/upgrade/rollback、共享测试、服务或真实供应商验收。这不是豁免整阶段测试；复验范围与执行由总体协调窗口另行授权，不能将未执行项记为通过。R0 尚未整体验收，未开始 R2 或 R1。
+
+<a id="r0-review-20260904"></a>
+
+### 2026-09-04｜R0 整体复验来源与结果（交总体协调窗口验收）
+
+本节是上方八项矩阵的追加复验记录，不改写 A/B/C/H 的历史验收或 D 的纯文档核对。复验代码基线始终为 `0ab4e910577efb84a1e6d0cee14f157861488faa`，父提交及本地 `origin/main` 为 `948e201522750aea26aecd34b9be8136d9280951`；开始 `main` 领先/落后 1/0，工作区、暂存区干净。本轮不 fetch、不 push，不修改实现、测试、配置或桌面 Word。
+
+#### 访问与执行边界
+
+- 每次后端测试前，在该 PowerShell 子进程中将 `VIO_CONTINUITY_ENGINE_PATH` 显式设为系统临时目录下不存在的 `vio-r0-review-engine-disabled-do-not-create`，检查不存在并验证测试子进程继承；未创建占位目录，不永久修改环境变量，不回退到真实 Engine 自动发现。
+- 既有 RFC 跨仓项 `Vio and Engine 7a1daca produce identical canonical UTF-8 and SHA-256 for independent corpus` 按原条件跳过，未执行、不计通过。没有新增跳过或名称过滤，没有运行真实 Engine shared tests。
+- 本次有限授权仅允许既有沙箱保护逻辑检查真实 Engine 目录及 `.continuity-data` 的存在性、实际路径等目录元数据；不枚举内容，不读取源码、HEAD、配置、密钥、数据库或业务文件，不在 Engine 中执行命令，不启动、修改或真实连接 Engine。该授权不倒写为 R0-C 首次越界已经获准，也不是后续阶段的长期许可。
+- 测试使用 Vio 自身的受控 loopback、显式测试替身、临时数据库和必要子进程；这些不代表真实外部运行时接通。真实模型、供应商、真实 API Key 读取/使用、业务公网请求与费用均为 0；未关闭用户程序或其他窗口服务。
+
+#### 实际命令流水与失败保留
+
+下表均来自同一代码基线上的本次连续复验；专项/组合已通过者按用户授权引用首次复验输出，不无理由重跑。行间有重叠，不相加为独立测试总数。后端命令在 `backend` 执行，前端命令在仓库根目录执行。
+
+| 项目 / 命令 | 通过 / 失败 / 跳过 | 退出码与口径 |
+| --- | --- | --- |
+| `node --test tests/subject-runtime-port-r0a.test.js` | 37 / 0 / 0 | 0；首次复验专项 |
+| `node --test tests/subject-runtime-status-r0b.test.js` | 9 / 0 / 0 | 0；首次复验专项 |
+| `pnpm test src/api/subject-runtime-api.test.ts src/components/profile/SubjectRuntimeSettings.test.tsx` | 37 / 0 / 0 | 0；R0-C 专项，使用现有正式入口 |
+| `pnpm test -- src/api/subject-runtime-api.test.ts src/components/profile/SubjectRuntimeSettings.test.tsx` | 60 / 0 / 0 | 0；首次复验实际覆盖全部 5 个前端测试文件，不能把这次输出记成仅专项 |
+| V1—V4 既有六文件命令（见下方完整命令） | 101 / 0 / 0 | 0；首次复验受影响组合 |
+| R0-A/B、health、V1—V5 十一个文件命令（见下方） | 167 / 0 / 0 | 0；首次复验完整受影响组合 |
+| 首次后端默认 `pnpm test` | 258 / 3 / 1（共 262 项） | 1；进程崩溃，保留失败，不因后续成功改写 |
+| `node --test tests/account-subject-flow.test.js` | 2 / 0 / 0 | 0；受控诊断，仅单独运行一次 |
+| `node --test tests/api-connection-flow.test.js` | 2 / 0 / 0 | 0；受控诊断，仅单独运行一次 |
+| `node --test tests/assistant-global-settings-flow.test.js` | 3 / 0 / 0 | 0；受控诊断，仅单独运行一次 |
+| `node --test --test-concurrency=1 "tests/*.test.js"` | 265 / 0 / 1（共 266 项） | 0；仅诊断，不能替代默认命令；同一组 31 个文件 |
+| 用户释放资源后，原默认 `pnpm test` 受控复验一次 | 265 / 0 / 1（共 266 项） | 0；实际脚本为 `node --test "tests/*.test.js"`，约 23.070 秒，无并行启动第二套测试 |
+| `pnpm run typecheck` | 不适用测试计数 | 0；实际执行 `tsc -b` |
+| `pnpm run build` | 不适用测试计数 | 0；实际执行 `tsc -b && vite build`，113 个模块转换 |
+| 对 `729f9e3…HEAD` 间全部 11 个 JavaScript 文件逐一 `node --check <file>` | 11 个文件通过 / 0 失败 | 0；本次恢复复验重新执行；TypeScript 由正式类型检查及构建验证 |
+
+完整受影响组合命令如下，未使用名称过滤、排除文件或关闭进程隔离：
+
+```powershell
+node --test tests/continuity-integration-v1-flow.test.js tests/continuity-integration-v2-flow.test.js tests/continuity-integration-v3-flow.test.js tests/continuity-capability-v4-flow.test.js tests/continuity-capability-v4-recovery.test.js tests/model-execution-v4.test.js
+node --test tests/subject-runtime-port-r0a.test.js tests/subject-runtime-status-r0b.test.js tests/health.test.js tests/continuity-integration-v1-flow.test.js tests/continuity-integration-v2-flow.test.js tests/continuity-integration-v3-flow.test.js tests/continuity-capability-v4-flow.test.js tests/continuity-capability-v4-recovery.test.js tests/model-execution-v4.test.js tests/continuity-conversation-v5-flow.test.js tests/continuity-conversation-v5-recovery.test.js
+```
+
+首次前端验证也保留命令入口失败：`pnpm exec vitest run src/api/subject-runtime-api.test.ts src/components/profile/SubjectRuntimeSettings.test.tsx` 因 `vitest` 无法解析退出 1，未执行测试、不计通过。随后使用表内已有 `pnpm test <两个文件>` 正式入口完成专项；未安装依赖、未修改脚本或测试。
+
+首次后端失败中，account-subject 与 api-connection 测试进程输出 `Fatal process out of memory: Zone` 并以 `2147483651` 退出；assistant-global-settings 进程以 `3221226505` 异常退出，不能将其也直接断言为已证实的 OOM。没有通过改断言、增加跳过、加大堆、改变隔离或永久并发配置来获得通过。
+
+运行环境沿用 `E:\node.exe`、Node v22.23.1、x64、12 个可用逻辑处理器，物理内存约 15.82 GiB。单文件及串行诊断未复现崩溃或业务断言失败；串行后系统提交内存仍约 96.51%、仅余 0.90 GiB，因此当时没有强行运行默认命令。用户自行关闭部分软件后，本次默认命令启动前提交内存约 22.95 / 25.82 GiB、余量 2.87 GiB，可用物理内存约 4.04 GiB；结束时提交内存约 22.96 GiB，可用物理内存约 4.00 GiB。CIM 查询未取得数据，Windows 性能计数器取得上述提交内存采样。后续成功支持继续排查资源压力，但不足以证明全部崩溃根因已经查明。
+
+#### 八项原要求的本次复验对应
+
+| 原 R0 要求 | 本次实现/文件与测试核对 | 复验结论与尚未完成边界 |
+| --- | --- | --- |
+| Vio 核心职责 | 原责任表、ADR-034/BE-ADR-040 与 R0-A 职责清单断言一致 | 规则证据符合；真实登录、多助手等产品能力不算已实现 |
+| 通用主体运行时端口 | Port v1 严格校验、R0-B 默认装配/状态 GET/健康摘要；A 37、B 9、C 37 项专项通过 | 合同、只读装配及前端消费证据具备；未切换聊天执行 |
+| 空适配器、专用合同登记、第三方入口 | None 的空能力/空投影、第三方 Manifest 校验及 `registered_not_wired` 登记断言通过 | None 是正常合法状态；无真实第三方接入，不作为发布前置条件 |
+| 独立模式完整业务语义 | 两种模式文档与 None/UI 测试对应，不以 `available` 状态冒充普通模型回复 | R0 只冻结规则；真实身份先由 R2 完成，独立聊天仍由 R1 实现 |
+| 外部候选、最终表达、投影及执行权 | A 的表达/投影严格 JSON 与来源边界、受影响 V1—V5 回归通过；S4-Live 仅引用历史 | 不赋予 Vio 外部状态写权；通用业务分流/恢复仍属 R1，真实重连另行授权 |
+| 旧合同的适配器归属 | `adapter_only` 登记断言通过；后端 README 专用范围及被撤回的旧误判复核 | v1.1 权威原文不改，旧聊天依赖未假称已清除 |
+| 样例、兼容表、状态机与本地验证 | A 的合法/非法样例、七态转换、None、严格 JSON/UTF-8/公历/精确小数秒均通过；B/C 同源只读及生命周期测试通过 | 通用验证具备；RFC 真实跨仓项未执行、不计通过，不能冒称 Engine 已接通 |
+| 当前文档一致性 | 四项决定、历史/当前范围、八项矩阵、相对链接/锚点、历史正文保留及本轮追加范围复核 | 本次复验材料提交协调窗口；不自行宣告 R0 获整体验收，不开始 R2/R1 |
+
+#### 迁移验证的实际来源
+
+以下不是根据“没有修改迁移”推断通过，而是在本次默认全量输出中确认的原有测试：
+
+| 范围 | 现有测试文件与名称 | 本次结果 |
+| --- | --- | --- |
+| 021 fresh | [V4 flow](../tests/continuity-capability-v4-flow.test.js)：`migration 021 creates the durable V4 ledger on a fresh database` | 通过；检查表、索引、外键及迁移记录 |
+| 001–020 升级 | 同文件：`an existing 001-020 database upgrades to 021 without changing old facts` | 通过；保留旧用户事实、外键检查 0；现有 runner 继续迁移至当前 022 |
+| 021 失败回滚 | 同文件：`a failing 021 migration rolls back without partial V4 tables or migration record` | 通过；临时迁移副本注入错误，确认无部分 V4 表或 021 记录 |
+| 022 fresh | [V5 flow](../tests/continuity-conversation-v5-flow.test.js)：`migration 022 installs fresh and protects immutable turn facts` | 通过；表、唯一索引、外键及迁移记录 |
+| 001–021 升级与 022 失败回滚 | 同文件：`001-021 upgrades to 022 and a broken migration rolls back completely` | 通过；保留旧用户，失败库没有 022 记录或 Turn 表 |
+| 019/020 历史升级 | V2 `migration 019 installs fresh and upgrades an existing 018 database`；V3 `migration 020 installs from 001 and upgrades databases at 018 and 019` | 两项均通过，runner 按当前迁移集合执行；未改旧迁移 |
+
+本次只追加矩阵与三份现有日志；文档检查和产物清理结果见 [后端开发日志](开发日志.md#r0-review-20260904)。未执行真实 Engine shared/RFC 实现对照、真实供应商试聊、生产部署或 R2/R1 产品验收，均不计通过。首次默认崩溃、诊断通过、资源不足时未启动默认命令、释放资源后的默认复验及原 R0-C 越界记录分别保留；本次复验及验收记录交总体协调窗口最终验收，未推送，R2、R1 均未开始。
