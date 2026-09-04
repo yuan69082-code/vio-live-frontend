@@ -1,5 +1,18 @@
 # 后端测试策略
 
+## R0 证据口径与当前文档收尾
+
+R0-A/B/C 已分别验收并推送；2026-09-04 本轮只核对文档、引用和 [R0 要求与证据矩阵](../docs/SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)，没有执行下列代码测试或服务。历史数量不得当作本轮新测通过数；R0 整体验收仍待总体协调窗口复核。
+
+- R0-A 历史专项 37/37，R0-B 历史专项 9/9。
+- R0-C 历史专项 37/37、前端全量 60/60；来源为 [工程日志](../../docs/工程日志.md)“2026-09-04｜R0-C 验收修正记录”，覆盖严格响应、None/第三方显示、StrictMode 单次 GET、重进、手动刷新、卸载取消、无轮询和失败不保留旧成功状态。
+- 最近历史后端全量 266 项：265 通过、0 失败、1 条既有 RFC 跨仓对照因显式不存在的隔离路径未执行，不计入通过；首次误读真实 Engine 后失败及后续有限目录检查历史保留。本轮没有执行或新增任何跳过。
+- 后续验收按 [ADR-034](../../docs/决策记录.md#adr-034) 与 [现行路线](../../docs/后端/13-部署运维测试与路线图.md#r0-r13-order)；真实多助手/多会话、分阶段前端、六导航及原模型/API/工具/MCP/设备、安全墙要求不减。R0 后先 R2 再 R1，本轮均未开始。
+
+真实 Engine 共享测试命令仅保留为特定适配器历史验收入口，不是 Vio 完成或发布的必跑项。本轮不运行它们，也不探测真实 Engine。首次彻底解耦后，无用户另行重连授权就不探测、读取、启动或修改真实引擎；通用端口仍须在 Vio 自有环境完整验证。下方关于历史副本/Engine 路径的说明不构成当前执行授权，也不表示现有源码的相邻目录探测逻辑已在 R0 被修改。
+
+## 已有测试范围及历史入口
+
 后端测试将至少覆盖：
 
 - 用户与主体隔离
@@ -33,9 +46,9 @@ R0-A `subject-runtime-port-r0a.test.js` 当前为 37/37，以纯本地方式验�
 
 R0-B `subject-runtime-status-r0b.test.js` 当前为 9/9，验证应用默认 None Adapter、平台可用/运行时未配置区分、完整公共响应、`/health.subjectRuntime`、第三方 Adapter 与七种合法状态、非法 Manifest/状态/版本/未知字段 fail closed、响应脱敏，以及查询不调用运行时操作。测试仅使用临时 SQLite 和本机随机端口，不读取 Engine、不访问公网、不调用模型或 Provider；运行命令为 `node --test tests/subject-runtime-status-r0b.test.js`。
 
-L1 新增 `live-chat-preparation-l1.test.js`，18/18 覆盖只读 plan、双确认 apply、精确幂等、固定 Profile/Provider/Model/路由/Permission/Budget/credential 冲突、正式 Binding 导出、doctor 四态、秘密不落盘/不回显、零执行事实和真实 loopback adapter 回归。L1 完成后的后端全量基线为 196/196。
+L1 初次实现时 `live-chat-preparation-l1.test.js` 为 18/18，覆盖只读 plan、双确认 apply、精确幂等、配置冲突、Binding 导出、doctor 四态、脱敏与零执行事实；当时后端全量为 196/196。后续修复及以下数量是分阶段历史，不是当前全量或本轮测试结果。
 
-S4-Live `live-chat-sandbox.test.js` 当前 18/18：除严格 manifest、测试专用固定身份、仓库外同根路径、symlink/junction/reparse 拒绝、doctor 沙箱门禁、只读 cleanup plan、双确认整根删除、占用失败以及 sibling/protected canary 外，还覆盖事故 110/264/273 字符计算、WakeSession 最终路径超限、原子临时路径单独超限、创建零残留、已有超限 manifest/doctor fail closed，以及 cleanup-only 兼容 plan/apply、未知/重复字段、Manifest/Binding/hash/canonical path 篡改、reparse、非预算错误和占用拒绝。当前 L1 为 24/24，后端全量为 220/220；全程不使用 API Key、不访问公网、不调用 Provider/模型且不产生费用。
+S4-Live `live-chat-sandbox.test.js` 历史验收为 18/18：除严格 manifest、测试专用固定身份、仓库外同根路径、symlink/junction/reparse 拒绝、doctor 沙箱门禁、只读 cleanup plan、双确认整根删除、占用失败以及 sibling/protected canary 外，还覆盖事故 110/264/273 字符计算、WakeSession 最终路径超限、原子临时路径单独超限、创建零残留、已有超限 manifest/doctor fail closed，以及 cleanup-only 兼容 plan/apply、未知/重复字段、Manifest/Binding/hash/canonical path 篡改、reparse、非预算错误和占用拒绝。当时 L1 为 24/24，后端全量为 220/220；这些自动测试不使用真实 API Key、不访问公网、不调用真实 Provider/模型且不产生费用。
 
 自动化测试与真实供应商验收必须分开表述。2026-08-14 的首次 S4-Live 真实验收另以 `C:\VioS4\first-001` 可销毁短路径沙箱和 `disposable_test / promotionAllowed=false` 身份完成，结论为 PASS：真实 Provider execution 恰好一次，Engine 保持 `changed=false / revision=0`，最终主体 Message 来自 Engine `FirstRoundSuccessResult`，验收后官方 cleanup 已整根删除沙箱。该人工验收没有并入默认测试，也不把供应商费用概览的 ¥0 当作永久最终账单；Vio 账本状态保持 `not_reported`。
 

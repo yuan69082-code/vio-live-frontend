@@ -1,14 +1,23 @@
 # Vio Live 后端 ADR 决策记录
 
+## BE-ADR-040：按四项已确认决定收尾 R0 文档，不提前实施产品功能
+
+- 日期：2026-09-04
+- 状态：已采用，仅同步说明；R0 整体验收待总体协调窗口复核
+- 决策来源：[ADR-034](../../docs/决策记录.md#adr-034) 是四项决定的完整记录：R0 后先 R2 再 R1、随后 R3 至 R13；R8 只完成公共机制与截至 R7 的模块接线，R9—R11 各自完成对应前后端真实联调，R13 全量复验；同一用户多个助手及各助手多个会话；保留六个导航。编号、原真实功能与安全墙要求不变。
+- 后端落实边界：现有开发期 User Space/助手列表/指针只是数据基础，不等于 R2 真实登录和多助手产品验收。R1 使用 R2 正式身份完成模式分流及聊天解耦，不依赖真实 Engine 在场；通用接口必须验证，具体外部运行时接入不作为 Vio 发布条件。
+- 独立性：首次彻底解耦后，无用户另行重连授权就不探测、读取、启动或修改真实引擎。未来通过独立适配器或接口扩展接入，不能擅改 Vio 核心。已有 v1.1 和 BE-ADR-035 的适配器专用权威保持，README 原第43行已限定原第45行，旧报告误判正式撤回。
+- 本次影响：仅 Markdown 文档、索引、决策、日志与 [R0 证据矩阵](SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)；无源码、接口合同、测试、配置、迁移或 Word 修改，无服务/回归执行、Engine 访问、真实调用或费用。历史证据不冒称本轮测试通过，未开始 R2 或 R1，未推送。
+
 ## BE-ADR-039：Vio Core 只依赖通用 Subject Runtime Port，外部运行时为可选适配器
 
 - 日期：2026-08-25
-- 状态：已采用，R0-A 合同冻结与 R0-B 通用只读状态装配已完成；R0 尚未完成，R1 尚未开始
+- 状态：已采用，R0-A/B/C 已验收并推送；R0 尚未整体验收，R2、R1 尚未开始；现行顺序见 BE-ADR-040
 - 决策：Vio Core 永久负责账号、助手、会话/消息、模型/Provider、MCP/Skill/Plugin/Tool、手机/设备、本地记忆、Context、权限安全、工作流/生活数据及费用/导出/备份恢复。可选外部主体运行时只通过 `vio-subject-runtime-port/v1` 提供主体状态、连续性或表达增强；没有外部运行时是合法 `none / disconnected` 状态，不能让 Vio 整体不可用。
 - 端口：v1 固定 Adapter Manifest、`none/external` 模式、能力清单、版本协商、严格观察输入、表达结果、外部状态投影、timeout/cancel/recovery、固定错误码和 `disconnected/connecting/ready/degraded/incompatible/paused/reconnecting` 状态机。None Adapter 不伪造 runtime 名称/版本、能力、expression、projection 或 revision；第三方实现只能通过受校验的 adapter 入口加入。
 - Continuity 限定：`continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 与 `conversation_response` 全部登记为 Continuity Engine Adapter 专用合同，不是 Vio Core 合同。BE-ADR-035 的 SubjectState/最终表达权威只在用户选择该适配器及其既有合同范围内继续成立；它不构成 Vio 的启动依赖。
 - R0-A 影响：新增纯本地合同、状态机、None Adapter、样例、兼容表和测试，当时未修改应用装配、聊天业务、V1—V5、数据库、HTTP API、前端或 Continuity Engine。
-- R0-B 推进：应用默认装配 None Adapter；新增 `GET /api/v1/subject-runtime/status` 和 `/health.subjectRuntime`，只返回经 R0-A 校验并冻结的通用快照。旧 `continuityEngine` 健康值仅按 `adapter_only_legacy` 兼容保留。查询不执行运行时操作，不连接外部运行时。现有聊天流程切换到新端口、独立模式真实对话及 Continuity Engine Adapter 映射仍属于 R1。
+- R0-B 推进：应用默认装配 None Adapter；新增 `GET /api/v1/subject-runtime/status` 和 `/health.subjectRuntime`，只返回经 R0-A 校验并冻结的通用快照。旧 `continuityEngine` 健康值仅按 `adapter_only_legacy` 兼容保留。查询不执行运行时操作，不连接外部运行时。R0-C 已完成设置页读取；聊天分流和 Vio 自身适配边界整理仍属于 R1，具体真实 Engine 重连不是该阶段或发布的前置条件。
 
 ## BE-ADR-038：首次真实供应商验收只能证明可销毁测试身份下的本机链路
 
@@ -343,7 +352,7 @@
 
 ## 待形成的 ADR
 
-以下事项是进入下一阶段前的阻塞性决策：
+以下保留尚需在各归属阶段形成的技术决策，不把全部生产事项前置为 R0/R2 的共同阻塞，也不改变 BE-ADR-040 已确认顺序。进入对应施工项前仍须按监工要求解决其实际决策缺口：
 
 1. Google 登录、邮箱验证码和会话机制
 2. 正式数据库产品、备份、并发和生产迁移方案

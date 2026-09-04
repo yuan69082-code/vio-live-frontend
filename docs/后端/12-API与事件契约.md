@@ -3,12 +3,12 @@
 ## 状态
 
 - 文档状态：基础契约持续实现
-- 实现状态：既有业务 API 和 Continuity Engine 专用连接合同保持不变；R0-A 已新增纯后端、无 HTTP 路由的 `Subject Runtime Port v1` 通用合同基础，尚未切换聊天业务
+- 实现状态：R0-A 通用合同、R0-B 状态装配与只读 HTTP 接口、R0-C 前端读取均已完成；既有业务 API 和 Engine 专用合同不变，聊天尚未切换到通用端口
 - 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
 
 ## 目标
 
-建立前端、平台后端、连续性引擎、AI 模型和外部能力之间的稳定边界。接口变化不能依赖页面内部状态，也不能让前端直接持有数据库、密钥或设备厂商协议。
+建立前端、Vio Core、可选外部主体运行时、AI 模型和外部能力之间的稳定边界。接口变化不能依赖页面内部状态，也不能让前端直接持有数据库、密钥或设备厂商协议。现行顺序按 [ADR-034](../决策记录.md#adr-034)：R0 验收后 R2、R1、R3 至 R13；当前未开始 R2 或 R1。
 
 ## 接口关系
 
@@ -41,11 +41,13 @@ Continuity Engine 是一个可选适配器实现，其既有 SubjectBinding、Pl
 - 能力：`observation_input`、`expression_result`、`state_projection`、`cancellation`、`recovery`
 - 操作：`submit_observation`、`cancel_operation`、`recover_operation`
 
-该合同目前只在后端模块中供机器验证，没有新增公共 HTTP API，也没有接入现有 Conversation Turn 编排。None Adapter 对运行时专属操作稳定返回 `SUBJECT_RUNTIME_NOT_CONFIGURED / never`，且不制造表达或状态投影。完整字段、错误和兼容表见 [Subject Runtime Port v1](../../backend/docs/SUBJECT_RUNTIME_PORT_V1.md)。
+R0-B 已在应用中默认装配 None Adapter，并新增只读 `GET /api/v1/subject-runtime/status` 与 `/health.subjectRuntime`；R0-C 设置页已读取前者。未新增数据库迁移，也未接入现有 Conversation Turn 编排。None Adapter 对外部专属操作稳定返回 `SUBJECT_RUNTIME_NOT_CONFIGURED / never`，不制造表达或状态投影；这不等于独立聊天实现。完整字段、错误、兼容表与证据见 [Subject Runtime Port v1](../../backend/docs/SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)。
 
 ### 平台后端与模型服务
 
-continuity-engine 决定何时需要模型并组织最终认知 Context；Vio 平台后端负责用户 Token/权限/安全门槛、模型路由与安全调用通道，并把结果返回引擎继续判断。当前只实现规则选择、平台事实只读投影和开发调用方显式 `state_update` 保存，不发送模型请求。模型服务不直接操作数据库、设备、用户权限或 SubjectState。
+通用职责：Vio 负责模型路由、自有 Context/记忆、Token、权限安全、真实执行和费用记录；独立模式由 Vio 模型执行链形成普通回复，真实分流属于 R1 未完成目标。外部模式的候选、最终表达和受控投影遵守已选适配器合同，模型服务不能越权修改数据、权限或外部 SubjectState。
+
+现有 Engine 专用链路继续由 Engine 决定模型请求并组织其最终认知 Context；Vio V4 执行并以 CapabilityResult 回传候选，V5 只发布 Engine/V2 最终回复。F1 与首次 S4-Live 已验证该固定身份链路，不是独立模式验收。普通 Router 和 Context 查询端点本身仍不发送模型请求。详见 [两模式规则](../../backend/docs/SUBJECT_RUNTIME_PORT_V1.md#mode-semantics)。
 
 ### 平台后端与外部能力
 
@@ -62,13 +64,16 @@ Continuity Integration Contract v1.1 及 Capability 合同已经闭合并获 Con
 | Engine E1—E4 已实现 | 引擎侧 test-only ContractTestAdapter、成功/错误 envelope、结果账本、确定性 Action Gate/Evolution、正式本机 HTTP 服务与非终态 operation 恢复 |
 | Vio V2/V3 已实现 | operation/response/stateProjection 幂等账本、revision 冲突隔离、正式本机 HTTP transport、delivery outbox/attempt 与查询/重启恢复 |
 | S2/S3 已通过 | V1 → V3 → Engine E4 → V2 真实 loopback HTTP 正常、机器错误、响应丢失、Engine/Vio/双方重启和冲突隔离共享验收；15/15 |
-| 尚未实现 | 真实模型/CapabilityRequest/CapabilityResult、公共对话 API 串接、前端真实回复、生产认证、多租户与部署 |
-| 第一轮明确排除 | CapabilityRequest/CapabilityResult、真实模型/Tool/MCP/设备、三层数据空间实际跨系统读写、生产认证/多租户/部署 |
-| 未来产品/生产待共同决定 | 真实模型/Capability、公共对话 API 与前端接线、生产鉴权、异步/流式、通用重绑定、完整 Outbox 运维参数和生产投影扩展 |
+| 后续已实现/验收 | V4 Capability、V5 固定身份公共轮次、F1 页面真实回复及首次 S4-Live 真实供应商试聊；见既有日志，不代表独立聊天或产品完成 |
+| 第一轮当时明确排除 | CapabilityRequest/CapabilityResult、真实模型/Tool/MCP/设备、三域实际跨系统读写及生产认证/多租户/部署；这一历史范围不否认后续 V4/F1/S4-Live 成果 |
+| 当前未完成 | 真实登录、多助手产品能力、独立聊天、通用 Binding、生产认证、多租户与部署；按已确认归属阶段实施，本轮不施工 |
+| 其余既有待办保留 | 异步/流式、通用重绑定、完整 Outbox 运维参数和生产投影扩展仍未完成；不得因本次修正已完成状态而删除这些记录，也不把特定适配器真实接入改成 Vio 发布前置条件 |
 
 现有 Vio `POST .../state-updates` 是 legacy/unverified 开发调用方写入口，不是引擎权威投影接口；现有 Context API 是平台事实只读投影，不是最终认知 Context。正式本机连接使用独立 V1/V2/V3 链路，没有复用这两个旧入口。
 
-第一轮机器契约只在 v1.1 第 19 节定义：三份严格 Draft 2020-12 Schema、正式 conformance vector、固定 SubjectBinding fixture、`requestHash`/`bindingFixtureHash`、`IDEMPOTENCY_KEY_REUSED / never`、revision 全不等冲突、最小 snapshot 和独立进程内 ContractTestAdapter 均已获确认。Vio V1/V2/V3 已分别实现请求、结果投影和正式本机 delivery，Engine E4 提供正式 HTTP Adapter；S2/S3 已完成真实 loopback 联验。该实现仍没有新增 Vio 公共交付 API，也未接真实模型或前端。
+第一轮机器契约只在 v1.1 第 19 节定义：三份严格 Draft 2020-12 Schema、正式 conformance vector、固定 SubjectBinding fixture、`requestHash`/`bindingFixtureHash`、`IDEMPOTENCY_KEY_REUSED / never`、revision 全不等冲突、最小 snapshot 和独立进程内 ContractTestAdapter 均已获确认。Vio V1/V2/V3、Engine E4 与 S2/S3 是当时未接真实模型和前端的历史阶段；后续 V4/V5/F1/S4-Live 完成情况如上，不改写第一轮合同。
+
+R1 整理 Vio 自有适配边界与聊天解耦，不要求真实引擎参与。首次彻底解耦后，未经用户另行要求重连，不探测、读取、启动或修改真实 Engine；通用接口必须测试，真实引擎联调另算，不是 Vio 完成或发布条件。
 
 ## 契约中的通用信息
 

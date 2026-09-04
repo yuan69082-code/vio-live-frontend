@@ -2,6 +2,8 @@
 
 ## 状态与边界
 
+R0 当前状态：R0-A/B/C 已验收并推送，通用状态 GET、健康摘要和设置页读取均已存在；没有运行时控制写接口，现有 V5/F1 聊天尚未切换到通用端口。R0 整体验收待复核，之后按 [ADR-034](../../docs/决策记录.md#adr-034) 先 R2、再 R1、随后 R3 至 R13。真实登录及同用户多助手产品能力尚未实现；本次仅同步文档，不改变任何公共 API 或合同。两模式规则和历史证据见 [端口说明](SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)。
+
 S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 v1.1 身份仅用于 `disposable_test` 验收且禁止晋升；Windows 创建和 doctor 以同一 240 字符门禁验证 Engine WakeSession 最终/原子临时文件的最坏路径，超限返回 `unsafe / engine_persistence_path_budget_exceeded`；推荐新建 `C:\VioS4\first-001` 这类仓库外短路径。cleanup 只允许整根删除：正常沙箱及唯一问题为历史路径超预算的旧沙箱均需通过其余全部严格校验，plan 返回 `cleanupEligible`、`legacyUnsafeReason` 和唯一 `deleteTargets=[canonicalSandboxRoot]`，apply 继续要求服务停止与整箱销毁双确认。
 
 - 当前阶段：Vio V5 已在固定本地试聊 Profile 下实现公共 Conversation Turn API，正式复用 V1 请求、V3 delivery、Engine E5-A、V4 Capability 和 V2 结果/投影账本，并只将 Engine 最终 response 保存为主体 Message；F1 已把现有对话页接到该公共 API。2026-08-14 首次 S4-Live 真实供应商试聊已在可销毁测试身份和短路径沙箱中通过；该结果不是通用身份、生产认证或公开部署验收
@@ -10,11 +12,11 @@ S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
 
-前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。F1 对话页已接入固定本地 Profile 的 V5 Turn/Message API；其余未接线页面继续保留开发期演示或 mock 边界，前端没有直接接入模型配置或 Continuity Engine。
+前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。F1 对话页已接入固定本地 Profile 的 V5 Turn/Message API，R0-C 设置页已读取通用主体运行时状态；其余未接线页面继续保留开发期演示或 mock 边界，前端没有直接接入模型配置或 Continuity Engine。
 
 ## R0-A｜Subject Runtime Port v1（内部合同）
 
-R0-A 已实现 Vio 自己的 `vio-subject-runtime-port/v1`，详细字段、兼容表、状态转换、合法/非法样例和错误码见 [`SUBJECT_RUNTIME_PORT_V1.md`](SUBJECT_RUNTIME_PORT_V1.md)。这是进程内后端合同，**没有新增公共 HTTP 路由**，也没有把现有 V5/F1 聊天流程接到新端口。
+R0-A 已实现 Vio 自己的 `vio-subject-runtime-port/v1`，详细字段、兼容表、状态转换、合法/非法样例和错误码见 [`SUBJECT_RUNTIME_PORT_V1.md`](SUBJECT_RUNTIME_PORT_V1.md)。R0-A 当时只建立进程内合同，没有新增公共 HTTP 路由，也没有把现有 V5/F1 聊天流程接到新端口；后续 R0-B 新增的只读接口见下一节，不能把 R0-A 历史范围当作当前无接口。
 
 合同固定：
 
