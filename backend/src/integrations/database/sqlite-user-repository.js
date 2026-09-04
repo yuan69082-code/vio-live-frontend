@@ -68,5 +68,8 @@ export function createSqliteUserRepository(connection) {
     findByEmail(email) {
       return mapUser(findByEmailStatement.get(email));
     },
+    isPersonalIdentity(userId) {
+      return Boolean(connection.prepare('SELECT 1 FROM personal_identities WHERE user_id=?').get(userId));
+    },
   };
 }

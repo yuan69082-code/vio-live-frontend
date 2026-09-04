@@ -1,288 +1,54 @@
-import { FormEvent, useMemo, useState } from 'react'
+import { useState } from 'react'
+import { emptyAssistantSettings, finishOperation, operationKey } from '../api/personal-api'
+import type { PersonalPreferences } from '../api/personal-api'
+import { usePersonal } from '../state/PersonalContext'
+import { AvatarField, Panel, Status } from '../components/personal/PersonalFields'
+import { AssistantSettingsFields, PreferenceFields, StorageFacts } from '../components/personal/PreferenceFields'
+import { useScopedAction } from '../components/personal/useScopedAction'
+import styles from '../components/personal/personal.module.css'
 
-type RoleKey = 'work' | 'life' | 'companion' | 'custom'
-type MemoryKey = 'cloud' | 'local' | 'hybrid'
-type ContextKey = 'concise' | 'standard' | 'complete' | 'custom'
-
-type Option<T extends string> = {
-  value: T
-  label: string
-  description: string
-}
-
-const avatars = [
-  { value: 'spark', symbol: '✦', label: '星光', tone: 'violet' },
-  { value: 'moon', symbol: '☾', label: '月亮', tone: 'blue' },
-  { value: 'wave', symbol: '≈', label: '波纹', tone: 'aqua' },
-  { value: 'bloom', symbol: '✿', label: '花朵', tone: 'rose' },
-]
-
-const roleOptions: Array<Option<RoleKey>> = [
-  { value: 'work', label: '工作伙伴', description: '协作、规划与执行' },
-  { value: 'life', label: '生活管家', description: '日程、提醒与生活整理' },
-  { value: 'companion', label: '陪伴', description: '交流、倾听与长期陪伴' },
-  { value: 'custom', label: '自定义', description: '由你定义相处方式' },
-]
-
-const memoryOptions: Array<Option<MemoryKey>> = [
-  { value: 'cloud', label: '云端', description: '多设备使用' },
-  { value: 'local', label: '本地', description: '仅此设备' },
-  { value: 'hybrid', label: '混合', description: '灵活组合' },
-]
-
-const contextOptions: Array<Option<ContextKey>> = [
-  { value: 'concise', label: '精简', description: '更轻、更快速' },
-  { value: 'standard', label: '标准', description: '平衡信息与速度' },
-  { value: 'complete', label: '完整', description: '保留更多上下文' },
-  { value: 'custom', label: '自定义', description: '之后自行调整' },
-]
-
-function ChoiceGrid<T extends string>({
-  name,
-  value,
-  options,
-  columns,
-  onChange,
-}: {
-  name: string
-  value: T | ''
-  options: Array<Option<T>>
-  columns: 'two' | 'three'
-  onChange: (value: T) => void
-}) {
-  return (
-    <div className={`choice-grid choice-grid-${columns}`}>
-      {options.map((option) => (
-        <label className="choice-card" key={option.value}>
-          <input
-            type="radio"
-            name={name}
-            value={option.value}
-            checked={value === option.value}
-            onChange={() => onChange(option.value)}
-          />
-          <span className="choice-card-content">
-            <strong>{option.label}</strong>
-            <small>{option.description}</small>
-          </span>
-        </label>
-      ))}
-    </div>
-  )
-}
-
-function FirstSetupPage({ onComplete }: { onComplete: () => void }) {
-  const [agentName, setAgentName] = useState('')
+export default function FirstSetupPage() {
+  const { api, state, scope, guarded, acceptSession, restore } = usePersonal()
+  const task = useScopedAction(scope)
+  const session = state.kind === 'ready' ? state.session : null
+  const [displayName, setDisplayName] = useState(session?.user.displayName ?? '')
   const [avatar, setAvatar] = useState<string | null>(null)
-  const [role, setRole] = useState<RoleKey | ''>('')
-  const [customRole, setCustomRole] = useState('')
-  const [memory, setMemory] = useState<MemoryKey | ''>('')
-  const [context, setContext] = useState<ContextKey | ''>('')
-  const [message, setMessage] = useState('')
-
-  const basicReady = agentName.trim().length > 0 && role !== ''
-  const customReady = role !== 'custom' || customRole.trim().length > 0
-  const formReady = useMemo(
-    () => basicReady && customReady && memory !== '' && context !== '',
-    [basicReady, context, customReady, memory],
-  )
-
-  const clearMessage = () => setMessage('')
-
-  const skipAdvanced = () => {
-    if (!agentName.trim()) {
-      setMessage('请先为智能体取一个名字。')
-      return
+  const [assistantAvatar, setAssistantAvatar] = useState<string | null>(null)
+  const [name, setName] = useState('')
+  const [settings, setSettings] = useState({ ...emptyAssistantSettings })
+  const [preferences, setPreferences] = useState<PersonalPreferences>({ storagePreference: 'local', contextMode: 'balanced' })
+  const [key] = useState(() => operationKey(session?.user.userId ?? scope, 'onboarding'))
+  if (!session) return null
+  function save(skip: boolean) {
+    if (!session || task.busy) return
+    if (!displayName.trim() || !name.trim() || name.trim().length > 80) { task.setError('请填写个人显示名与 1–80 字的助手名称。'); return }
+    const input = {
+      displayName: displayName.trim(), avatar,
+      assistant: { name: name.trim(), avatar: assistantAvatar, settings: skip ? { ...emptyAssistantSettings } : settings },
+      preferences: skip ? { storagePreference: 'local' as const, contextMode: 'balanced' } : preferences,
     }
-
-    if (!role || !customReady) {
-      setMessage('请先完成基础定位选择。')
-      return
-    }
-
-    onComplete()
+    void task.run((signal) => guarded((owned) => api.onboarding(input, { signal: owned, idempotencyKey: key }), signal), (saved) => {
+      acceptSession(saved)
+      finishOperation(session.user.userId, 'onboarding')
+    })
   }
-
-  const completeSetup = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!formReady) return
-    onComplete()
-  }
-
-  return (
-    <main className="setup-shell">
-      <div aria-hidden="true" className="ambient ambient-one" />
-      <div aria-hidden="true" className="ambient ambient-two" />
-
-      <section className="setup-card" aria-labelledby="setup-title">
-        <header className="setup-header">
-          <a className="wordmark setup-wordmark" href="#top" aria-label="Vio Live 首页">
-            Vio Live
-          </a>
-          <span className="setup-step">首次设置</span>
-          <h1 id="setup-title">认识你的智能体</h1>
-          <p>先从简单的选择开始，之后都可以随时修改。</p>
-        </header>
-
-        <form onSubmit={completeSetup} noValidate>
-          <section className="setup-section" aria-labelledby="identity-title">
-            <div className="section-heading">
-              <div>
-                <span>01</span>
-                <h2 id="identity-title">创建智能体</h2>
-              </div>
-              <small>基础信息</small>
-            </div>
-
-            <div className="setup-field">
-              <label htmlFor="agent-name">智能体名称</label>
-              <input
-                id="agent-name"
-                name="agent-name"
-                type="text"
-                autoComplete="off"
-                maxLength={24}
-                placeholder="例如：Vio、小满、Nova"
-                value={agentName}
-                onChange={(event) => {
-                  setAgentName(event.target.value)
-                  clearMessage()
-                }}
-              />
-              <span className="field-hint">这是之后与你一起生活和工作的名字。</span>
-            </div>
-
-            <fieldset
-              className="setup-field avatar-fieldset"
-              aria-labelledby="avatar-field-label"
-            >
-              <div className="field-legend-row">
-                <span id="avatar-field-label">选择头像</span>
-                <button
-                  className="avatar-skip"
-                  type="button"
-                  aria-pressed={avatar === null}
-                  onClick={() => {
-                    setAvatar(null)
-                    clearMessage()
-                  }}
-                >
-                  暂不设置
-                </button>
-              </div>
-              <div className="avatar-options">
-                {avatars.map((item) => (
-                  <label className="avatar-option" key={item.value} title={item.label}>
-                    <input
-                      type="radio"
-                      name="avatar"
-                      value={item.value}
-                      checked={avatar === item.value}
-                      onChange={() => {
-                        setAvatar(item.value)
-                        clearMessage()
-                      }}
-                    />
-                    <span className={`avatar-circle avatar-${item.tone}`} aria-hidden="true">
-                      {item.symbol}
-                    </span>
-                    <small>{item.label}</small>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <fieldset className="setup-field option-fieldset">
-              <legend>基础定位</legend>
-              <ChoiceGrid
-                name="role"
-                value={role}
-                options={roleOptions}
-                columns="two"
-                onChange={(value) => {
-                  setRole(value)
-                  clearMessage()
-                }}
-              />
-              {role === 'custom' && (
-                <input
-                  className="custom-role-input"
-                  type="text"
-                  aria-label="自定义基础定位"
-                  maxLength={36}
-                  placeholder="用一句话描述你期待的定位"
-                  value={customRole}
-                  onChange={(event) => {
-                    setCustomRole(event.target.value)
-                    clearMessage()
-                  }}
-                />
-              )}
-            </fieldset>
-          </section>
-
-          <section className="setup-section" aria-labelledby="preference-title">
-            <div className="section-heading">
-              <div>
-                <span>02</span>
-                <h2 id="preference-title">记忆与上下文</h2>
-              </div>
-              <small>可跳过</small>
-            </div>
-
-            <fieldset className="setup-field option-fieldset">
-              <legend>记忆保存方式</legend>
-              <ChoiceGrid
-                name="memory"
-                value={memory}
-                options={memoryOptions}
-                columns="three"
-                onChange={(value) => {
-                  setMemory(value)
-                  clearMessage()
-                }}
-              />
-            </fieldset>
-
-            <fieldset className="setup-field option-fieldset">
-              <legend>默认上下文模式</legend>
-              <ChoiceGrid
-                name="context"
-                value={context}
-                options={contextOptions}
-                columns="two"
-                onChange={(value) => {
-                  setContext(value)
-                  clearMessage()
-                }}
-              />
-            </fieldset>
-          </section>
-
-          <div className="setup-actions">
-            <button
-              className="skip-button"
-              type="button"
-              disabled={!basicReady || !customReady}
-              onClick={skipAdvanced}
-            >
-              跳过高级设置
-            </button>
-            <button className="submit-button" type="submit" disabled={!formReady}>
-              完成设置
-              <span aria-hidden="true">→</span>
-            </button>
-          </div>
-
-          <p className="setup-status" aria-live="polite">
-            {message || '\u00a0'}
-          </p>
-        </form>
-
-        <footer>当前设置仅保存在页面状态中，不会上传或写入数据库。</footer>
-      </section>
-    </main>
-  )
+  return <main className="setup-shell"><section className={`setup-card ${styles.page}`}>
+    <header className="setup-header"><span className="wordmark">Vio Live</span><h1>首次设置</h1><p>资料与首个助手将一起保存到当前服务端。</p></header>
+    <form noValidate onSubmit={(e) => { e.preventDefault(); save(false) }}>
+      <Panel title="认识你与第一个助手">
+        <label className={styles.field}>个人显示名<input value={displayName} maxLength={80} disabled={task.busy} onChange={(e) => setDisplayName(e.target.value)} /></label>
+        <AvatarField label="个人头像" value={avatar} onChange={setAvatar} disabled={task.busy} />
+        <label className={styles.field}>首个助手名称<input value={name} maxLength={80} disabled={task.busy} onChange={(e) => setName(e.target.value)} /></label>
+        <AvatarField label="助手头像" value={assistantAvatar} onChange={setAssistantAvatar} disabled={task.busy} />
+        <AssistantSettingsFields value={settings} onChange={setSettings} disabled={task.busy} />
+        <PreferenceFields value={preferences} onChange={setPreferences} disabled={task.busy} />
+        <StorageFacts storage={session.storage} />
+        <p className={styles.hint}>跳过高级设置：仍保存显示名、头像和首个助手；定位、性格、人设、要求为空，保存偏好为本地，上下文为标准。</p>
+        <div className={styles.actions}><button type="button" disabled={task.busy} onClick={() => save(true)}>跳过高级设置并保存</button>
+          <button className={styles.primary} type="submit" disabled={task.busy}>完成设置</button>
+          <button type="button" disabled={task.busy} onClick={() => void restore()}>重新读取保存结果</button></div>
+        <Status {...task} />
+      </Panel>
+    </form>
+  </section></main>
 }
-
-export default FirstSetupPage

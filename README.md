@@ -1,12 +1,12 @@
 # Vio Live
 
-Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。F1 已将现有对话页接入固定本地 Profile 的 Vio V5 公共 Conversation Turn API；R0-C 已让“我的”页通过正式只读 API 展示通用主体运行时状态；其他未接线前端模块仍保留原有 mock 数据。平台后端已完成账号/主体、全局设定/AI 私域、对话/摘要/状态/Context、事件、模型路由、权限安全、扩展与设备注册，以及管账、预算、月历、身体管理和本地记忆基础。
+Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。**R2 已于 2026-09-05 正式验收通过**：受控个人所有者初始化、真实会话访问、首次设置、同一所有者多助手、个人资料、会话撤销、访问审计/诊断、Provider/Model、加密凭据、认证连接检查及受控账户删除已形成真实本机闭环；邮箱、Google 与公开注册继续暂缓。账户/空间删除按已确认的 7 天可撤销、实际删除后 14 天受管副本处理及 30 天最小凭据政策执行，实际执行、失败恢复与限权查询分别记录，不能以期限届满冒充删除成功。历史 F1 固定 Profile 的 V5 对话代码和证据保留，新个人主入口不挂载该固定身份链路；R1 身份化独立聊天、R3 多会话均尚未开始。
 
-R0-A 已冻结 Vio 自己的 [`Subject Runtime Port v1`](backend/docs/SUBJECT_RUNTIME_PORT_V1.md)：Vio Core 永久负责账号、助手、会话/消息、模型/Provider、扩展能力、设备、本地记忆、Context、权限安全、工作流/生活数据及费用/导出/备份恢复；外部主体运行时只是可选增强。R0-B 已将该端口的 Manifest、连接快照和版本协商结果装配为通用只读状态，默认正式使用 None Adapter，并提供 `GET /api/v1/subject-runtime/status` 与 `/health.subjectRuntime`。R0-C 在“我的”设置页通过现有同源 `apiClient` 读取该正式接口，严格校验 Port v1 字段、状态、能力与版本协商，并提供一次进入读取、手动重新读取及卸载取消；没有自动轮询，也不会执行外部运行时操作。未配置外部运行时时，页面明确显示“Vio 可独立使用”和“未连接（正常）”，平台仍为 `available`。R0-A/B/C **没有**切换现有聊天编排；Continuity Engine 在该通用端口中仍只是 `registered_not_wired` 的可选适配器，R0 总阶段仍未完成，R1 尚未开始。
+R0-A 已冻结 Vio 自己的 [`Subject Runtime Port v1`](backend/docs/SUBJECT_RUNTIME_PORT_V1.md)：Vio Core 永久负责账号、助手、会话/消息、模型/Provider、扩展能力、设备、本地记忆、Context、权限安全、工作流/生活数据及费用/导出/备份恢复；外部主体运行时只是可选增强。R0-B/C 已完成通用只读状态装配与“我的”页展示。R0 已于 2026-09-04 验收；它没有切换聊天编排。Continuity Engine 在通用端口中仍只是 `registered_not_wired` 的可选适配器，R1 尚未开始。
 
-后端现可按用户保存 Security Policy 与安全偏好，并按 Permission → Policy → Confirmation 保护私域及生活数据。生活模块使用独立 User Space 表和 `life_data` 权限，提供本地确定性统计与受控记忆投影；不会支付、同步银行/健康设备或调用 AI。设备适配器仍只有未配置描述，扩展和设备均不执行真实操作。前端继续通过 Vite 同源代理访问 Vio 后端；除对话页的 V5 固定本地试聊接线和“我的”页的 R0-C 主体运行时只读状态外，其他页面尚未迁移到真实 API。
+后端现可按用户保存 Security Policy 与安全偏好，并按 Permission → Policy → Confirmation 保护私域及生活数据。生活模块使用独立 User Space 表和 `life_data` 权限，提供本地确定性统计与受控记忆投影；不会支付、同步银行/健康设备或调用 AI。设备适配器仍只有未配置描述，扩展和设备均不执行真实操作。前端通过 Vite 同源代理访问 Vio 后端；R2 个人访问、首次设置、资料/助手与能力配置已接真实 API，R0-C 通用状态仍只读。其余原型模块按各阶段边界保留，不能因为六个导航存在就算全部真实接线。
 
-[`Continuity Integration Contract v1.1`](docs/后端/14-continuity-engine连接契约v1.1.md) 已由 Continuity Engine 正式接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。Vio V5 在固定本地试聊 Profile 下提供持久化公共 Conversation Turn API，把现有 Conversation/Message 串入 V1 → V3 → Engine E5-A → V4 → V2，并且只把 Engine 最终 `FirstRoundSuccessResult.response.content` 保存为主体 Message。F1 对话页只消费该公共 API：真实历史来自 Message 列表，发送、查询和显式恢复遵循 V5 状态机，超时或断线使用 `sessionStorage` 保留同一幂等事实。首次真实验收使用可销毁测试身份、独立短路径沙箱和 Alibaba Cloud Model Studio 的 OpenAI-compatible Provider，结论为 PASS。**这仍不表示产品已经生产可用**：通用正式身份/Binding、生产认证、多租户、加密密钥存储、备份和部署均未完成。在现有 Continuity Engine Adapter 合同范围内，Continuity Engine 仍是该适配器的 AI SubjectState 与最终主体表达权威；该专用合同不再代表 Vio Core。前端也仍只能连接 Vio 后端。
+[`Continuity Integration Contract v1.1`](docs/后端/14-continuity-engine连接契约v1.1.md) 已由 Continuity Engine 正式接受，第一轮 test-only、S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。Vio V5 在固定本地试聊 Profile 下提供持久化公共 Conversation Turn API，把现有 Conversation/Message 串入 V1 → V3 → Engine E5-A → V4 → V2，并且只把 Engine 最终 `FirstRoundSuccessResult.response.content` 保存为主体 Message。F1 对话页只消费该公共 API：真实历史来自 Message 列表，发送、查询和显式恢复遵循 V5 状态机，超时或断线使用 `sessionStorage` 保留同一幂等事实。首次真实验收使用可销毁测试身份、独立短路径沙箱和 Alibaba Cloud Model Studio 的 OpenAI-compatible Provider，结论为 PASS。**这仍不表示产品已经生产可用**：R2 已完成个人身份与加密 Provider 凭据，但通用外部运行时身份/Binding、生产级 KMS/无人值守密钥恢复、多租户、完整备份和部署均未完成。在现有 Continuity Engine Adapter 合同范围内，Continuity Engine 仍是该适配器的 AI SubjectState 与最终主体表达权威；该专用合同不再代表 Vio Core。前端也仍只能连接 Vio 后端。
 
 S4-Live 首次真实试聊必须先创建可销毁验收沙箱：固定 v1.1 身份只登记为 `purpose=s4-live-acceptance`、`identityClass=disposable_test`、`promotionAllowed=false`，不得转为正式主体。Binding、Vio SQLite 和 Engine 数据必须位于同一个仓库外沙箱根；Windows 创建与 doctor 还会按 Engine WakeSession 原子写入的最坏路径执行 240 字符安全预算，超限以 `engine_persistence_path_budget_exceeded` 拒绝。应使用全新、仓库外的短绝对路径，例如 `C:\VioS4\first-001`；不得移动或缩写已有沙箱来绕过门禁。门禁上线前创建且唯一问题为超预算的旧沙箱仍可由官方 cleanup 在完整 Manifest/Binding/路径/保护校验和双确认后整根删除；doctor 继续判为 unsafe。清理禁止手工删数据库行、Engine JSON 或修改 revision。命令与完整顺序见 [`backend/scripts/README.md`](backend/scripts/README.md)。
 
@@ -16,13 +16,13 @@ L1 现提供三个安全准备入口：从正式 fixture/hash 导出仓库外 Bi
 
 ## R0 收尾与已确认施工顺序
 
-2026-09-04 四项决定已采用：R0 整体验收后按 **R2 → R1 → R3 至 R13** 推进，保留原编号；R2 完成真实登录和同一用户多助手创建、列表、选择与普通切换，R1 再完成真实身份下的独立聊天和业务解耦，R3 完成各助手的多个会话及隔离。现有开发期 User Space/助手指针不等于这些产品能力已实现。
+2026-09-04 四项决定已采用：R0 整体验收后按 **R2 → R1 → R3 至 R13** 推进，保留原编号。R2 已于 2026-09-05 正式验收通过，完成个人所有者访问保护和同一用户多助手的创建、列表、设置、选择与普通切换，以及受控账户删除流程；删除政策已确认，不改写此前待决历史。R1 再完成真实身份下的独立聊天和业务解耦，R3 完成各助手的多个会话及隔离。
 
 R8 完成公共机制及截至 R7 已完成模块的前端接线；R9—R11 各自在本阶段完成对应前端、后端和真实联调，R13 全量复验。保留工作台、对话、连续性、AI 私域、能力、我的六个导航；后续元素不能靠占位、禁用或登记计作 R8 已完成。助手市场和多助手协作不在本轮范围，原真实功能、安全墙及权限要求不变。
 
 R0 冻结规则，不代表独立聊天已实现。首次彻底解耦后，未经用户另行要求重连，Vio 施工、测试和发布不探测、读取、启动或修改真实 Engine；通用端口必须验证，真实外部运行时接入另行处理，不作为 Vio 完成和发布前置条件。新增对接优先通过独立适配器或接口扩展，不擅改 Vio 核心。
 
-本次仅整理 Markdown 说明及 [R0 要求与证据矩阵](backend/docs/SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)，没有运行代码回归。R0-A/B/C 已验收并推送；R0 整体验收仍待总体协调窗口复核，R2、R1 均未开始。完整决定与阶段出口见 [ADR-034](docs/决策记录.md#adr-034) 和 [现行路线图](docs/后端/13-部署运维测试与路线图.md#r0-r13-order)。
+R0-A/B/C 及整阶段已验收并推送。R2 正式验收范围与保留边界见 [R2 个人访问合同](backend/docs/R2_PERSONAL_CONTRACT.md) 和 [前端交接](docs/R2_FRONTEND_HANDOFF.md)；完整顺序见 [ADR-034](docs/决策记录.md#adr-034) 和 [现行路线图](docs/后端/13-部署运维测试与路线图.md#r0-r13-order)。
 
 ## 前后端本地运行
 
@@ -60,11 +60,12 @@ pnpm dev
    ```
 
 2. 在安卓 Chrome 中打开终端显示的 `Network` 地址。登录页位于根路径 `/`。
+   此历史 LAN 前端入口不等于已完成 R2 非本机安全访问：个人口令访问的非 loopback origin 必须使用 HTTPS。当前本轮只验收本机浏览器；手机真实个人访问需待用户明确 HTTPS/运行环境后另行验证，不向 HTTP LAN 页面输入真实口令或凭据。
 3. Windows 防火墙仅允许该前端进程通过“专用网络”，不要允许公用网络。
 4. 禁止使用公网隧道或路由器端口映射暴露此入口。电脑与前端进程必须保持运行，手机才能继续访问。
 5. 使用完成后在前端终端按 `Ctrl+C` 停止入口。
 
-此命令只让 Vite 前端监听局域网；Vio 后端与 Continuity Engine 仍只监听电脑本机，不会开放局域网监听。登录页的 Google 与邮箱验证码操作仍是纯演示行为，当前登录不是正式账号认证。
+此命令只让 Vite 前端监听局域网；Vio 后端与 Continuity Engine 仍只监听电脑本机，不会开放局域网监听。Google 与邮箱验证码入口仍暂缓；R2 个人口令会话是真实服务端访问保护，但尚未完成 HTTPS、服务器部署或公开认证，因此该 LAN 入口仍不是生产入口。
 
 ## 验证
 
@@ -91,8 +92,8 @@ pnpm test
 
 ## 当前边界
 
-- 对话页已停止使用 `conversationMock.messages`，只读取固定本地 Profile 的 V5 Message/Turn 公共投影；“我的”页的主体运行时卡片只读取 `GET /api/v1/subject-runtime/status`，不会使用静态状态或旧 `continuityEngine` 健康字段。其余页面和未接线模块仍使用原有 `src/data/*Mock.ts` 原型数据。
-- 没有真实 Google/邮箱验证码登录或会话；`x-vio-user-id` 只用于开发期当前用户上下文。
+- 历史 F1 对话代码读取固定 Profile 的 V5 Message/Turn 公共投影，新个人入口不借用该身份、不自动恢复旧无归属缓存。“我的”页的主体运行时卡片只读取 `GET /api/v1/subject-runtime/status`，R2 资料/助手/安全及模型配置读取个人 API；未接线模块仍明确使用 `src/data/*Mock.ts` 原型数据。
+- Google/邮箱验证码和公开注册已暂缓；R2 个人所有者会话是当前正式业务身份来源，生产装配不接受 `x-vio-user-id` 作为授权依据。历史测试可在 test-support 中显式替代访问端口，但不存在环境后门。
 - 通用 Message 创建与重生成正文仍由开发调用方显式提交；唯一例外是 V5 固定本地 Turn API，它只把 V2 已保存的 Engine 最终 response 创建为主体 Message。
 - 摘要和 legacy/unverified `state_update` 仍由开发调用方显式提交；Context 只读投影不生成提示词或消耗 Token。正式本机连接不使用该旧写入口，Vio V2 通过独立投影账本保存 Engine 结果；现有 `state_update` 仍须收口或停用，Context 仍只作为平台事实来源。
 - Vio V1 已实现第一轮 `ContinuityInteractionRequest`、`message_created` PlatformObservation 和 `message_version` fact 的严格本地 Schema/validator、固定 SubjectBinding fixture/hash、逻辑请求构造及请求输入跨重启恢复；没有新增 HTTP 或生产连接入口。
@@ -108,4 +109,4 @@ pnpm test
 - 生活管理只保存显式输入并进行本地统计；提醒不执行，AI 建议不生成，本地记忆不自动进入通用 Context。没有支付、银行同步、健康设备数据、医疗诊断、真实导出或自动数据删除。
 - 未认证后端不能直接公开部署。
 
-F1 固定本地 Profile 对话页接线与首次 S4-Live 真实供应商试聊验收已完成；这不等于正式身份或完整产品可用。当前只收尾 R0 文档与验收材料，随后先由总体协调窗口复核 R0，验收后才按 R2、R1 及后续阶段分别授权施工。真实登录、多助手产品能力、独立聊天、通用身份/Binding、生产认证、多租户、密钥库、备份和部署仍未完成。
+F1 固定本地 Profile 对话页接线与首次 S4-Live 真实供应商试聊验收已完成；这不等于完整产品可用。R0 已验收，R2 个人访问、多助手、加密凭据及已批准 7/14/30 天政策的受控删除已于 2026-09-05 正式验收通过。手机实机、HTTPS、云部署、跨设备云端同步和本轮真实供应商验证不属于 R2 已执行项；R1 独立聊天、R3 多会话、通用外部身份/Binding、生产认证、多租户、备份和无人值守密钥恢复尚未完成，不自动进入后续阶段。

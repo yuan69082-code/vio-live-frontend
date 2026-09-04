@@ -59,7 +59,7 @@ export function createSqlitePermissionRepository(connection) {
   const findActiveRuleStatement = connection.prepare(`
     ${selection}
     WHERE user_id = ?
-      AND subject_id = ?
+      AND subject_id IS ?
       AND resource_type = ?
       AND resource_id = ?
       AND action = ?

@@ -1,4 +1,5 @@
 import { NotFoundError, ValidationError } from '../../core/errors.js';
+import { requirePermissionSubject } from './permission-scope.js';
 import {
   requireOpaqueResourceId,
   requirePlainObject,
@@ -55,11 +56,7 @@ export function createPermissionChecker({
         'resourceId',
         'action',
       ]);
-      const subjectId = requireString(input.subjectId, 'subjectId', { maxLength: 128 });
-
-      if (!subjectRepository.findById(normalizedUserId, subjectId)) {
-        throw new NotFoundError('Subject was not found for this user.');
-      }
+      const subjectId = requirePermissionSubject(normalizedUserId,input.subjectId,userRepository,subjectRepository);
 
       const scope = {
         userId: normalizedUserId,

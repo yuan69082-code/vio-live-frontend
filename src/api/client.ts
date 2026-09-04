@@ -15,7 +15,7 @@ type ApiClientOptions = {
 }
 
 type ApiRequestOptions = RequestOptions & {
-  method?: 'GET' | 'POST' | 'PATCH'
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   headers?: Record<string, string>
   body?: unknown
 }
@@ -125,6 +125,9 @@ export function createApiClient({
       const hasBody = options.body !== undefined
       const response = await fetchImplementation(joinUrl(baseUrl, path), {
         method: options.method ?? 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        redirect: 'error',
         headers: {
           accept: 'application/json',
           ...(hasBody ? { 'content-type': 'application/json' } : {}),

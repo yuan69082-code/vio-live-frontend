@@ -1,4 +1,4 @@
-import { ConflictError, NotFoundError, ValidationError } from '../../core/errors.js';
+import { ApplicationError, ConflictError, NotFoundError, ValidationError } from '../../core/errors.js';
 import { createId } from '../../core/ids.js';
 import { ContinuityTransportError } from '../../integrations/continuity-engine/http-continuity-integration-transport.js';
 import {
@@ -135,7 +135,16 @@ export function createContinuityCapabilityService({
   clock = () => new Date(),
   idFactory = createId,
   logger = console,
+  ownerBusinessAllowed = () => true,
 }) {
+  function requireOwner(userId) {
+    if (ownerBusinessAllowed(userId) !== true) {
+      throw new ApplicationError('Owner business operations are suspended.', {
+        code: 'OWNER_BUSINESS_SUSPENDED', statusCode: 423,
+      });
+    }
+  }
+
   function originalFor(requestId) {
     return requestService.getStoredRequest(requestId);
   }
@@ -157,6 +166,7 @@ export function createContinuityCapabilityService({
   }
 
   function persistInbox(envelope, original) {
+    requireOwner(original.identity.userId);
     const validated = validateCapabilityRequiredEnvelope(envelope, original);
     const request = validated.capabilityRequest;
     const canonicalRequest = canonicalizeJson(request).toString('utf8');
@@ -413,10 +423,12 @@ export function createContinuityCapabilityService({
   }
 
   async function postResult(record, storedResult, outbox) {
+    requireOwner(record.userId);
     let current = transitionOutbox(outbox, 'in_flight', { recoveryReason: 'post_started' });
     const entry = attempt(storedResult.capabilityResultId, 'post_result');
     try {
       const response = await transport.submitCapabilityResult(canonicalizeJson(storedResult.result));
+      requireOwner(record.userId);
       finishAttempt(entry, 'response_received', response);
       const envelope = response.payload;
       if (envelope.status === 'completed') {
@@ -436,6 +448,7 @@ export function createContinuityCapabilityService({
       }
       throw new ValidationError('Engine CapabilityResult response status is unsupported.');
     } catch (error) {
+      requireOwner(record.userId);
       if (!(error instanceof ContinuityTransportError)) {
         finishAttempt(entry, 'response_invalid', { errorCode: error.code ?? 'validation_error' });
         incident(record, 'capability_callback_response_invalid', { capabilityResultId: storedResult.capabilityResultId, errorCode: error.code ?? 'validation_error' });
@@ -459,9 +472,11 @@ export function createContinuityCapabilityService({
   }
 
   async function queryThenRecover(record, storedResult, outbox) {
+    requireOwner(record.userId);
     const entry = attempt(storedResult.capabilityResultId, 'query_request');
     try {
       const response = await transport.queryRequest(record.requestId);
+      requireOwner(record.userId);
       if (response.kind === 'not_found') {
         finishAttempt(entry, 'query_not_found', response);
         incident(record, 'engine_request_not_found', { capabilityResultId: storedResult.capabilityResultId });
@@ -489,6 +504,7 @@ export function createContinuityCapabilityService({
       }
       throw new ValidationError('Engine query status is unsupported for capability recovery.');
     } catch (error) {
+      requireOwner(record.userId);
       if (error instanceof ContinuityTransportError) {
         finishAttempt(entry, error.transportCode, { statusCode: error.httpStatus, errorCode: error.transportCode });
         return { status: 'waiting', outbox };
@@ -500,6 +516,7 @@ export function createContinuityCapabilityService({
   }
 
   async function deliver(record, storedResult) {
+    requireOwner(record.userId);
     let outbox = capabilityRepository.ensureOutbox(
       storedResult.capabilityResultId,
       storedResult.requestId,
@@ -523,6 +540,7 @@ export function createContinuityCapabilityService({
   async function process(inputRecord, rawResume = {}) {
     const resume = normalizeResume(rawResume);
     let record = capabilityRepository.findRequest(inputRecord.capabilityRequestId) ?? inputRecord;
+    requireOwner(record.userId);
     let controlledRetry = false;
     const existingResult = capabilityRepository.findResultByRequest(record.capabilityRequestId);
     if (existingResult) {
@@ -665,6 +683,7 @@ export function createContinuityCapabilityService({
       apiKey,
       capabilityRequest: record.request,
     });
+    requireOwner(record.userId);
     const stored = persistResult(record, model, execution, providerResult, decision.auditRef);
     return deliver(record, stored);
   }
@@ -672,6 +691,7 @@ export function createContinuityCapabilityService({
   return Object.freeze({
     async handleCapabilityRequired(envelope, originalRequest, resume = {}) {
       const original = originalRequest ?? originalFor(envelope.requestId);
+      requireOwner(original.identity.userId);
       let record;
       try { record = persistInbox(envelope, original); } catch (error) {
         const existing = capabilityRepository.findRequestByInteraction(envelope?.requestId);
@@ -683,6 +703,7 @@ export function createContinuityCapabilityService({
     async resumeCapability(capabilityRequestId, resume = {}) {
       const record = capabilityRepository.findRequest(capabilityRequestId);
       if (!record) throw new NotFoundError('CapabilityRequest was not found.');
+      requireOwner(record.userId);
       if (!['waiting_confirmation', 'waiting_budget', 'waiting_retry', 'received', 'ready'].includes(record.status)) {
         throw new ConflictError('CapabilityRequest is not waiting for an internal resume.');
       }
@@ -693,6 +714,7 @@ export function createContinuityCapabilityService({
       for (const execution of capabilityRepository.listAmbiguousExecutions()) {
         const record = capabilityRepository.findRequest(execution.capabilityRequestId);
         if (!record) continue;
+        if (ownerBusinessAllowed(record.userId) !== true) continue;
         const model = modelService.getModel(record.userId, execution.modelId);
         persistResult(record, model, execution, {
           status: 'UNKNOWN', output: null, usage: null,
@@ -703,6 +725,8 @@ export function createContinuityCapabilityService({
         normalized += 1;
       }
       for (const outbox of capabilityRepository.listRecoverableOutboxes()) {
+        const record = capabilityRepository.findRequestByInteraction(outbox.requestId);
+        if (!record || ownerBusinessAllowed(record.userId) !== true) continue;
         if (outbox.status === 'in_flight') transitionOutbox(outbox, 'outcome_unknown', { recoveryReason: 'process_restart' });
       }
       return { status: 'ready', normalized };
@@ -710,6 +734,7 @@ export function createContinuityCapabilityService({
     reconcileEngineTerminal(requestId, engineTerminal) {
       const record = capabilityRepository.findRequestByInteraction(requestId);
       if (!record) return null;
+      requireOwner(record.userId);
       const status = typeof engineTerminal === 'string'
         ? engineTerminal
         : validateCapabilityFailedEnvelope(engineTerminal, record.request).status;

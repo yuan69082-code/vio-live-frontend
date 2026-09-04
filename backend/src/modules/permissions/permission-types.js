@@ -12,6 +12,7 @@ export const PERMISSION_RESOURCE_TYPES = Object.freeze([
   'life_data',
   'proactive_interaction',
   'data_export',
+  'identity',
 ]);
 
 export const PERMISSION_LEVELS = Object.freeze([

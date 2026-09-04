@@ -20,8 +20,8 @@ function presentUserSpace(userSpace) {
     identity: {
       userId: userSpace.userId,
       mode: userSpace.identityMode,
-      verified: false,
-      authenticationStatus: 'not_connected',
+      verified: userSpace.identityMode === 'personal_owner',
+      authenticationStatus: userSpace.identityMode === 'personal_owner' ? 'personal_session_required' : 'not_connected',
     },
     ownership: {
       userSpaceId: userSpace.spaceId,

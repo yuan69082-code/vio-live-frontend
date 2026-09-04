@@ -142,7 +142,7 @@ export function createSecurityService({
         'securitySessionId',
       ]);
       const scope = {
-        subjectId: requireString(input.subjectId, 'subjectId', { maxLength: 128 }),
+        subjectId: input.subjectId === null ? null : requireString(input.subjectId, 'subjectId', { maxLength: 128 }),
         resourceType: requirePermissionValue(
           input.resourceType,
           'resourceType',

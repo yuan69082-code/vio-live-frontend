@@ -88,7 +88,16 @@ export function createContinuityConversationTurnService({
   clock = () => new Date(),
   idFactory = createId,
   faultInjector = null,
+  ownerBusinessAllowed = () => true,
 }) {
+  function requireOwner(userId) {
+    if (ownerBusinessAllowed(userId) !== true) {
+      throw new ApplicationError('Owner business operations are suspended.', {
+        code: 'OWNER_BUSINESS_SUSPENDED', statusCode: 423,
+      });
+    }
+  }
+
   function fault(stage, turn) {
     faultInjector?.(stage, structuredClone(turn));
   }
@@ -190,6 +199,7 @@ export function createContinuityConversationTurnService({
   }
 
   function publishCompleted(record, stored) {
+    requireOwner(record.userId);
     const envelope = stored?.envelope;
     if (!stored || stored.processingStage !== 'completed' || envelope?.status !== 'completed') {
       return record;
@@ -252,6 +262,7 @@ export function createContinuityConversationTurnService({
   }
 
   function synchronize(record) {
+    requireOwner(record.userId);
     let current = turnRepository.findByRequestId(record.requestId) ?? record;
     if (current.status === 'publishing') {
       const stored = resultService.getStoredResult(current.requestId);
@@ -310,6 +321,7 @@ export function createContinuityConversationTurnService({
   }
 
   async function drive(record, resume = null) {
+    requireOwner(record.userId);
     try {
       if (resume) {
         await deliveryService.resumeCapability(record.capabilityRequestId, resume);
@@ -317,14 +329,17 @@ export function createContinuityConversationTurnService({
         await deliveryService.submitStoredRequest(record.requestId);
       }
     } catch (error) {
+      if (error?.code === 'OWNER_BUSINESS_SUSPENDED') throw error;
       if (error instanceof ConflictError || error instanceof ValidationError) throw error;
     }
+    requireOwner(record.userId);
     return synchronize(record);
   }
 
   return Object.freeze({
     enabled: deliveryService.enabled,
     async createTurn(userId, assistantId, conversationId, idempotencyKey, value) {
+      requireOwner(userId);
       if (!deliveryService.enabled) {
         throw new ApplicationError('Continuity Engine integration is not configured.', {
           code: 'continuity_engine_unavailable',
@@ -426,6 +441,7 @@ export function createContinuityConversationTurnService({
       return publicTurn(requireTurn(userId, assistantId, conversationId, turnId));
     },
     async resumeTurn(userId, assistantId, conversationId, turnId, value) {
+      requireOwner(userId);
       let record = requireTurn(userId, assistantId, conversationId, turnId);
       const input = onlyFields(value, ['confirmationId', 'retryApproved']);
       if (record.status === 'completed') return publicTurn(record);
@@ -465,6 +481,7 @@ export function createContinuityConversationTurnService({
     async initialize() {
       let reconciled = 0;
       for (const record of turnRepository.listRecoverable()) {
+        if (ownerBusinessAllowed(record.userId) !== true) continue;
         try {
           // V4 and V3/V2 recovery run before V5. V5 startup only reconciles
           // durable local facts and must never originate an Engine/Provider call.

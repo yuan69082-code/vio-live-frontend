@@ -1,6 +1,14 @@
 import { createServer } from 'node:http';
 
 import { createRouter } from './http/router.js';
+import { createPersonalHttpAccess } from './http/personal-routes.js';
+import { createSqlitePersonalRepository } from './integrations/database/sqlite-personal-repository.js';
+import { createPersonalIdentityService } from './modules/personal/personal-identity-service.js';
+import { createPersonalConfigurationService } from './modules/personal/personal-configuration-service.js';
+import { createPersonalDeletionService } from './modules/personal/personal-deletion-service.js';
+import { createPersonalManagedCopies } from './modules/personal/personal-managed-copies.js';
+import { createProviderConnectionChecker } from './integrations/model-providers/provider-connection-check.js';
+import { createPersonalCredentialVault } from './integrations/secrets/personal-credential-vault.js';
 import { createUnconfiguredDeviceAdapterRegistry } from './integrations/devices/unconfigured-device-adapter-registry.js';
 import { createSqliteApiProviderRepository } from './integrations/database/sqlite-api-provider-repository.js';
 import { createSqliteApiProviderCredentialRepository } from './integrations/database/sqlite-api-provider-credential-repository.js';
@@ -91,6 +99,11 @@ export function createApplication({
   modelExecutor: providedModelExecutor = null,
   conversationTurnFaultInjector = null,
   subjectRuntimeAdapter: providedSubjectRuntimeAdapter = null,
+  requestAccess = null,
+  personalClock = () => new Date(),
+  personalManagedRoot = null,
+  personalDeletionBeforeOnlineDelete = () => {},
+  providerConnectionChecker: providedConnectionChecker = null,
 }) {
   const subjectRuntimeAdapter = providedSubjectRuntimeAdapter
     ?? createNoneSubjectRuntimeAdapter();
@@ -99,6 +112,9 @@ export function createApplication({
   });
   const database = createSqliteDatabase(config);
   const userRepository = createSqliteUserRepository(database.connection);
+  const personalRepository = createSqlitePersonalRepository(database.connection);
+  const ownerBusinessAllowed = userId => userRepository.findById(userId)?.status === 'active';
+  const personalVault = createPersonalCredentialVault({repository:personalRepository});
   const userSpaceRepository = createSqliteUserSpaceRepository(database.connection);
   const subjectRepository = createSqliteSubjectRepository(database.connection);
   const assistantGlobalSettingsRepository =
@@ -148,8 +164,17 @@ export function createApplication({
   );
   const continuityConversationTurnRepository =
     createSqliteContinuityConversationTurnRepository(database.connection);
-  const credentialStore = providedCredentialStore
-    ?? createEnvironmentApiCredentialStore(environment);
+  const legacyCredentialStore = providedCredentialStore ?? createEnvironmentApiCredentialStore(environment);
+  const credentialStore = {
+    describeApiKey(args) {
+      return args.secretRef?.startsWith('vault:') ? personalVault.describeApiKey(args) : legacyCredentialStore.describeApiKey(args);
+    },
+    resolveApiKey(args) {
+      // A verified personal identity can never fall back to historical environment credentials.
+      return args.secretRef?.startsWith('vault:') || userRepository.isPersonalIdentity(args.ownerUserId)
+        ? personalVault.resolveApiKey(args) : legacyCredentialStore.resolveApiKey(args);
+    },
+  };
   const deviceAdapterRegistry = createUnconfiguredDeviceAdapterRegistry();
   const migrationTargetRegistry = createUnconfiguredMigrationTargetRegistry();
   const userService = createUserService({
@@ -401,6 +426,7 @@ export function createApplication({
     });
   const continuityCapabilityService = configuredContinuityTransport
     ? createContinuityCapabilityService({
+      ownerBusinessAllowed,
       requestService: continuityRequestService,
       resultService: continuityResultService,
       capabilityRepository: continuityCapabilityRepository,
@@ -418,6 +444,7 @@ export function createApplication({
     : null;
   const continuityDeliveryService = configuredContinuityTransport
     ? createContinuityDeliveryService({
+      ownerBusinessAllowed,
       requestService: continuityRequestService,
       resultService: continuityResultService,
       deliveryRepository: continuityDeliveryRepository,
@@ -449,6 +476,7 @@ export function createApplication({
     environment,
   });
   const continuityConversationTurnService = createContinuityConversationTurnService({
+    ownerBusinessAllowed,
     turnRepository: continuityConversationTurnRepository,
     conversationService,
     messageService,
@@ -463,7 +491,20 @@ export function createApplication({
     runInTransaction: database.runInTransaction,
     faultInjector: conversationTurnFaultInjector,
   });
+  const personalIdentityService = createPersonalIdentityService({repository:personalRepository,userRepository,userSpaceRepository,
+    subjectService,userSpaceService,permissionService,runInTransaction:database.runInTransaction,vault:personalVault,clock:personalClock});
+  const personalConfigurationService = createPersonalConfigurationService({repository:personalRepository,identityService:personalIdentityService,
+    apiProviderService,modelService,modelRoutingRuleService,permissionService,securityService,confirmationService,
+    credentialBindingRepository:apiProviderCredentialRepository,connectionChecker:providedConnectionChecker??createProviderConnectionChecker(),vault:personalVault,
+    runInTransaction:database.runInTransaction,clock:personalClock});
+  const personalManagedCopies=createPersonalManagedCopies({db:database.connection,clock:personalClock,allowedRootRequired:personalManagedRoot});
+  const personalDeletionService=createPersonalDeletionService({database,identityService:personalIdentityService,configurationService:personalConfigurationService,
+    repository:personalRepository,vault:personalVault,managedCopies:personalManagedCopies,clock:personalClock,beforeOnlineDelete:personalDeletionBeforeOnlineDelete});
+  const personalHttpAccess = createPersonalHttpAccess({identityService:personalIdentityService,configurationService:personalConfigurationService,deletionService:personalDeletionService,vault:personalVault,
+    secureCookies:config.personalAccess.secureCookies,allowedOrigin:config.personalAccess.allowedOrigin});
   const router = createRouter({
+    personalHttpAccess,
+    requestAccess,
     config,
     database,
     userService,
@@ -508,10 +549,16 @@ export function createApplication({
     void router(request, response);
   });
   let databaseClosed = false;
+  let deletionTimer=null;
 
   return {
     server,
     database,
+    personalIdentityService,
+    personalConfigurationService,
+    personalVault,
+    personalDeletionService,
+    personalManagedCopies,
     continuityRequestService,
     continuityResultService,
     continuityDeliveryService,
@@ -530,6 +577,11 @@ export function createApplication({
     confirmationService,
     proactiveInteractionService,
     async start() {
+      try{personalDeletionService.sweep();}catch{logger.error?.('[vio] deletion maintenance deferred',{code:'DELETION_MAINTENANCE_DEFERRED'});}
+      try{personalConfigurationService.initialize();}catch(error){
+        if(error.errcode!==5&&error.code!=='SQLITE_BUSY')throw error;
+        logger.error?.('[vio] personal recovery deferred',{code:'PERSONAL_RECOVERY_DATABASE_BUSY'});
+      }
       await continuityCapabilityService?.initialize();
       await continuityDeliveryService.initialize();
       await continuityConversationTurnService.initialize();
@@ -553,12 +605,18 @@ export function createApplication({
         throw new Error('Backend server did not expose a TCP address.');
       }
 
+      deletionTimer=setInterval(()=>{
+        try{personalDeletionService.sweep();}catch{logger.error?.('[vio] deletion maintenance deferred',{code:'DELETION_MAINTENANCE_DEFERRED'});}
+      },60000);
+      deletionTimer.unref();
       return {
         host: address.address,
         port: address.port,
       };
     },
     async stop() {
+      clearInterval(deletionTimer);
+      personalVault.close();
       if (server.listening) {
         await new Promise((resolve, reject) => {
           server.close((error) => (error ? reject(error) : resolve()));

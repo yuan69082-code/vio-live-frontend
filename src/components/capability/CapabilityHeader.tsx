@@ -7,11 +7,11 @@ function CapabilityHeader() {
         <CapabilityIcon name="spark" />
       </span>
       <div>
-        <span>CAPABILITY CENTER · 本地模拟</span>
+        <span>CAPABILITY CENTER · 服务端配置</span>
         <h1>能力中心</h1>
-        <p>统一查看模型、服务、技能与设备</p>
+        <p>模型 / API 已接线；其他能力分组仍为原型</p>
       </div>
-      <span className="capability-header-badge">仅 UI</span>
+      <span className="capability-header-badge">混合状态</span>
     </header>
   )
 }

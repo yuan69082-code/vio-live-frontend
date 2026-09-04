@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { runMigrations } from './migrations.js';
+import { installOwnerDeletionAuthority } from './personal-deletion-scope.js';
 
 export function createSqliteDatabase({ databasePath, migrationsPath }) {
   if (databasePath !== ':memory:') {
@@ -10,6 +11,7 @@ export function createSqliteDatabase({ databasePath, migrationsPath }) {
   }
 
   const connection = new DatabaseSync(databasePath);
+  const withOwnerDeletion = installOwnerDeletionAuthority(connection);
   let transactionDepth = 0;
   try {
     connection.exec('PRAGMA foreign_keys = ON;');
@@ -27,6 +29,14 @@ export function createSqliteDatabase({ databasePath, migrationsPath }) {
 
   return {
     connection,
+    withOwnerDeletion(taskId,owner,rows,operation) {
+      if(transactionDepth<1)throw new Error('Owner deletion requires an active managed transaction.');
+      return withOwnerDeletion(taskId,owner,rows,()=>{
+        const result=operation();
+        if(result&&typeof result.then==='function')throw new Error('Owner deletion authority cannot cross an asynchronous boundary.');
+        return result;
+      });
+    },
     runInTransaction(operation) {
       if (transactionDepth > 0) {
         return operation();

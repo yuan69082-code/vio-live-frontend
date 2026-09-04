@@ -1,4 +1,5 @@
 import { ConflictError, NotFoundError, ValidationError } from '../../core/errors.js';
+import { requirePermissionSubject } from '../permissions/permission-scope.js';
 import { createId } from '../../core/ids.js';
 import {
   optionalString,
@@ -66,13 +67,7 @@ export function createConfirmationService({
   }
 
   function requireSubject(userId, subjectId) {
-    const normalizedSubjectId = requireString(subjectId, 'subjectId', { maxLength: 128 });
-
-    if (!subjectRepository.findById(userId, normalizedSubjectId)) {
-      throw new NotFoundError('Subject was not found for this user.');
-    }
-
-    return normalizedSubjectId;
+    return requirePermissionSubject(userId,subjectId,userRepository,subjectRepository);
   }
 
   function requireConfirmation(userId, confirmationId) {

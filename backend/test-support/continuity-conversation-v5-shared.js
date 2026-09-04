@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 
-import { createApplication } from '../src/app.js';
+import { createApplication } from './legacy-test-application.js';
 import { loadConfig } from '../src/config.js';
 import { createHttpContinuityIntegrationTransport } from '../src/integrations/continuity-engine/http-continuity-integration-transport.js';
 import { createOpenAiCompatibleModelExecutor } from '../src/integrations/model-providers/openai-compatible-model-executor.js';

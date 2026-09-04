@@ -29,6 +29,8 @@ export function createSqliteModelRepository(connection) {
       models.model_type,
       models.cost_description,
       models.test_status,
+      models.status,
+      models.version,
       models.created_at,
       api_providers.display_name AS provider_display_name,
       api_providers.provider_type,
@@ -74,6 +76,8 @@ export function createSqliteModelRepository(connection) {
       modelType: row.model_type,
       costDescription: row.cost_description,
       testStatus: row.test_status,
+      status: row.status,
+      version: row.version,
       capabilities: findCapabilitiesStatement.all(row.model_id).map((item) => item.capability),
       createdAt: row.created_at,
       provider: {
@@ -90,7 +94,7 @@ export function createSqliteModelRepository(connection) {
 
   return {
     insert(model) {
-      connection.exec('BEGIN IMMEDIATE;');
+      connection.exec('SAVEPOINT model_insert;');
 
       try {
         insertModelStatement.run(
@@ -108,9 +112,9 @@ export function createSqliteModelRepository(connection) {
           insertCapabilityStatement.run(model.modelId, capability);
         }
 
-        connection.exec('COMMIT;');
+        connection.exec('RELEASE model_insert;');
       } catch (error) {
-        connection.exec('ROLLBACK;');
+        connection.exec('ROLLBACK TO model_insert; RELEASE model_insert;');
 
         if (isConstraintError(error)) {
           throw new ConflictError('Model could not be created for this provider.');
@@ -124,9 +128,17 @@ export function createSqliteModelRepository(connection) {
     findById(ownerUserId, modelId) {
       return mapModel(findByIdStatement.get(ownerUserId, modelId));
     },
+    findManyByUser(user) {return connection.prepare(`${selection} WHERE models.owner_user_id=? ORDER BY models.created_at,models.model_id`).all(user).map(mapModel);},
+    updateConfiguration(user,id,input) {
+      connection.prepare('UPDATE models SET model_name=?,model_type=?,cost_description=?,status=?,version=version+1 WHERE owner_user_id=? AND model_id=?')
+        .run(input.modelName,input.modelType,input.costDescription,input.status,user,id);
+      connection.prepare('DELETE FROM model_capabilities WHERE model_id=? AND EXISTS(SELECT 1 FROM models WHERE model_id=? AND owner_user_id=?)').run(id,id,user);
+      for(const c of input.capabilities) insertCapabilityStatement.run(id,c);
+      return mapModel(findByIdStatement.get(user,id));
+    },
     findByCapability({ ownerUserId, capability, onlyEnabledProviders }) {
       const enabledCondition = onlyEnabledProviders
-        ? "AND api_providers.status = 'enabled'"
+        ? "AND api_providers.status = 'enabled' AND models.status = 'enabled'"
         : '';
       const statement = connection.prepare(`
         ${selection}

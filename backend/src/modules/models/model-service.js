@@ -58,6 +58,17 @@ export function createModelService({
   }
 
   return {
+    listModels(userId) {return modelRepository.findManyByUser(requireUser(userId));},
+    updateModel(userId,modelId,value) {
+      const user=requireUser(userId); const current=modelRepository.findById(user,modelId);
+      if(!current) throw new NotFoundError('Model was not found for this user.');
+      const input=requireOnlyFields(value,['modelName','modelType','capabilities','costDescription','status']);
+      if(!['enabled','disabled'].includes(input.status)) throw new ValidationError('Unsupported model status.',{field:'status'});
+      return modelRepository.updateConfiguration(user,modelId,{
+        modelName:requireString(input.modelName,'modelName',{maxLength:160}),modelType:requireString(input.modelType,'modelType',{maxLength:80}),
+        capabilities:requireCapabilities(input.capabilities),costDescription:requireString(input.costDescription??'','costDescription',{minLength:0,maxLength:2000}),status:input.status,
+      });
+    },
     createModel(userId, providerId, value) {
       const ownerUserId = requireUser(userId);
       const normalizedProviderId = requireProvider(ownerUserId, providerId);

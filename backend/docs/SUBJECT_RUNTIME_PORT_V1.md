@@ -2,11 +2,11 @@
 
 ## 状态与范围
 
-- 施工范围：R0-A 冻结合同；R0-B 装配只读状态；R0-C 展示状态；本次仅整理 R0 文档与验收材料
+- 施工范围：R0-A 冻结合同；R0-B 装配只读状态；R0-C 展示状态；R0 已完成整体验收
 - 合同版本：`vio-subject-runtime-port/v1`
-- 当前状态：R0-A/B/C 已验收并推送；R0 整体验收仍待总体协调窗口复核
-- 未完成：真实登录及多助手产品能力、现有聊天业务切换、Standalone 对话执行；具体外部运行时的真实接入另行授权，不作为 Vio 完成或发布门槛
-- 下一阶段边界：R0 验收后先 R2，再 R1，然后 R3 至 R13；实际聊天编排按模式切换属于 R1，本文件不授权施工
+- 当前状态：R0-A/B/C 及 R0 整阶段已验收并推送；R2 已于 2026-09-05 正式验收通过
+- 未完成：现有聊天业务切换与 Standalone 对话执行仍属于 R1，各助手多会话属于 R3；具体外部运行时的真实接入另行授权，不作为 Vio 完成或发布门槛
+- 下一阶段边界：既定顺序为 R0 → R2 → R1 → R3 至 R13；R1 尚未开始，实际聊天编排按模式切换属于 R1，本文件不授权施工
 
 本端口是 Vio 自己的稳定后端合同，不属于 Continuity Engine，也不要求任何外部主体运行时存在。Vio 与外部运行时的进程、数据库、代码发布和启动生命周期独立。R0-B 已新增默认 None Adapter 应用装配与通用只读 HTTP 状态接口，R0-C 已接入前端读取；R0-A/B/C 未新增数据库迁移，也未切换现有聊天业务。独立聊天尚未实现，不能把状态接口正常当成业务解耦完成。
 
@@ -291,7 +291,7 @@ node --test tests/subject-runtime-port-r0a.test.js
 
 测试不启动或读取 Engine，不使用网络、API Key、模型、Provider、MCP、Tool 或设备。R0-A 没有修改前端、迁移、公共 HTTP API、登录、记忆、Context、模型执行或部署。
 
-R0-A/B/C 已完成并推送，不等于 R0 整体验收通过；R2、R1 尚未开始。不得据此夸大为完整业务解耦或产品可用。上面的命令是专项入口说明，本次文档收尾没有执行。
+R0-A/B/C 完成并推送时并不等于 R0 已获整体验收；其后 R0 已完成整体验收，R2 也已于 2026-09-05 正式验收通过，R1 尚未开始。不得据此夸大为完整业务解耦或产品可用。上面的命令是专项入口说明，R0 文档收尾当时没有执行。
 
 <a id="r0-evidence"></a>
 
@@ -309,18 +309,18 @@ R0-A/B/C 已完成并推送，不等于 R0 整体验收通过；R2、R1 尚未�
 
 | 原 R0 要求 | 现有实现或说明位置 | 测试或历史验收来源 | 当前状态 | 未完成事项 |
 | --- | --- | --- | --- | --- |
-| Vio 核心职责 | 本文责任表、[总体架构](../../docs/后端/01-总体架构与系统边界.md)、[端口常量](../src/modules/subject-runtime/subject-runtime-port-v1.js) | A 的责任清单断言；D 上下文核对 | 规则已冻结，本轮补足两模式适用范围 | 核心产品功能不因责任清单而视为已实现；待整阶段复核 |
-| 通用主体运行时端口 | [Port v1](../src/modules/subject-runtime/subject-runtime-port-v1.js)、[状态服务](../src/modules/subject-runtime/subject-runtime-status-service.js)、[API说明](API.md) | A、B；C 只读消费 | 合同、装配、状态 GET 与健康摘要已实现 | 未接入聊天执行；R1 完成，R0 整阶段待复验 |
+| Vio 核心职责 | 本文责任表、[总体架构](../../docs/后端/01-总体架构与系统边界.md)、[端口常量](../src/modules/subject-runtime/subject-runtime-port-v1.js) | A 的责任清单断言；D 上下文核对及 R0 整体复验 | 规则已冻结并完成 R0 验收 | 核心产品功能不因责任清单而视为已实现；按后续阶段验收 |
+| 通用主体运行时端口 | [Port v1](../src/modules/subject-runtime/subject-runtime-port-v1.js)、[状态服务](../src/modules/subject-runtime/subject-runtime-status-service.js)、[API说明](API.md) | A、B；C 只读消费及 R0 整体复验 | 合同、装配、状态 GET 与健康摘要已实现并完成 R0 验收 | 未接入聊天执行；由 R1 完成 |
 | 空适配器、特定合同登记、第三方入口 | [None Adapter](../src/modules/subject-runtime/none-subject-runtime-adapter.js)、[登记模块](../src/modules/subject-runtime/subject-runtime-adapter-contracts.js) | A、B 的 None/第三方/非法输入测试 | None 正式合法；特定适配器 `registered_not_wired` | 无真实第三方接入；具体外部系统不作为 Vio 发布门槛 |
-| 独立模式完整业务语义 | 本文“两种模式”及“None Adapter 行为”；[ADR-034](../../docs/决策记录.md#adr-034) | A/B/C 只证明外部缺席合法与状态展示；D 规则对应 | R0 规则已说明，不冒称独立聊天完成 | R2 提供真实身份后，R1 才实现和验收独立正常聊天 |
+| 独立模式完整业务语义 | 本文“两种模式”及“None Adapter 行为”；[ADR-034](../../docs/决策记录.md#adr-034) | A/B/C 只证明外部缺席合法与状态展示；D 规则对应 | R0 规则已说明，R2 已提供真实个人身份；不冒称独立聊天完成 | R1 才实现和验收独立正常聊天 |
 | 外部模式候选、最终表达、投影、执行权 | 本文“两种模式”“表达结果与状态投影”；[v1.1专用合同](../../docs/后端/14-continuity-engine连接契约v1.1.md) | A 的结果/投影验证；H 的候选回传与最终回复历史 | 保留已选模式和专用权威，不赋予 Vio 外部状态写权 | 通用业务分流与恢复由 R1 完成；真实重连须另行授权 |
 | 旧合同只归属特定适配器 | 登记模块的 `adapter_only`；[后端README](../README.md)的专用范围；ADR-032/BE-ADR-035 | A 的专用合同登记断言；H | 归属已冻结；撤回 README 原第45行误判，第43行限定与权威原文保留 | 旧聊天依赖仍待 R1 整理，不改写历史合同 |
-| 样例、兼容表、状态机及纯本地验证 | [样例](../src/modules/subject-runtime/subject-runtime-contract-examples.js)、[状态机](../src/modules/subject-runtime/subject-runtime-state-machine.js)、[R0-A测试](../tests/subject-runtime-port-r0a.test.js)、[测试索引](../tests/README.md) | A 的合法/非法样例、兼容、七态转换、取消/恢复测试 | 文件与历史验收存在，本轮只核对引用 | R0 整体复验未在本轮执行；禁止以真实 Engine 在场为前提 |
-| 当前文档一致性 | 根/后端README、总体架构、API与事件契约、决策、路线与本矩阵 | D；[工程日志](../../docs/工程日志.md)本次文档收尾记录 | 过时接口摘要与两模式范围已整理，四项决定已同步 | 待总体协调窗口复核；本地提交未推送，不等于 GitHub 已同步 |
+| 样例、兼容表、状态机及纯本地验证 | [样例](../src/modules/subject-runtime/subject-runtime-contract-examples.js)、[状态机](../src/modules/subject-runtime/subject-runtime-state-machine.js)、[R0-A测试](../tests/subject-runtime-port-r0a.test.js)、[测试索引](../tests/README.md) | A 的合法/非法样例、兼容、七态转换、取消/恢复测试及 R0 整体复验 | 文件、历史验收和整阶段复验均存在 | 禁止以真实 Engine 在场为前提；后续适配器联调另行授权 |
+| 当前文档一致性 | 根/后端README、总体架构、API与事件契约、决策、路线与本矩阵 | D；[工程日志](../../docs/工程日志.md)文档收尾与整体验收记录 | 过时接口摘要与两模式范围已整理，四项决定及 R0/R2 当前状态已同步 | R1 尚未开始；后续阶段按既定顺序执行 |
 
 最近历史后端全量为 266 项，265 通过、0 失败、1 条既有条件跳过：`Vio and Engine 7a1daca produce identical canonical UTF-8 and SHA-256 for independent corpus`，当次因显式不存在的隔离路径未执行。R0-C 首次测试自动发现真实 Engine、读取 HEAD/规范化实现后失败，以及随后获准的有限目录元数据检查，均在原日志保留；后续跳过不能抹掉首次事实，有限授权也不成为长期许可。
 
-本轮未执行：R0-A/B/C 专项、前后端全量及组合回归、TypeScript/构建/语法验证、迁移 fresh/upgrade/rollback、共享测试、服务或真实供应商验收。这不是豁免整阶段测试；复验范围与执行由总体协调窗口另行授权，不能将未执行项记为通过。R0 尚未整体验收，未开始 R2 或 R1。
+上述 D 轮当时未执行：R0-A/B/C 专项、前后端全量及组合回归、TypeScript/构建/语法验证、迁移 fresh/upgrade/rollback、共享测试、服务或真实供应商验收；该历史事实不以之后结果覆盖。随后 R0 完成独立整体验收，R2 于 2026-09-05 正式验收通过；R1 尚未开始。
 
 <a id="r0-review-20260904"></a>
 

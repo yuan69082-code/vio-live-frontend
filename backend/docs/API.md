@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-R0 当前状态：R0-A/B/C 已验收并推送，通用状态 GET、健康摘要和设置页读取均已存在；没有运行时控制写接口，现有 V5/F1 聊天尚未切换到通用端口。R0 整体验收待复核，之后按 [ADR-034](../../docs/决策记录.md#adr-034) 先 R2、再 R1、随后 R3 至 R13。真实登录及同用户多助手产品能力尚未实现；本次仅同步文档，不改变任何公共 API 或合同。两模式规则和历史证据见 [端口说明](SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)。
+R0 已验收并推送；通用状态 GET、健康摘要和设置页读取均已存在，现有 V5/F1 聊天尚未切换到通用端口。R2 已于 **2026-09-05 正式验收通过**：个人所有者访问、首次设置、多助手、资料、会话、审计/诊断、Provider/Model、加密凭据与认证连接检查，以及按已确认政策执行的账户删除、限权查询/撤销/重试均已完成本机闭环；邮箱、Google 和公开注册继续暂缓。精确字段、幂等、确认与恢复合同见 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md)。R1 独立聊天和 R3 多会话尚未开始。
 
 S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 v1.1 身份仅用于 `disposable_test` 验收且禁止晋升；Windows 创建和 doctor 以同一 240 字符门禁验证 Engine WakeSession 最终/原子临时文件的最坏路径，超限返回 `unsafe / engine_persistence_path_budget_exceeded`；推荐新建 `C:\VioS4\first-001` 这类仓库外短路径。cleanup 只允许整根删除：正常沙箱及唯一问题为历史路径超预算的旧沙箱均需通过其余全部严格校验，plan 返回 `cleanupEligible`、`legacyUnsafeReason` 和唯一 `deleteTargets=[canonicalSandboxRoot]`，apply 继续要求服务停止与整箱销毁双确认。
 
@@ -10,9 +10,27 @@ S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 
 - 后端版本：`0.19.0`
 - 业务前缀：`/api/v1`
 - 开发服务默认地址：`http://127.0.0.1:8787`
-- 当前没有真实登录、会话或认证，所有用户/主体归属检查仍是开发期请求范围，不能直接公开部署。
+- 生产应用装配中的业务 API 必须先通过 R2 个人会话验证；开发身份头不再是授权依据。HTTPS、远程部署、公开注册和多租户仍未完成，不能直接公开部署。
 
-前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。F1 对话页已接入固定本地 Profile 的 V5 Turn/Message API，R0-C 设置页已读取通用主体运行时状态；其余未接线页面继续保留开发期演示或 mock 边界，前端没有直接接入模型配置或 Continuity Engine。
+前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。R2 访问、首次设置、资料/助手、访问安全及 Provider/Model/凭据配置已接入个人 API；F1 对话页仍使用固定本地 Profile 的 V5 Turn/Message API，不能自动认领为 R2 身份，也不提前算作 R1 解耦。
+
+## R2｜个人访问、设置与模型配置
+
+所有路径使用 `/api/v1/personal` 前缀。初始化前只有 `GET /access`、受一次性邀请保护的 `POST /initialize` 和登录请求可达；其余操作要求 HttpOnly/SameSite Cookie。所有写请求还要求同源检查与 `X-Vio-CSRF`。完整请求/响应字段以 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md) 为唯一交接表，本节只列入口，避免复制第二份易漂移合同。
+
+| 范围 | 入口 | 当前状态 |
+| --- | --- | --- |
+| 访问 | `GET /access`、`POST /initialize`、`POST/GET/DELETE /sessions`、`GET/DELETE /session` | 已实现；30 天绝对/7 天闲置期限、退出与目标撤销 |
+| 首次设置与资料 | `POST /onboarding`、`GET/PATCH /profile` | 已实现；资料版本与实际 `server_database / cloudSync=false` 分开表达 |
+| 多助手 | `GET/POST /assistants`、`GET/PATCH /assistants/:id`、`PUT /current-assistant` | 已实现；归属过滤、幂等创建、版本/选择 CAS；不迁移历史数据 |
+| 安全可见性 | `GET /access-audit`、`GET /diagnostics` | 已实现；只返回脱敏白名单，不是 R9 设备控制 |
+| Provider/Model | `GET/POST/PATCH /providers`、`GET/POST/PATCH /models` | 已实现；账户级 Permission/Security/Confirmation 与版本检查 |
+| 凭据 | `GET /vault`、`POST /vault/unlock`、`PUT/DELETE /providers/:id/credential` | 已实现；浏览器混合加密运输、服务端密文保存、只返回固定状态/掩码 |
+| 连接认证检查 | `POST /providers/:id/connection-tests`、`GET .../:testId` | 已实现；只调用受限 `/models`，不生成、不证明生成能力 |
+| 操作恢复 | `GET /operations`、`POST /operation-cancellations`、`POST /confirmations/:id/decision` | 已实现；相同 key 精确恢复，取消不能撤销已完成事实 |
+| 账户/空间删除 | `POST /deletions`、`POST /deletion-access`、`GET /deletions/current` 或 `/:id`、`POST /deletions/current/cancellation` 与 `/retry` | 高风险确认、立即撤销旧会话、7 天限权撤销、到期真实执行、失败恢复；具体 DTO 与 14/30 天期限见 R2 合同 |
+
+生产个人装配不接受 `x-vio-user-id`、前端自报 userId、固定测试 Profile 或“数据库第一位用户”作为身份。历史测试只在 `test-support/legacy-test-application.js` 显式注入访问替代，生产不存在环境开关。旧无归属缓存和固定试聊账本不自动迁入、重发或删除。
 
 ## R0-A｜Subject Runtime Port v1（内部合同）
 
@@ -29,7 +47,7 @@ R0-A 已实现 Vio 自己的 `vio-subject-runtime-port/v1`，详细字段、兼�
 
 None Adapter 返回 `platformStatus=available` 与 `runtimeStatus=not_configured`。运行时专用请求稳定返回 `unavailable / SUBJECT_RUNTIME_NOT_CONFIGURED / never`，且 `expression=null`、`stateProjection=null`，不伪造 revision。
 
-`continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 和 `conversation_response` 继续由既有代码实现，但只属于 Continuity Engine Adapter；代码登记状态为 `registered_not_wired`。R0-A 没有改变这些合同、迁移、HTTP transport 或业务语义。R0 仍未完成，R1 尚未开始。
+`continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 和 `conversation_response` 继续由既有代码实现，但只属于 Continuity Engine Adapter；代码登记状态为 `registered_not_wired`。R0-A 没有改变这些合同、迁移、HTTP transport 或业务语义。R0-A 完成当时 R0 整体尚未完成；此后 R0 已完成整体验收，R1 仍尚未开始。
 
 ## R0-B｜通用主体运行时状态（只读）
 
@@ -75,7 +93,7 @@ Adapter Manifest、连接快照或协商结果存在未知字段、非法状态�
 
 `subjectRuntime` 使用同一份已校验通用快照，默认返回 `platformStatus=available` 与 `runtimeStatus=not_configured`。历史 `continuityEngine` 值为兼容既有调用方而保留；新增 `continuityEngineCompatibility.scope=adapter_only_legacy` 明确它不是 Vio Core 的通用健康合同。
 
-R0-B 只增加通用状态装配和只读查询，没有运行时选择/连接/断开/重连写接口，没有创建 Continuity Engine Adapter，也没有切换 V1—V5/F1 聊天编排。R0 仍未完成，R1 尚未开始。
+R0-B 当时只增加通用状态装配和只读查询，没有运行时选择/连接/断开/重连写接口，没有创建 Continuity Engine Adapter，也没有切换 V1—V5/F1 聊天编排；R0 后续已完成整体验收，R1 仍尚未开始。
 
 ## 统一返回结构
 
@@ -120,7 +138,7 @@ R0-B 只增加通用状态装配和只读查询，没有运行时选择/连接/�
 - `details` 只在存在安全的结构化错误详情时返回。
 - 响应头同时返回 `x-request-id`；错误体内的 `requestId` 与其一致。
 - 创建成功使用 `201` 并返回 `Location`；一般查询/更新使用 `200`。
-- 当前错误状态包括 `400`、`404`、`409`、`413`、`415` 和 `500`。
+- 当前错误状态包括 `400`、`401`、`403`、`404`、`409`、`413`、`415`、`423`、`429` 和 `500`。
 
 ## 请求规则
 

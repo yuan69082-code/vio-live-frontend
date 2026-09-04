@@ -2,11 +2,11 @@
 
 ## 状态
 
-- 文档状态：平台后端 6 的模型/API 路由配置基础已实现，真实连接仍在规划
+- 文档状态：R2 已把个人 Provider/Model、加密凭据和认证连接检查接到真实页面；完整 R6 与真实供应商验收仍未完成
 - 真实模型连接：未完成
 - 本地配置与路由：已完成 Provider/Model 持久化、六类任务默认/备用规则和确定性本地选择
 - Token Budget、Wake、主动提示和后台策略已形成开发期配置/安全准备闭环；真实语音、模型调用和供应商计量仍未接入
-- 当前限制：不指定具体模型 SDK、计费实现或密钥服务产品
+- 当前限制：只正式复用 `openai_compatible`，认证检查不生成；云 KMS、备份、真实供应商 live 验收和公开部署仍未完成
 
 ## 目标
 
@@ -45,7 +45,7 @@
 - 费用说明
 - 备用模型
 
-本阶段已确定下面“当前基础实现”的开发期字段与接口；供应商专属参数、真实调用和生产密钥方案仍不在本文件中固化。
+下面基础目录仍保留；R2 在其上增加个人身份范围的配置、加密凭据与认证检查，不提前完成 R6 的全部模型能力。
 
 ### 当前基础实现
 
@@ -54,8 +54,8 @@
 - Model 归属于 Provider，保存模型名称、模型类型、费用说明、测试状态和 `chat`、`long_text`、`vision`、`image`、`video`、`audio`、`search`、`embedding` 能力标签。
 - 可路由任务严格为 `chat`、`long_text`、`image`、`video`、`audio`、`search`；`vision` 与 `embedding` 当前只作为目录查询能力。
 - Model Routing Rule 按用户与任务唯一保存默认模型、可选备用模型和 `enabled`/`disabled` 状态。默认和备用必须属于同一用户、支持该任务且不能相同。
-- Base URL 只保存配置，不用于当前网络请求；包含用户名、密码、片段或凭据查询参数时会被拒绝。
-- Provider/Model 测试状态当前固定初始化为 `not_tested`，不接受客户端伪造；费用说明只是配置文本，不执行计费。
+- Base URL 保存后只可用于明确的连接认证检查或既有 V4 执行；R2 检查拒绝非 HTTPS、凭据/query/fragment、IP/本地/私网/保留目标、重定向、超时和超限响应。随机 loopback 仅由测试依赖注入授权。
+- Provider/Model 能力标签和费用说明仍是配置；`/models` 认证成功不代表生成能力通过，也不产生 Provider generation 事实。
 
 ## 路由原则
 
@@ -77,7 +77,7 @@ Router 响应固定标记模型和外部 API 未调用。模型选择不读取�
 - 外部服务撤销后，相关密钥和调用能力必须失效。
 - 具体加密、轮换和密钥库方案等待安全 ADR 决定。
 
-当前 `api_key_secret_ref` 只是必须为 `NULL` 的数据库占位。后端提供安全存储端口，但当前实现只返回 `storage=secure_store_required` 与 `writeSupported=false`，没有保存方法。Provider 接口拒绝 Key、Token、Secret、凭据或凭据引用输入，响应只返回 `not_configured`，因此本阶段不能配置或使用任何真实 API Key。
+R2 个人凭据不通过普通 Provider JSON 接收明文。浏览器使用临时 RSA-OAEP-256 + AES-GCM 封装，服务端以个人随机库密钥执行 AES-256-GCM 加密后写入独立账本；口令派生密钥只包装库密钥。响应只返回 `not_configured/configured/locked/revoked/unavailable` 等状态和固定掩码，不返回 secretRef、长度或前后缀。保存、轮换和撤销均经过账户级 Permission → Security → Confirmation/Audit；重启后库保持锁定且不回退到环境凭据。该格式可跨平台，不等于云 KMS、无人值守恢复或备份已经配置。
 
 ## Token 与资源原则
 

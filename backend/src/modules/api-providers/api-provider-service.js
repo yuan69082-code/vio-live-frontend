@@ -1,7 +1,7 @@
 import { NotFoundError, ValidationError } from '../../core/errors.js';
 import { createId } from '../../core/ids.js';
 import { requirePlainObject, requireString } from '../../core/validation.js';
-import { requireApiKeySecretRef } from '../../integrations/secrets/environment-api-credential-store.js';
+import { requireApiCredentialReference } from '../../integrations/secrets/api-credential-reference.js';
 import {
   API_INTERFACE_FORMATS,
   API_PROVIDER_STATUSES,
@@ -183,6 +183,23 @@ export function createApiProviderService({
         return presentProvider(created, credentialStore, credentialBindingRepository);
       });
     },
+    updateConfiguration(userId,providerId,value) {
+      const owner=requireUser(userId);
+      const current=apiProviderRepository.findById(owner,providerId);
+      if(!current) throw new NotFoundError('API provider was not found for this user.');
+      const input=requireOnlyFields(value,['displayName','baseUrl','interfaceFormat','status']);
+      const next={
+        displayName:requireString(input.displayName,'displayName',{maxLength:120}),
+        baseUrl:normalizeBaseUrl(input.baseUrl),
+        interfaceFormat:requireAllowedValue(input.interfaceFormat,'interfaceFormat',API_INTERFACE_FORMATS),
+        status:requireAllowedValue(input.status,'status',API_PROVIDER_STATUSES),updatedAt:clock().toISOString(),
+      };
+      return runInTransaction(()=>{
+        const updated=apiProviderRepository.updateConfiguration(owner,providerId,next);
+        recordChange(updated,'status_updated');
+        return presentProvider(updated,credentialStore,credentialBindingRepository);
+      });
+    },
     getProvider(userId, providerId) {
       const ownerUserId = requireUser(userId);
       const normalizedProviderId = requireString(providerId, 'providerId', { maxLength: 128 });
@@ -229,8 +246,9 @@ export function createApiProviderService({
       const provider = apiProviderRepository.findById(ownerUserId, normalizedProviderId);
       if (!provider) throw new NotFoundError('API provider was not found for this user.');
       const input = requireOnlyFields(value, ['secretRef', 'subjectId', 'confirmationId', 'securitySessionId']);
-      const { secretRef } = requireApiKeySecretRef(input.secretRef);
-      const subjectId = requireString(input.subjectId, 'subjectId', { maxLength: 128 });
+      const { secretRef } = requireApiCredentialReference(input.secretRef);
+      const subjectId = input.subjectId===null && userRepository.isPersonalIdentity?.(ownerUserId)
+        ? null : requireString(input.subjectId, 'subjectId', { maxLength: 128 });
       const security = securityService.checkSecurity(ownerUserId, {
         subjectId,
         resourceType: 'api',
@@ -274,7 +292,7 @@ export function createApiProviderService({
       if (!binding) throw new NotFoundError('API provider credential is not configured.');
       return Object.freeze({
         credentialBindingId: binding.credentialBindingId,
-        resolveApiKey: () => credentialStore.resolveApiKey({ secretRef: binding.secretRef }),
+        resolveApiKey: () => credentialStore.resolveApiKey({ secretRef: binding.secretRef, ownerUserId, providerId:normalizedProviderId }),
       });
     },
   };

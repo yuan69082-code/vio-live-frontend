@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { createApplication } from '../src/app.js';
+import { createApplication } from './legacy-test-application.js';
 import { loadConfig } from '../src/config.js';
 
 const silentLogger = {

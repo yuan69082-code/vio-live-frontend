@@ -85,6 +85,11 @@ export function createSqliteApiProviderRepository(connection) {
     findById(ownerUserId, providerId) {
       return mapProvider(findByIdStatement.get(ownerUserId, providerId));
     },
+    updateConfiguration(ownerUserId,providerId,input) {
+      connection.prepare('UPDATE api_providers SET display_name=?,base_url=?,interface_format=?,status=?,updated_at=? WHERE owner_user_id=? AND api_provider_id=?')
+        .run(input.displayName,input.baseUrl,input.interfaceFormat,input.status,input.updatedAt,ownerUserId,providerId);
+      return mapProvider(findByIdStatement.get(ownerUserId,providerId));
+    },
     findManyByUser(ownerUserId) {
       return findManyByUserStatement.all(ownerUserId).map(mapProvider);
     },

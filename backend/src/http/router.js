@@ -100,6 +100,8 @@ export function createRouter({
   continuityDeliveryService,
   continuityConversationTurnService,
   subjectRuntimeStatusService,
+  personalHttpAccess,
+  requestAccess,
   logger = console,
 }) {
   return async function route(request, response) {
@@ -143,6 +145,11 @@ export function createRouter({
         sendJson(response, 200, { data: subjectRuntimeStatusService.getStatus() });
         return;
       }
+
+      if (personalHttpAccess && await personalHttpAccess.handle(request,response,url)) return;
+      // All legacy business routes remain subject to the same verified personal session.
+      // Tests may explicitly inject a test-only access port; there is no environment bypass.
+      (requestAccess ?? personalHttpAccess.authorizeLegacy)(request,url);
 
       if (request.method === 'GET' && url.pathname === '/api/v1/data-export/schemas') {
         const schemas = dataExportService.listSchemas();

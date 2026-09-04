@@ -11,7 +11,7 @@
 7. 模型与扩展能力管理
 8. 设备、AI 私域、生活模块和数据治理
 
-模块负责业务规则和用例，不直接依赖具体数据库、模型服务、continuity-engine 或设备 SDK。当前实现账号/User Space/主体、数据隔离、设定/私域、对话/Context、事件、模型/扩展/设备、生活管理、主动交互与 Token 控制、数据导出准备、Permission/Security/Confirmation/AuditLog。Dashboard 只聚合已有事实；Security 只返回安全资格并标记外部执行未发生；Permission Checker 不执行资源操作，Router 也不调用真实模型。
+模块负责业务规则和用例；具体数据库、模型服务、continuity-engine 或设备 SDK 通过装配依赖进入。`personal/` 现承载唯一个人所有者初始化、会话、首次设置、资料、多助手选择、访问审计/诊断及配置编排；所有业务身份来自验证会话，不接受客户端 userId。账户级 Provider/Model/凭据及删除操作仍复用 Permission → Security → Confirmation/Audit。`personal-deletion-service.js` 持久化 7/14/30 天政策和限权恢复，`personal-managed-copies.js` 只处理明确登记的单所有者受管文件，不建设 R11 完整备份。
 
 `subject-runtime/` 承载通用合同、状态机、None Adapter、第三方入口和 Engine 专用合同登记。R0-B 已在应用默认装配 None Adapter 及通用只读状态服务，R0-C 已消费该状态；不能再称当前没有应用装配。None Adapter 不伪造 expression、projection、revision 或能力，现有聊天仍未切换；模式选择和 Vio 内适配边界整理属于 R1，真实引擎联调另行授权而非 Vio 发布门槛。规则与阶段证据见 [R0矩阵](../../docs/SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)。
 
@@ -25,7 +25,7 @@ AI 私域模块只保存调用方显式提交的五类 JSON 记录，Space 与�
 
 安全模块保持以下边界：Permission 决定基础权限，Security Policy 与 Security 只能收紧；用户偏好不能降低平台 `high` / `critical` 逐次确认底线。`session_allow` 只形成明确确认后的精确、短时开发期授权，不是认证。SensitiveData 只定义分类元数据并提供只读查询；Confirmation 不代表执行；AuditLog 与 Event 分离且只记录最小字段。
 
-模型配置模块保持以下边界：APIProvider 保存服务来源、Base URL、接口格式与启停元数据；Model 保存名称、类型、能力、费用说明与测试状态；Model Routing Rule 按用户和任务保存默认/备用模型；Router 只执行确定性本地选择。测试状态当前固定为 `not_tested`，API Key 只通过未配置的安全存储端口描述状态，任何模块都不保存密钥或调用供应商。
+模型配置模块保持以下边界：APIProvider 保存服务来源、Base URL、接口格式与启停元数据；Model 保存名称、类型、能力、费用说明与测试状态；Model Routing Rule 按用户和任务保存默认/备用模型。R2 个人配置可安全写入、轮换和撤销加密凭据，并以受限 `/models` 请求做网络/认证检查；该检查不调用生成、不证明模型生成能力、不产生受控测试之外的供应商调用。V4 的正式生成执行仍是独立既有链路。
 
 扩展能力模块保持以下边界：Registry 只保存用户范围元数据；Capability 按主体预览 Permission，不消费 `allow_once`；Tool Usage 只执行 Security/Confirmation 前置判断并记录 `not_executed`。MCP 未连接，Plugin 未安装，Skill/Tool 没有执行器，任何模块都不接收真实执行输入或调用第三方服务。
 

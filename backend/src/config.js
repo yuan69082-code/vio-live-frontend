@@ -42,6 +42,15 @@ function readPositiveInteger(value, name, defaultValue) {
   return number;
 }
 
+function readPersonalAccess(environment,host) {
+  const value=environment.VIO_PERSONAL_ALLOWED_ORIGIN?.trim()||'';
+  if(!value)return Object.freeze({allowedOrigin:null,secureCookies:host!=='127.0.0.1'});
+  let url;try{url=new URL(value);}catch{throw new Error('VIO_PERSONAL_ALLOWED_ORIGIN must be an absolute origin.');}
+  if(url.username||url.password||url.search||url.hash||(url.pathname!==''&&url.pathname!=='/')||!['http:','https:'].includes(url.protocol))throw new Error('VIO_PERSONAL_ALLOWED_ORIGIN must be a credential-free origin.');
+  if(url.protocol==='http:'&&!['127.0.0.1','localhost'].includes(url.hostname))throw new Error('Non-loopback personal access origins must use HTTPS.');
+  return Object.freeze({allowedOrigin:url.origin,secureCookies:url.protocol==='https:'});
+}
+
 function readContinuityEngineConfig(environment) {
   const enabled = readBoolean(
     environment.VIO_CONTINUITY_ENGINE_ENABLED,
@@ -100,8 +109,9 @@ function readContinuityEngineConfig(environment) {
 }
 
 export function loadConfig(environment = process.env) {
+  const host=environment.VIO_BACKEND_HOST?.trim() || '127.0.0.1';
   return Object.freeze({
-    host: environment.VIO_BACKEND_HOST?.trim() || '127.0.0.1',
+    host,
     port: readPort(environment.VIO_BACKEND_PORT),
     databasePath: readDatabasePath(environment.VIO_BACKEND_DB_PATH),
     migrationsPath: join(backendRoot, 'migrations'),
@@ -130,5 +140,6 @@ export function loadConfig(environment = process.env) {
         2_097_152,
       ),
     }),
+    personalAccess:readPersonalAccess(environment,host),
   });
 }

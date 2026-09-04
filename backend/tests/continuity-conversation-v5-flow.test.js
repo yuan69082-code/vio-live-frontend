@@ -6,7 +6,7 @@ import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 
 import { createSqliteDatabase } from '../src/integrations/database/sqlite-database.js';
-import { createApplication } from '../src/app.js';
+import { createApplication } from '../test-support/legacy-test-application.js';
 import { loadConfig } from '../src/config.js';
 import {
   configureV4Execution,
@@ -100,6 +100,8 @@ test('001-021 upgrades to 022 and a broken migration rolls back completely', () 
   const upgradePath = join(directory, 'upgrade.sqlite');
   cpSync(resolve('migrations'), migrations021, { recursive: true });
   rmSync(join(migrations021, '022_create_continuity_conversation_turn_ledger.sql'));
+  rmSync(join(migrations021, '023_create_personal_identity_and_access.sql'));
+  rmSync(join(migrations021, '024_create_governed_personal_deletion.sql'));
   const old = createSqliteDatabase({ databasePath: upgradePath, migrationsPath: migrations021 });
   old.connection.prepare(`INSERT INTO users
     (user_id,primary_email,display_name,status,created_at,updated_at)

@@ -1,4 +1,4 @@
-import { createApplication } from '../src/app.js';
+import { createApplication } from './legacy-test-application.js';
 import { loadConfig } from '../src/config.js';
 import {
   calculateProjectionContentHash,

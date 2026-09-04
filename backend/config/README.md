@@ -14,6 +14,7 @@
 | `VIO_BACKEND_HOST` | `127.0.0.1` | HTTP 监听地址 |
 | `VIO_BACKEND_PORT` | `8787` | HTTP 监听端口 |
 | `VIO_BACKEND_DB_PATH` | `backend/data/vio-live.dev.sqlite` | 开发数据库文件；测试可使用 `:memory:` 或临时路径 |
+| `VIO_PERSONAL_ALLOWED_ORIGIN` | 无 | R2 个人访问页面允许的精确同源 origin；非 loopback 必须为无凭据、无 query/fragment 的 HTTPS origin。未配置时只接受本机 loopback 开发来源 |
 | `VIO_CONTINUITY_ENGINE_ENABLED` | `false` | 是否装配正式本机 Continuity HTTP transport；仅接受 `true` / `false` |
 | `VIO_CONTINUITY_ENGINE_BASE_URL` | `http://127.0.0.1:8766` | Engine E4/E5-A 正式本机 HTTP origin；启用时必须显式提供且只接受 `127.0.0.1`、无路径/凭据 |
 | `VIO_CONTINUITY_ENGINE_TOKEN` | 无 | Engine 正式本机 Bearer service token；启用时必填且至少 32 字符，不保存到数据库或日志 |
@@ -38,6 +39,8 @@
 | `CONTINUITY_ENGINE_INTEGRATION_TOKEN` | 无 | Engine 进程的本地 service token；doctor 只比较它与 Vio token 是否满足长度并一致，不输出值 |
 
 配置值不会返回给前端。数据库路径可以迁移到其他适配器，但业务模块不得直接读取该环境变量。Continuity 集成默认关闭；启用时只连接本机，token 仅在进程内用于 `Authorization: Bearer ...`，不得写入 Git、SQLite、日志或错误响应。Provider secretRef 由独立 credential binding 保存，真实值仅在模型调用瞬间从环境读取；环境变量名称和 Base URL 都必须先通过严格校验。`/health` 只暴露 `disabled`、`ready`、`degraded`，不返回 token、密钥配置、完整 Engine URL、Binding 或请求正文。
+
+R2 个人访问使用服务端 HttpOnly/SameSite 会话、CSRF 与精确 Origin 校验。当前本机默认保持 `127.0.0.1`；未来服务器必须先配置 HTTPS 和精确 `VIO_PERSONAL_ALLOWED_ORIGIN`，不能仅通过改变监听地址公开服务。个人凭据由数据库中的 AES-256-GCM 密文和口令包装库密钥保护，不使用环境变量 API Key 后门；服务重启后既有会话仍可验证，但解密库保持锁定，须本人重新登录或显式解锁。该实现不宣称已配置云 KMS、备份或无人值守解锁。
 
 L1 不使用 `.env` 文件。关闭 PowerShell 后，`VIO_MODEL_API_KEY_LIVE` 和两个 service token 必须重新设置；文档、命令输出、SQLite 和 Git 中只会出现非秘密配置、脱敏状态及 credential reference，不会保存真实值。
 

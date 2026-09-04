@@ -5,6 +5,8 @@ import ContinuityPage from './ContinuityPage'
 import PrivateDomainPage from './PrivateDomainPage'
 import ProfilePage from './ProfilePage'
 import WorkspacePage from './WorkspacePage'
+import { useOptionalPersonal } from '../state/PersonalContext'
+import personalStyles from '../components/personal/personal.module.css'
 
 type NavigationKey =
   | 'workspace'
@@ -94,7 +96,18 @@ function NavigationIcon({ name }: { name: IconName }) {
 }
 
 function MainNavigation() {
+  const personal = useOptionalPersonal()
+  const [identityError, setIdentityError] = useState(false)
   const [activeKey, setActiveKey] = useState<NavigationKey>('workspace')
+  const session = personal?.state.kind === 'ready' ? personal.state.session : null
+  const currentAssistant = personal?.assistants?.items.find((item) => item.assistantId === personal.assistants?.currentAssistantId)
+  const reloadAssistants = personal?.reloadAssistants
+  useEffect(() => {
+    if (!reloadAssistants) return
+    const controller = new AbortController()
+    queueMicrotask(() => { if (!controller.signal.aborted) void reloadAssistants(controller.signal).catch(() => { if (!controller.signal.aborted) setIdentityError(true) }) })
+    return () => controller.abort()
+  }, [reloadAssistants])
   const activeItem =
     navigationItems.find((item) => item.key === activeKey) ?? navigationItems[0]
 
@@ -107,16 +120,21 @@ function MainNavigation() {
       <div aria-hidden="true" className="main-ambient main-ambient-top" />
       <div aria-hidden="true" className="main-ambient main-ambient-bottom" />
 
-      <section className="main-frame" aria-label="Vio Live 主导航框架">
+      <section className="main-frame" aria-label="Vio Live 主导航框架" style={personal ? { gridTemplateRows: 'auto minmax(0, 1fr) auto' } : undefined}>
+        {personal && <header className={personalStyles.identity}><span>{session?.user.displayName} · 当前助手：{currentAssistant?.name ?? (personal.assistants ? '尚未选择' : '正在读取')}</span>
+          <button type="button" onClick={() => setActiveKey('profile')}>管理助手与访问</button>
+          {identityError && <button type="button" onClick={() => { setIdentityError(false); void personal.reloadAssistants().catch(() => setIdentityError(true)) }}>身份数据读取失败，重试</button>}
+        </header>}
         <div
+          key={personal ? `${personal.scope}:${session?.currentAssistantId ?? 'none'}` : 'legacy'}
           className={`main-content${activeKey === 'workspace' ? ' workspace-content' : ''}${activeKey === 'conversation' ? ' conversation-content' : ''}${activeKey === 'continuity' ? ' continuity-content' : ''}${activeKey === 'private' ? ' private-domain-content' : ''}${activeKey === 'capability' ? ' capability-content' : ''}${activeKey === 'profile' ? ' profile-content' : ''}`}
           role="tabpanel"
           aria-labelledby={`navigation-${activeItem.key}`}
         >
           {activeKey === 'workspace' ? (
-            <WorkspacePage />
+            <WorkspacePage assistant={currentAssistant} />
           ) : activeKey === 'conversation' ? (
-            <ConversationPage />
+            personal ? <section className={personalStyles.body}><h1>对话</h1><p>当前助手：{currentAssistant?.name ?? '尚未读取'}</p><p>个人身份已接通。独立聊天将在 R1 接续，多会话在 R3 完成；当前不会调用旧固定聊天身份。</p><p>旧恢复缓存未读取、未导入、未删除，不会自动归属当前身份。</p><button type="button" onClick={() => setActiveKey('profile')}>管理当前助手</button></section> : <ConversationPage />
           ) : activeKey === 'continuity' ? (
             <ContinuityPage />
           ) : activeKey === 'private' ? (

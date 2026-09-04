@@ -4,6 +4,7 @@ import { requireString } from '../core/validation.js';
 export const DEVELOPMENT_USER_HEADER = 'x-vio-user-id';
 
 export function requireDevelopmentUserId(request) {
+  if (request.accessContext?.userId) return request.accessContext.userId;
   const value = request.headers[DEVELOPMENT_USER_HEADER];
 
   if (Array.isArray(value)) {

@@ -1,4 +1,4 @@
-import { ConflictError, ValidationError } from '../../core/errors.js';
+import { ApplicationError, ConflictError, ValidationError } from '../../core/errors.js';
 import { createId } from '../../core/ids.js';
 import { requireString } from '../../core/validation.js';
 import { ContinuityTransportError } from '../../integrations/continuity-engine/http-continuity-integration-transport.js';
@@ -135,12 +135,26 @@ export function createContinuityDeliveryService({
   clock = () => new Date(),
   idFactory = createId,
   logger = console,
+  ownerBusinessAllowed = () => true,
 }) {
   let healthStatus = 'degraded';
 
+  function requireOwner(userId) {
+    if (ownerBusinessAllowed(userId) !== true) {
+      throw new ApplicationError('Owner business operations are suspended.', {
+        code: 'OWNER_BUSINESS_SUSPENDED', statusCode: 423,
+      });
+    }
+  }
+
+  function requestOwner(requestId) {
+    return requestService.getStoredRequest(requestId).identity.userId;
+  }
+
   function loadOriginalRequest(requestId) {
-    const binding = requestService.loadFixedBindingFixture();
     const request = requestService.getStoredRequest(requestId);
+    requireOwner(request.identity.userId);
+    const binding = requestService.loadFixedBindingFixture();
     validateFirstRoundRequest(request);
     if (calculateRequestHash(request) !== request.requestHash) {
       throw new ConflictError('Stored V1 requestHash could not be reproduced.');
@@ -260,6 +274,7 @@ export function createContinuityDeliveryService({
   }
 
   function recoverLocalResult(outbox) {
+    requireOwner(requestOwner(outbox.requestId));
     const existing = resultService.recoverStoredResult(outbox.requestId);
     if (!existing) return null;
     capabilityService?.reconcileEngineTerminal(outbox.requestId, 'completed');
@@ -267,6 +282,7 @@ export function createContinuityDeliveryService({
   }
 
   async function handleCapabilityRequired(outbox, original, envelope, details = {}) {
+    requireOwner(original.request.identity.userId);
     if (!capabilityService) {
       return publicOutcome(quarantine(outbox, 'capability_service_unavailable', {
         operationId: envelope?.operationId ?? null,
@@ -287,6 +303,7 @@ export function createContinuityDeliveryService({
       envelope,
       original.request,
     );
+    requireOwner(original.request.identity.userId);
     if (capabilityOutcome.status === 'completed') {
       let result;
       try {
@@ -323,6 +340,7 @@ export function createContinuityDeliveryService({
   }
 
   async function postOriginal(outbox, original, recoveryReason = null) {
+    requireOwner(original.request.identity.userId);
     let current = transition(outbox, 'in_flight', {
       recoveryReason,
       transportResult: 'post_started',
@@ -330,6 +348,7 @@ export function createContinuityDeliveryService({
     const attempt = startAttempt(current.requestId, 'post');
     try {
       const response = await transport.submitCanonicalRequest(original.canonicalBody);
+      requireOwner(original.request.identity.userId);
       healthStatus = 'ready';
       const envelope = response.payload;
       const operationId = envelope?.operationId ?? null;
@@ -378,6 +397,7 @@ export function createContinuityDeliveryService({
         httpStatus: response.statusCode,
       });
     } catch (error) {
+      requireOwner(original.request.identity.userId);
       if (!(error instanceof ContinuityTransportError)) throw error;
       finishAttempt(attempt, {
         outcome: error.transportCode,
@@ -406,9 +426,11 @@ export function createContinuityDeliveryService({
   }
 
   async function queryUnknown(outbox, original) {
+    requireOwner(original.request.identity.userId);
     const attempt = startAttempt(outbox.requestId, 'query');
     try {
       const response = await transport.queryRequest(outbox.requestId);
+      requireOwner(original.request.identity.userId);
       healthStatus = 'ready';
       if (response.kind === 'not_found') {
         finishAttempt(attempt, {
@@ -545,6 +567,7 @@ export function createContinuityDeliveryService({
         transportResult: 'query_completed',
       });
     } catch (error) {
+      requireOwner(original.request.identity.userId);
       if (!(error instanceof ContinuityTransportError)) throw error;
       finishAttempt(attempt, {
         outcome: error.transportCode,
@@ -588,11 +611,13 @@ export function createContinuityDeliveryService({
     if (!capabilityService) throw new ValidationError('Continuity capability service is unavailable.');
     const record = capabilityService.getRequest(capabilityRequestId);
     if (!record) throw new ValidationError('Continuity CapabilityRequest was not found.');
+    requireOwner(record.userId);
     let outbox = deliveryRepository.findOutbox(record.requestId);
     if (!outbox || !operationMatches(outbox, record.operationId)) {
       throw new ConflictError('Original interaction outbox does not match CapabilityRequest.');
     }
     const outcome = await capabilityService.resumeCapability(capabilityRequestId, resume);
+    requireOwner(record.userId);
     if (outcome.status === 'completed') {
       const result = resultService.receiveResult(record.requestId, outcome.envelope);
       return completeFromV2(outbox, result, {
@@ -618,9 +643,13 @@ export function createContinuityDeliveryService({
 
   async function initialize() {
     let recovered = 0;
-    for (const outbox of deliveryRepository.listRecoverable()) {
+    const pending = deliveryRepository.listRecoverable();
+    const eligible = pending.filter((outbox) => ownerBusinessAllowed(requestOwner(outbox.requestId)) === true);
+    for (const outbox of eligible) {
       if (recoverLocalResult(outbox)) recovered += 1;
     }
+    // A suspended owner's unfinished work is not a reason to contact a runtime.
+    if (pending.length > 0 && eligible.length === 0) return { status: healthStatus, recovered };
     let ready = false;
     try {
       ready = await transport.checkReady();
@@ -630,6 +659,7 @@ export function createContinuityDeliveryService({
     healthStatus = ready ? 'ready' : 'degraded';
     if (!ready) return { status: healthStatus, recovered };
     for (const entry of deliveryRepository.listRecoverable()) {
+      if (ownerBusinessAllowed(requestOwner(entry.requestId)) !== true) continue;
       try {
         await submitStoredRequest(entry.requestId);
         recovered += 1;

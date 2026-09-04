@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "initialize:personal": "node scripts/initialize-personal.js",
     "prepare:local-chat": "node scripts/prepare-local-chat-profile.js",
     "export:local-chat-binding": "node scripts/export-local-chat-binding.js",
     "prepare:live-chat": "node scripts/prepare-live-chat.js",

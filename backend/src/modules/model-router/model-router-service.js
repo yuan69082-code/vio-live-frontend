@@ -29,8 +29,8 @@ export function createModelRouterService({
         const fallbackModel = rule.fallbackModelId
           ? modelRepository.findById(ownerUserId, rule.fallbackModelId)
           : null;
-        const defaultEnabled = defaultModel?.provider.status === 'enabled';
-        const fallbackEnabled = fallbackModel?.provider.status === 'enabled';
+        const defaultEnabled = defaultModel?.provider.status === 'enabled' && defaultModel.status !== 'disabled';
+        const fallbackEnabled = fallbackModel?.provider.status === 'enabled' && fallbackModel.status !== 'disabled';
         const model = defaultEnabled
           ? defaultModel
           : (fallbackEnabled ? fallbackModel : null);

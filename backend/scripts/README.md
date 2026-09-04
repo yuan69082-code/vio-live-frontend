@@ -2,7 +2,19 @@
 
 本目录用于放置可复现的开发、检查、迁移和运维脚本。
 
-脚本必须有明确输入、失败行为和适用环境；涉及数据迁移、恢复或删除时必须提供额外保护。`pnpm run prepare:local-chat` 调用 `prepare-local-chat-profile.js`，幂等准备 V5 固定本地用户、助手、会话和 SubjectBinding；已有数据与固定值冲突时 fail closed。该脚本不启动 HTTP、不连接 Engine 或 Provider，也不保存密钥。
+脚本必须有明确输入、失败行为和适用环境；涉及数据迁移、恢复或删除时必须提供额外保护。`pnpm run prepare:local-chat` 调用 `prepare-local-chat-profile.js`，幂等准备历史 V5 固定验收用户、助手、会话和 SubjectBinding；已有数据与固定值冲突时 fail closed。该脚本不启动 HTTP、不连接 Engine 或 Provider，也不保存密钥。它不是 R2 正式个人身份的初始化入口，不会被新个人主应用调用。
+
+## R2 受控个人初始化
+
+在本人已限制访问权限的仓库外私有运行目录中，显式执行：
+
+```powershell
+pnpm run initialize:personal -- --database "<仓库外私有运行目录>\personal.sqlite" --invitation-file "<仓库外私有运行目录>\owner-invitation" --acknowledge-owner-initialization
+```
+
+命令只迁移指定 Vio SQLite 并创建 15 分钟有效的一次性初始化资格，不启动服务、不连接任何外部系统。邀请只写入指定新文件，不回显；已有所有者、未过期邀请、输出文件已存在、相对/仓库内/链接路径均拒绝。用户从自己的私有邀请文件复制到初始化页，设置个人访问口令；不要把邀请、口令或供应商密钥发到聊天窗口或写入命令历史。初始化不认领旧开发数据或固定 Profile。
+
+日常本机开发使用同一个 `VIO_BACKEND_DB_PATH`，后端 `pnpm start`，前端从项目根 `pnpm dev --host 127.0.0.1`。个人会话可跨重启恢复，但凭据解密库重启后锁定，由本人登录或页面显式解锁；没有配置自动解锁或备份。当前只验收 loopback，远程/手机实机个人登录须未来完成 HTTPS 等运行条件，不能将历史 HTTP LAN 演示入口当作可传输真实口令的入口。接口与错误语义见 [R2 合同](../docs/R2_PERSONAL_CONTRACT.md)。下列 L1/S4-Live 说明保留历史用途，不是 R2 开发或发布前置条件。
 
 ## L1 真实供应商试聊准备
 

@@ -10,7 +10,7 @@ export type AssistantManagerData = {
   | { status: 'loading' | 'error' }
   | {
       status: 'ready'
-      assistants: readonly Subject[]
+      assistants: readonly Pick<Subject, 'subjectId' | 'name'>[]
       currentAssistantId: Subject['subjectId'] | null
     }
 )

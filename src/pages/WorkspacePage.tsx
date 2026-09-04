@@ -9,10 +9,11 @@ import { workspaceMock } from '../data/workspaceMock'
 import LifeBodyMetricsPage from './LifeBodyMetricsPage'
 import LifeCalendarPage from './LifeCalendarPage'
 import LifeLedgerPage from './LifeLedgerPage'
+import type { PersonalAssistant } from '../api/personal-api'
 
 type LifeView = 'workspace' | 'calendar' | 'ledger' | 'body-metrics'
 
-function WorkspacePage() {
+function WorkspacePage({ assistant }: { assistant?: PersonalAssistant } = {}) {
   const [lifeView, setLifeView] = useState<LifeView>('workspace')
 
   if (lifeView === 'calendar') {
@@ -31,9 +32,9 @@ function WorkspacePage() {
     <div className="workspace-page">
       <header className="workspace-header">
         <span className="workspace-avatar" aria-hidden="true">
-          {workspaceMock.agent.avatar}
+          {assistant?.avatar ? <img src={assistant.avatar} alt="" width={36} height={36} /> : assistant ? Array.from(assistant.name)[0] : workspaceMock.agent.avatar}
         </span>
-        <h1>{workspaceMock.agent.name}</h1>
+        <h1>{assistant?.name ?? workspaceMock.agent.name}</h1>
         <div className="workspace-life-entries" aria-label="生活管理入口">
           <button className="workspace-calendar-entry" type="button" onClick={() => setLifeView('calendar')}>
             <WorkspaceIcon name="calendar" />月历
@@ -48,6 +49,7 @@ function WorkspacePage() {
       </header>
 
       <div className="workspace-body">
+        {assistant && <p>以下工作与生活卡片保留原型，真实业务接线属于后续阶段，不是当前助手的已保存数据。</p>}
         <FocusCard {...workspaceMock.focus} />
         <TodayOverview items={workspaceMock.today} />
         <RecentChanges items={workspaceMock.changes} />

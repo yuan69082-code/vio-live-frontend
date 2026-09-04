@@ -4,9 +4,9 @@
 
 长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 的 Binding 导出、live-chat plan/apply 和只读 doctor 已用于一次可销毁、短路径、固定测试身份的真实 `openai_compatible` 验收，结论为 PASS；该结论不等于通用身份或生产部署已完成。
 
-R0-A 已新增 [`Subject Runtime Port v1`](docs/SUBJECT_RUNTIME_PORT_V1.md) 的纯后端合同模块、连接状态机、None Adapter、Continuity Engine 专用合同登记和第三方适配器入口。R0-B 已在 `createApplication` 中默认装配 None Adapter，并公开只读 `GET /api/v1/subject-runtime/status` 与 `/health.subjectRuntime`；R0-C 已在“我的”页读取和展示该状态，并完成 StrictMode 请求生命周期修复。R0-A/B/C 已验收并推送。`none / disconnected / not_configured` 与 `platformStatus=available` 是合法状态，但不证明独立聊天已实现：现有 V5/F1 仍沿用既有聊天链路，尚未切换到通用端口。
+R0-A/B/C 及 R0 整阶段已验收并推送。R2 已于 2026-09-05 正式验收通过：受控个人所有者初始化、HttpOnly 会话/CSRF/同源保护、首次设置、个人资料、同一所有者多助手、会话撤销、访问审计/诊断、Provider/Model、加密凭据及受限认证连接检查均已完成；邮箱、Google 与公开注册按最新决定暂缓。账户/空间删除采用 7 天撤销、实际删除、受管副本 14 天期限、最小凭据 30 天期限及重启/失败恢复。R1 尚未开始，现有 V5/F1 仍沿用固定本地 Profile 链路。
 
-2026-09-04 决定：R0 整体验收后先 R2、再 R1，然后 R3 至 R13，编号不变。R2 实现真实登录及同一用户多个助手的创建、选择和普通切换；R3 实现每个助手的多个会话及隔离。R8 完成公共机制与截至 R7 已完成模块的接线，R9—R11 各自完成对应前后端真实联调，R13 全量复验；保留六个导航，不扩展助手市场或多助手协作。以上是已确认目标，不是已实现产品能力，原真实功能及安全墙要求不减。详见 [ADR-034](../docs/决策记录.md#adr-034)。本轮仅完成文档和证据整理，未运行代码测试；[R0 整体验收仍待复核](docs/SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)，未开始 R2 或 R1。
+2026-09-04 决定：R0 后先 R2、再 R1，然后 R3 至 R13，编号不变。R2 删除政策阻塞已解除，实现、专项与页面证据见 [R2 合同](docs/R2_PERSONAL_CONTRACT.md) 和开发日志；总体协调窗口于 **2026-09-05 正式验收 R2 通过**。R1 独立聊天和 R3 各助手多会话均尚未开始。顺序见 [ADR-034](../docs/决策记录.md#adr-034)。
 
 S4-Live 可销毁沙箱通过严格 `sandbox.manifest.json` 把固定 `user-001 / assistant-001 / subject-001 / conversation-001 / binding-001` 标记为一次性验收身份（`promotionAllowed=false`）。`create:live-chat-sandbox` 只在仓库外创建同根 Binding/Vio data/Engine data 骨架；Windows 下会在任何写入前按 Engine WakeSession 最终文件及 `NamedTemporaryFile` 原子临时文件的最坏路径执行 240 字符安全预算，超限以 `unsafe / engine_persistence_path_budget_exceeded` 拒绝且不留半成品。doctor 对已有 manifest 使用同一门禁。推荐每次使用全新短路径，例如 `C:\VioS4\first-001`；不得移动、截断或用链接绕过。`cleanup:live-chat-sandbox` 只对“唯一不安全原因是历史路径超预算”的旧沙箱提供受限兼容：重新执行全部严格校验，plan 明示兼容原因，apply 仍需双确认且只能整根删除；其他错误一律 fail closed。它不提供逐表、逐行、逐 JSON 或 revision 回滚。
 
@@ -482,6 +482,6 @@ backend/
 
 R1 整理的是 Vio 自身适配边界与聊天解耦，不要求真实 Engine 陪同施工。首次彻底解耦后，未经用户另行要求重连，不探测、读取、启动或修改真实 Engine；通用接口须验证，真实引擎或同类运行时接入另行验收，不作为 Vio 完成或发布条件。将来优先用独立适配器或接口扩展接入，不擅改核心规则。
 
-V5 固定本地 Profile、F1、L1 与首次 S4-Live 的完成不等于完整产品。真实登录、多助手产品能力、独立聊天、通用正式身份/Binding、生产认证、多租户、密钥库、备份和部署仍待各归属阶段；当前不得公开部署。R0 未整体验收，下一施工阶段只能在验收后按已确认顺序进入 R2，而不是另启“本机个人日常使用化”路线。
+V5 固定本地 Profile、F1、L1 与首次 S4-Live 的完成不等于完整产品。R0 已验收；R2 个人访问、多助手、加密密钥库和已批准 7/14/30 天政策的受控删除已于 2026-09-05 正式验收通过。手机实机、HTTPS、云部署、跨设备云端同步及本轮真实供应商验证未执行；独立聊天、通用外部身份/Binding、生产认证、多租户、无人值守密钥恢复、备份和部署仍待各归属阶段。当前不得公开部署，R1、R3 尚未开始。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

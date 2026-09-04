@@ -4,11 +4,11 @@
 
 - 文档状态：基础契约持续实现
 - 实现状态：R0-A 通用合同、R0-B 状态装配与只读 HTTP 接口、R0-C 前端读取均已完成；既有业务 API 和 Engine 专用合同不变，聊天尚未切换到通用端口
-- 当前限制：真实认证、授权、分页、完整契约、兼容治理和生成代码尚未实现
+- 当前状态：个人会话认证、原权限安全链及 R2 个人接口已于 2026-09-05 正式验收通过；公开认证/部署、全域分页、完整契约治理和生成代码尚未完成。R2 删除流程的本机验证与联调证据已汇总到 R2 合同/日志。
 
 ## 目标
 
-建立前端、Vio Core、可选外部主体运行时、AI 模型和外部能力之间的稳定边界。接口变化不能依赖页面内部状态，也不能让前端直接持有数据库、密钥或设备厂商协议。现行顺序按 [ADR-034](../决策记录.md#adr-034)：R0 验收后 R2、R1、R3 至 R13；当前未开始 R2 或 R1。
+建立前端、Vio Core、可选外部主体运行时、AI 模型和外部能力之间的稳定边界。接口变化不能依赖页面内部状态，也不能让前端直接持有数据库、密钥或设备厂商协议。现行顺序按 [ADR-034](../决策记录.md#adr-034)：R0 已验收，R2 已于 2026-09-05 正式验收通过；R1 尚未开始。
 
 ## 接口关系
 
@@ -66,7 +66,9 @@ Continuity Integration Contract v1.1 及 Capability 合同已经闭合并获 Con
 | S2/S3 已通过 | V1 → V3 → Engine E4 → V2 真实 loopback HTTP 正常、机器错误、响应丢失、Engine/Vio/双方重启和冲突隔离共享验收；15/15 |
 | 后续已实现/验收 | V4 Capability、V5 固定身份公共轮次、F1 页面真实回复及首次 S4-Live 真实供应商试聊；见既有日志，不代表独立聊天或产品完成 |
 | 第一轮当时明确排除 | CapabilityRequest/CapabilityResult、真实模型/Tool/MCP/设备、三域实际跨系统读写及生产认证/多租户/部署；这一历史范围不否认后续 V4/F1/S4-Live 成果 |
-| 当前未完成 | 真实登录、多助手产品能力、独立聊天、通用 Binding、生产认证、多租户与部署；按已确认归属阶段实施，本轮不施工 |
+| R2 已实现 | 个人所有者初始化、服务端会话、首次设置、资料、多助手、会话撤销、访问审计/诊断、Provider/Model、加密凭据、认证连接检查 |
+| R2 于 2026-09-05 正式验收通过 | 已确认 7/14/30 天政策下的账户整体删除、专用限权访问、撤销/到期重试与持久化恢复；不把状态查询或时间到期冒充实际删除 |
+| 当前未完成 | R1 独立聊天、通用 Binding、HTTPS/远程部署、多租户；按已确认归属阶段实施 |
 | 其余既有待办保留 | 异步/流式、通用重绑定、完整 Outbox 运维参数和生产投影扩展仍未完成；不得因本次修正已完成状态而删除这些记录，也不把特定适配器真实接入改成 Vio 发布前置条件 |
 
 现有 Vio `POST .../state-updates` 是 legacy/unverified 开发调用方写入口，不是引擎权威投影接口；现有 Context API 是平台事实只读投影，不是最终认知 Context。正式本机连接使用独立 V1/V2/V3 链路，没有复用这两个旧入口。
@@ -108,7 +110,7 @@ R1 整理 Vio 自有适配边界与聊天解耦，不要求真实引擎参与。
 | --- | --- | --- |
 | `POST` | `/api/v1/users` | 创建基础用户；当前不是注册或登录验证 |
 | `GET` | `/api/v1/users/:userId` | 按稳定 ID 查询用户 |
-| `GET` | `/api/v1/users/current` | 使用 `x-vio-user-id` 查询开发期当前用户；不是认证 |
+| `GET` | `/api/v1/users/current` | 正式装配从 R2 验证会话解析当前用户；`x-vio-user-id` 仅是历史 test-support 合同，不是认证 |
 | `GET` | `/api/v1/users/:userId/user-space` | 查询用户空间、开发期身份状态和当前助手 ID |
 | `GET` | `/api/v1/users/:userId/user-space/assistants` | 查询本用户助手列表及当前标记 |
 | `GET` / `PATCH` | `/api/v1/users/:userId/user-space/current-assistant` | 查询或切换本用户的当前活动助手 |
@@ -130,7 +132,9 @@ Global Settings 是用户明确配置、允许更新的长期静态层；Subject
 
 Dashboard 只返回现有 User、Subject 与 `basicStatus`。`ready` 仅表示用户和主体均为 `active`；连续性固定返回 `not_available`，不从 mock、设定或模型配置猜测未实现状态，也不返回设备、待办、提醒或模型结果。
 
-`x-vio-user-id` 与路径中的 `userId` 都只是当前开发请求范围，不是可信身份。服务不会自动选择数据库首位用户；真实认证前不得公开这些路由。
+R2 正式装配以 HttpOnly 会话确定用户，路径 `userId` 必须与会话所有者一致；不接受前端自报、开发头、固定 Profile 或数据库首位用户。完整个人接口见 [`../../backend/docs/R2_PERSONAL_CONTRACT.md`](../../backend/docs/R2_PERSONAL_CONTRACT.md)。test-support 可为历史领域测试显式替代访问端口，但生产无环境后门。
+
+R2 账户删除新增 `/api/v1/personal/deletions`、`/deletion-access` 及任务查询/撤销/重试路由，精确方法、字段与错误以同一 [R2 个人合同](../../backend/docs/R2_PERSONAL_CONTRACT.md) 为唯一说明。申请使用普通会话和原高风险确认，批准后旧会话立即失效；删除专用能力不授予业务访问权。撤销需在 7 天截止前重新验证本人，随后正常登录建立新会话；已执行删除仍可在 30 天凭据期内限权查结果。GET 不驱动删除；到期重试不能绕过事务、归属或受管副本检查。此接口不是单条消息、单个助手或私域内容删除 API，也不构成 R11 完整备份。
 
 User 创建时与一对一 User Space 原子提交；首个 Subject 在空间没有当前助手时成为当前助手。当前助手是导航/请求选择，不属于 SubjectState，切换不得修改 Global Settings、Private Space、SubjectState、Conversation、Event 或生活数据。
 
