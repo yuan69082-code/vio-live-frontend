@@ -67,6 +67,14 @@ export function createPersonalIdentityService({repository:r,userRepository, user
   }
   const api={
     audit, identity, idempotent,
+    assertSessionActive(context) {
+      const p=identity(context.userId);
+      const now=clock();
+      const session=r.sessions(context.userId).find(item=>item.session_id===context.sessionId);
+      if(!session || session.revoked_at || session.expires_at<=now.toISOString()
+          || Date.parse(session.last_seen_at)+7*DAY<=now.getTime() || p.status!=='active') throw denied();
+      return context;
+    },
     issueInvitation() {
       if (r.owner()) throw new ConflictError('Personal owner already initialized.');
       if (r.activeInvitation(clock().toISOString())) throw new ConflictError('An unexpired personal invitation already exists.');

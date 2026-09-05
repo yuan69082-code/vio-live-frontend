@@ -13,7 +13,9 @@
 
 模块负责业务规则和用例；具体数据库、模型服务、continuity-engine 或设备 SDK 通过装配依赖进入。`personal/` 现承载唯一个人所有者初始化、会话、首次设置、资料、多助手选择、访问审计/诊断及配置编排；所有业务身份来自验证会话，不接受客户端 userId。账户级 Provider/Model/凭据及删除操作仍复用 Permission → Security → Confirmation/Audit。`personal-deletion-service.js` 持久化 7/14/30 天政策和限权恢复，`personal-managed-copies.js` 只处理明确登记的单所有者受管文件，不建设 R11 完整备份。
 
-`subject-runtime/` 承载通用合同、状态机、None Adapter、第三方入口和 Engine 专用合同登记。R0-B 已在应用默认装配 None Adapter 及通用只读状态服务，R0-C 已消费该状态；不能再称当前没有应用装配。None Adapter 不伪造 expression、projection、revision 或能力，现有聊天仍未切换；模式选择和 Vio 内适配边界整理属于 R1，真实引擎联调另行授权而非 Vio 发布门槛。规则与阶段证据见 [R0矩阵](../../docs/SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)。
+`subject-runtime/` 承载通用合同、状态机、None Adapter、第三方入口和 Engine 专用合同登记。R0-B 已在应用默认装配 None Adapter 及通用只读状态服务，R0-C 已消费该状态；不能再称当前没有应用装配。None Adapter 不伪造 expression、projection、revision 或能力。R1 新增的个人独立聊天不调用该 Adapter，也不把外部运行时伪装成 Vio 自有执行；真实外部适配器选择和联调仍须另行授权，并非 Vio 发布门槛。规则与阶段证据见 [R0矩阵](../../docs/SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)。
+
+`standalone-chat/` 承载 R1 个人独立聊天编排。它只从 R2 已验证个人会话取得 owner，并在操作开始时读取该 owner 当前选择的助手；每个助手只有一个默认独立会话。Provider 输入只包含助手显式设定、该默认会话内最多十二个已完成 turn 的账本锁定 MessageVersion，以及本轮锁定用户 MessageVersion。模块使用 R2 `defaultForChat` 模型、加密凭据、Permission/Security/Confirmation 与 Token Budget，先持久化 logical execution 和 Provider attempt，再调用固定地址的 `openai_compatible` adapter；严格成功结果与 usage 落盘后，Vio 才发布普通 `subject` MessageVersion。查询、幂等重放、启动和刷新不调用模型；显式 retry 在同一 logical execution 下创建新 attempt 并重新门控，`outcome_unknown` 保持 fail closed。精确接口见 [R1 独立聊天合同](../../docs/R1_STANDALONE_CHAT_CONTRACT.md)。本模块不实现 R3 多会话管理，不连接或探测 Engine，也不改变历史 V1–V5/S4 合同。
 
 `continuity-integration/` 承载 Continuity Engine Adapter 专用的 V1–V5 连接编排，而不是 Vio Core 合同。V1 提供严格请求；V2 提供结果/投影账本；V3 提供本机 HTTP delivery；V4 提供受控 Capability 模型执行与回传；V5 在固定本地 Profile 下把公共 Conversation Turn API 与用户 Message、V1 请求、V3/V4/V2 结果和最终主体 Message 关联。只有 Engine 最终 `FirstRoundSuccessResult.response.content` 能形成 V5 主体 Message，Provider 原始候选不能直接落入对话。模块不创建 Engine Event/StateMutation、不写 legacy SubjectState；S2/S3、S4 和 V5 shared test 分别验证正式本机链路、Capability 与公共轮次恢复边界。R0-A 没有移动、删除或切换这些既有实现。
 

@@ -193,6 +193,10 @@ export function createSqliteProactiveInteractionRepository(connection) {
       SELECT total_tokens FROM continuity_capability_usage_facts
       WHERE user_id = ? AND subject_id = ? AND occurred_at >= ? AND occurred_at < ?
         AND usage_status = 'provider_reported'
+      UNION ALL
+      SELECT total_tokens FROM standalone_chat_usage_facts
+      WHERE user_id = ? AND assistant_id = ? AND occurred_at >= ? AND occurred_at < ?
+        AND usage_status = 'provider_reported'
     )
   `);
   const summarizeSession = connection.prepare(`
@@ -202,6 +206,10 @@ export function createSqliteProactiveInteractionRepository(connection) {
       UNION ALL
       SELECT total_tokens FROM continuity_capability_usage_facts
       WHERE user_id = ? AND subject_id = ? AND budget_session_id = ?
+        AND usage_status = 'provider_reported'
+      UNION ALL
+      SELECT total_tokens FROM standalone_chat_usage_facts
+      WHERE user_id = ? AND assistant_id = ? AND budget_session_id = ?
         AND usage_status = 'provider_reported'
     )
   `);
@@ -331,8 +339,10 @@ export function createSqliteProactiveInteractionRepository(connection) {
         dailyUsed: summarizeDay.get(
           userId, subjectId, dayStart, nextDayStart,
           userId, subjectId, dayStart, nextDayStart,
+          userId, subjectId, dayStart, nextDayStart,
         ).total_tokens,
         sessionUsed: summarizeSession.get(
+          userId, subjectId, budgetSessionId,
           userId, subjectId, budgetSessionId,
           userId, subjectId, budgetSessionId,
         ).total_tokens,

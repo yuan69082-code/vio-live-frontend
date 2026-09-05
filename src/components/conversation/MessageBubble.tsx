@@ -1,11 +1,18 @@
-import type { ConversationMessage } from '../../api'
-
-type MessageBubbleProps = {
-  message: ConversationMessage
-  agentAvatar: string
+export type ConversationMessageView = {
+  messageId: string
+  senderType: 'user' | 'subject'
+  content: string
+  createdAt: string
 }
 
-function MessageBubble({ message, agentAvatar }: MessageBubbleProps) {
+type MessageBubbleProps = {
+  message: ConversationMessageView
+  agentAvatar: string
+  agentAvatarImage?: string | null
+  agentName?: string
+}
+
+function MessageBubble({ message, agentAvatar, agentAvatarImage, agentName = 'Vio' }: MessageBubbleProps) {
   const isUser = message.senderType === 'user'
   const time = new Intl.DateTimeFormat('zh-CN', {
     hour: '2-digit',
@@ -17,13 +24,13 @@ function MessageBubble({ message, agentAvatar }: MessageBubbleProps) {
     <article className={`message-row ${isUser ? 'is-user' : 'is-assistant'}`}>
       {!isUser && (
         <span className="message-avatar" aria-hidden="true">
-          {agentAvatar}
+          {agentAvatarImage ? <img src={agentAvatarImage} alt="" /> : agentAvatar}
         </span>
       )}
 
       <div className="message-content">
         <div className="message-meta">
-          <span>{isUser ? '你' : 'Vio'}</span>
+          <span>{isUser ? '你' : agentName}</span>
           <time dateTime={message.createdAt}>{time}</time>
         </div>
         <p className="message-bubble">{message.content}</p>

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { createServer } from 'node:http';
 import test from 'node:test';
 
@@ -41,6 +42,47 @@ function execute(executor, baseUrl, overrides = {}) {
   });
 }
 
+function successfulHttpsRequestDouble(observed) {
+  return (options) => {
+    observed.options = options;
+    const request = new EventEmitter();
+    request.destroy = () => {};
+    request.write = (body) => { observed.body = Buffer.from(body); };
+    request.end = () => {
+      options.lookup(options.hostname, { all: false }, (error, address, family) => {
+        observed.lookup = { error, address, family };
+      });
+      request.emit('finish');
+      const response = new EventEmitter();
+      response.statusCode = 200;
+      response.destroy = () => {};
+      request.emit('response', response);
+      response.emit('data', Buffer.from(JSON.stringify({
+        choices: [{ message: { content: 'pinned response' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
+      })));
+      response.emit('end');
+    };
+    return request;
+  };
+}
+
+function standaloneChatInput(overrides = {}) {
+  return {
+    provider: {
+      providerId: 'provider-1',
+      baseUrl: 'https://provider.test',
+      interfaceFormat: 'openai_compatible',
+    },
+    model,
+    apiKey: 'controlled-test-key',
+    messages: [{ role: 'user', content: 'hello' }],
+    deadlineAt: capabilityRequest.deadlineAt,
+    maxOutputCharacters: 100,
+    ...overrides,
+  };
+}
+
 test('openai_compatible adapter performs a real loopback HTTP call and parses trusted usage', async () => {
   let observed;
   const server = await serverWith((request, response) => {
@@ -64,6 +106,184 @@ test('openai_compatible adapter performs a real loopback HTTP call and parses tr
     assert.equal(observed.body.stream, false);
     assert.equal(Object.hasOwn(observed.body, 'tools'), false);
   } finally { await server.close(); }
+});
+
+test('legacy Capability execution preserves the full valid E5-A aggregate input boundary', async () => {
+  let observed;
+  const server = await serverWith((request, response) => {
+    const chunks = [];
+    request.on('data', (chunk) => chunks.push(chunk));
+    request.on('end', () => {
+      observed = JSON.parse(Buffer.concat(chunks));
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({
+        choices: [{ message: { content: 'accepted' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      }));
+    });
+  });
+  const maximumCapabilityRequest = {
+    ...capabilityRequest,
+    input: {
+      instruction: 'i'.repeat(4_096),
+      messageContent: 'm'.repeat(32_768),
+      perceptionSummary: 'p'.repeat(4_096),
+      currentFocus: 'f'.repeat(2_048),
+      maximumOutputCharacters: 100,
+    },
+  };
+  try {
+    const outcome = await execute(
+      createOpenAiCompatibleModelExecutor({ allowLoopbackHttp: true }),
+      server.baseUrl,
+      { capabilityRequest: maximumCapabilityRequest },
+    );
+    assert.equal(outcome.status, 'SUCCEEDED');
+    assert.equal(observed.messages.length, 1);
+    assert.equal(observed.messages[0].content.length, 43_014);
+  } finally { await server.close(); }
+});
+
+test('HTTPS execution validates every DNS answer and pins the selected safe IPv4 address', async () => {
+  const observed = {};
+  let resolutions = 0;
+  let requestStarts = 0;
+  const executor = createOpenAiCompatibleModelExecutor({
+    resolveAddresses: async (hostname, options) => {
+      resolutions += 1;
+      assert.equal(hostname, 'provider.test');
+      assert.deepEqual(options, { all: true, verbatim: true });
+      return [
+        { address: '93.184.216.34', family: 4 },
+        { address: '2606:4700:4700::1111', family: 6 },
+      ];
+    },
+    requestHttps: successfulHttpsRequestDouble(observed),
+  });
+  const outcome = await executor.executeChat(standaloneChatInput({
+    onRequestStart() { requestStarts += 1; },
+  }));
+  assert.equal(outcome.status, 'SUCCEEDED');
+  assert.equal(resolutions, 1);
+  assert.equal(requestStarts, 1);
+  assert.equal(observed.options.hostname, 'provider.test');
+  assert.deepEqual(observed.lookup, {
+    error: null,
+    address: '93.184.216.34',
+    family: 4,
+  });
+  assert.equal(JSON.parse(observed.body).model, model.modelName);
+});
+
+test('HTTPS execution rejects mixed public and private DNS answers before request start', async () => {
+  let requestCreated = false;
+  let requestStarts = 0;
+  const executor = createOpenAiCompatibleModelExecutor({
+    resolveAddresses: async () => [
+      { address: '93.184.216.34', family: 4 },
+      { address: '127.0.0.1', family: 4 },
+    ],
+    requestHttps() { requestCreated = true; throw new Error('must not create request'); },
+  });
+  const outcome = await executor.executeChat(standaloneChatInput({
+    onRequestStart() { requestStarts += 1; },
+  }));
+  assert.equal(outcome.status, 'FAILED_TERMINAL');
+  assert.equal(outcome.errorCode, 'PROVIDER_TARGET_UNSAFE');
+  assert.equal(outcome.requestMayHaveBeenSent, false);
+  assert.equal(requestCreated, false);
+  assert.equal(requestStarts, 0);
+});
+
+test('HTTPS execution fails closed with a stable status for an IPv6-only Provider', async () => {
+  const executor = createOpenAiCompatibleModelExecutor({
+    resolveAddresses: async () => [
+      { address: '2606:4700:4700::1111', family: 6 },
+    ],
+    requestHttps() { throw new Error('must not create request'); },
+  });
+  const outcome = await executor.executeChat(standaloneChatInput());
+  assert.equal(outcome.status, 'FAILED_TERMINAL');
+  assert.equal(outcome.errorCode, 'PROVIDER_ADDRESS_FAMILY_UNSUPPORTED');
+  assert.equal(outcome.requestMayHaveBeenSent, false);
+});
+
+test('DNS failure is retryable only as a request proven not sent', async () => {
+  let requestStarts = 0;
+  const executor = createOpenAiCompatibleModelExecutor({
+    resolveAddresses: async () => { throw new Error('controlled DNS failure'); },
+    requestHttps() { throw new Error('must not create request'); },
+  });
+  const outcome = await executor.executeChat(standaloneChatInput({
+    onRequestStart() { requestStarts += 1; },
+  }));
+  assert.equal(outcome.status, 'FAILED_RETRYABLE');
+  assert.equal(outcome.errorCode, 'PROVIDER_DNS_UNAVAILABLE');
+  assert.equal(outcome.requestMayHaveBeenSent, false);
+  assert.equal(requestStarts, 0);
+});
+
+test('a synchronous request failure after the durable request boundary is UNKNOWN', async () => {
+  let requestStarts = 0;
+  const executor = createOpenAiCompatibleModelExecutor({
+    resolveAddresses: async () => [{ address: '93.184.216.34', family: 4 }],
+    requestHttps() {
+      const request = new EventEmitter();
+      request.destroy = () => {};
+      request.write = () => { throw new Error('controlled synchronous write failure'); };
+      request.end = () => {};
+      return request;
+    },
+  });
+  const outcome = await executor.executeChat(standaloneChatInput({
+    onRequestStart() { requestStarts += 1; },
+  }));
+  assert.equal(requestStarts, 1);
+  assert.equal(outcome.status, 'UNKNOWN');
+  assert.equal(outcome.errorCode, 'PROVIDER_REQUEST_INTERRUPTED');
+  assert.equal(outcome.requestMayHaveBeenSent, true);
+});
+
+test('a request error after the durable request boundary cannot revert to proven not sent', async () => {
+  let requestStarts = 0;
+  const executor = createOpenAiCompatibleModelExecutor({
+    resolveAddresses: async () => [{ address: '93.184.216.34', family: 4 }],
+    requestHttps() {
+      const request = new EventEmitter();
+      request.destroy = () => {};
+      request.write = () => true;
+      request.end = () => {
+        queueMicrotask(() => request.emit('error', new Error('controlled request error')));
+      };
+      return request;
+    },
+  });
+  const outcome = await executor.executeChat(standaloneChatInput({
+    onRequestStart() { requestStarts += 1; },
+  }));
+  assert.equal(requestStarts, 1);
+  assert.equal(outcome.status, 'UNKNOWN');
+  assert.equal(outcome.errorCode, 'PROVIDER_CONNECTION_FAILED');
+  assert.equal(outcome.requestMayHaveBeenSent, true);
+});
+
+test('failure to persist the request boundary remains proven not sent', async () => {
+  const executor = createOpenAiCompatibleModelExecutor({
+    resolveAddresses: async () => [{ address: '93.184.216.34', family: 4 }],
+    requestHttps() {
+      const request = new EventEmitter();
+      request.destroy = () => {};
+      request.write = () => { throw new Error('must not write after boundary failure'); };
+      request.end = () => {};
+      return request;
+    },
+  });
+  const outcome = await executor.executeChat(standaloneChatInput({
+    onRequestStart() { throw new Error('controlled persistence failure'); },
+  }));
+  assert.equal(outcome.status, 'FAILED_RETRYABLE');
+  assert.equal(outcome.errorCode, 'PROVIDER_REQUEST_NOT_SENT');
+  assert.equal(outcome.requestMayHaveBeenSent, false);
 });
 
 for (const [statusCode, expectedStatus, errorCode] of [

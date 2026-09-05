@@ -4,12 +4,16 @@ import { createApplication } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createTestDatabasePath } from './test-application.js';
 
-export async function startPersonalTestApplication(t,options={}) {
+export async function startPersonalTestApplication(
+  t,
+  options = {},
+  { applicationFactory = createApplication } = {},
+) {
   const temp=createTestDatabasePath();
   let app;let baseUrl;
   const state={cookie:'',csrf:''};
   const start=async()=>{
-    app=createApplication({config:loadConfig({VIO_BACKEND_DB_PATH:temp.databasePath,VIO_BACKEND_PORT:'0'}),environment:{},logger:{error(){}},...options});
+    app=applicationFactory({config:loadConfig({VIO_BACKEND_DB_PATH:temp.databasePath,VIO_BACKEND_PORT:'0'}),environment:{},logger:{error(){}},...options});
     const {port}=await app.start();baseUrl=`http://127.0.0.1:${port}`;
   };
   await start();t.after(async()=>{await app.stop();temp.remove();});

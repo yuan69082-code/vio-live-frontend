@@ -4,9 +4,9 @@
 
 长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 的 Binding 导出、live-chat plan/apply 和只读 doctor 已用于一次可销毁、短路径、固定测试身份的真实 `openai_compatible` 验收，结论为 PASS；该结论不等于通用身份或生产部署已完成。
 
-R0-A/B/C 及 R0 整阶段已验收并推送。R2 已于 2026-09-05 正式验收通过：受控个人所有者初始化、HttpOnly 会话/CSRF/同源保护、首次设置、个人资料、同一所有者多助手、会话撤销、访问审计/诊断、Provider/Model、加密凭据及受限认证连接检查均已完成；邮箱、Google 与公开注册按最新决定暂缓。账户/空间删除采用 7 天撤销、实际删除、受管副本 14 天期限、最小凭据 30 天期限及重启/失败恢复。R1 尚未开始，现有 V5/F1 仍沿用固定本地 Profile 链路。
+R0-A/B/C 及 R0 整阶段已验收并推送。R2 已于 2026-09-05 正式验收通过：受控个人所有者初始化、HttpOnly 会话/CSRF/同源保护、首次设置、个人资料、同一所有者多助手、会话撤销、访问审计/诊断、Provider/Model、加密凭据及受限认证连接检查均已完成；邮箱、Google 与公开注册按最新决定暂缓。账户/空间删除采用 7 天撤销、实际删除、受管副本 14 天期限、最小凭据 30 天期限及重启/失败恢复。R1 独立聊天现已落地：它只认 R2 个人会话和服务端当前助手，每个助手拥有一个隔离的默认会话，由 Vio 自己完成路由、门控、Provider 执行、结果锁定和最终消息发布；后端隔离回归、前端接线、前端自动化和受控真实页面闭环均已完成，正式阶段验收仍待总体协调窗口，R3 多会话尚未开始。历史 V5/F1 固定 Profile/Engine 链路继续作为独立的既有证据保留，不参与 R1 生产个人聊天路径。
 
-2026-09-04 决定：R0 后先 R2、再 R1，然后 R3 至 R13，编号不变。R2 删除政策阻塞已解除，实现、专项与页面证据见 [R2 合同](docs/R2_PERSONAL_CONTRACT.md) 和开发日志；总体协调窗口于 **2026-09-05 正式验收 R2 通过**。R1 独立聊天和 R3 各助手多会话均尚未开始。顺序见 [ADR-034](../docs/决策记录.md#adr-034)。
+2026-09-04 决定：R0 后先 R2、再 R1，然后 R3 至 R13，编号不变。R2 删除政策阻塞已解除，实现、专项与页面证据见 [R2 合同](docs/R2_PERSONAL_CONTRACT.md) 和开发日志；总体协调窗口于 **2026-09-05 正式验收 R2 通过**。R1 后端施工状态与接口见 [R1 独立聊天合同](docs/R1_STANDALONE_CHAT_CONTRACT.md)；它不是 R3 的会话列表、新建、重命名或删除能力。顺序见 [ADR-034](../docs/决策记录.md#adr-034)。
 
 S4-Live 可销毁沙箱通过严格 `sandbox.manifest.json` 把固定 `user-001 / assistant-001 / subject-001 / conversation-001 / binding-001` 标记为一次性验收身份（`promotionAllowed=false`）。`create:live-chat-sandbox` 只在仓库外创建同根 Binding/Vio data/Engine data 骨架；Windows 下会在任何写入前按 Engine WakeSession 最终文件及 `NamedTemporaryFile` 原子临时文件的最坏路径执行 240 字符安全预算，超限以 `unsafe / engine_persistence_path_budget_exceeded` 拒绝且不留半成品。doctor 对已有 manifest 使用同一门禁。推荐每次使用全新短路径，例如 `C:\VioS4\first-001`；不得移动、截断或用链接绕过。`cleanup:live-chat-sandbox` 只对“唯一不安全原因是历史路径超预算”的旧沙箱提供受限兼容：重新执行全部严格校验，plan 明示兼容原因，apply 仍需双确认且只能整根删除；其他错误一律 fail closed。它不提供逐表、逐行、逐 JSON 或 revision 回滚。
 
@@ -38,6 +38,7 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
   V5 固定本地试聊：公共 Turn API → user Message/V1 → V3/V4/Engine/V2 → Engine 最终 response → subject Message
   R0-A/B 通用边界（聊天尚未接线）：Vio Core → Subject Runtime Port v1 → None / Continuity Engine / 第三方 Adapter
   通用状态查询：已校验 Adapter 快照 → GET /api/v1/subject-runtime/status 与 /health.subjectRuntime
+  R1 个人独立聊天：R2 会话/当前助手 → 每助手唯一默认会话 → Vio 路由/权限/安全/预算 → Provider → 锁定结果/MessageVersion
 ```
 
 L1 命令与完整 PowerShell 启动步骤见 [`scripts/README.md`](scripts/README.md)，环境变量治理见 [`config/README.md`](config/README.md)。准备与 doctor 不会调用模型或产生费用；只有用户在 F1 页面发送消息并完成必要确认后，才可能发生真实 Provider 调用。
@@ -136,16 +137,25 @@ Vio 的通用运行时边界入口是 [`Subject Runtime Port v1`](docs/SUBJECT_R
 - 导出记录按用户/主体保存 Schema 版本、创建时间、范围、敏感分类、归属/字段/外键检查及最终安全准备结果
 - 导出准备使用精确 `data_export:export` Permission，并由 Security Policy 与高风险逐次 Confirmation 审核
 - 机器人与其他载体迁移只提供未配置契约和 Schema 兼容准备，固定不连接、不传输、不执行；未来真实执行必须重新检查安全
+- R1 个人独立聊天只从已验证的 R2 `vio_personal_session` 和服务端 User Space 当前助手确定作用域，不接受请求体/路径自报用户、助手或会话；每个用户/助手组合只有一个默认独立会话
+- R1 写入要求同源、CSRF 和 `Idempotency-Key`；查询默认会话、按 turnId 或 key 查询均为纯读取，不调用 Provider、不发布消息、不驱动恢复
+- R1 固定使用当前用户启用的 `defaultForChat` 模型，不自动 fallback；每次执行重新检查 Provider/Model、加密凭据库、`api:execute` Permission、`privacy_access_request + private_record` Security/Confirmation 与 Token Budget
+- R1 每轮只保留一个逻辑 execution，可在明确安全重试时追加不可变 Provider attempt；已发送结果未知时进入 `outcome_unknown` 并禁止盲重试，已锁定结果可在重启后只做本地幂等发布
+- R1 只把当前助手明确设定、同一默认会话最近 12 个已完成轮次及当前用户消息发给 Provider；严格验证的 Provider 文本和 usage 先落入 `025` 账本，再发布为锁定的普通 `subject` MessageVersion
+- Provider 正式请求要求 HTTPS；域名在发送前解析并拒绝任一危险地址，当前选择安全 IPv4 并把实际请求固定到该地址，禁止重定向。IPv6-only 明确不支持；随机 loopback HTTP 只存在于受控测试装配
+- 生产个人会话下的 legacy Conversation/Message/continuity turn/`state_update` 写入返回 `PERSONAL_CHAT_ROUTE_REQUIRED`；历史数据、读取能力及 test-support 兼容证据不删除
 - 基础服务信息与健康检查
 - 所有 JSON 响应统一包含 `success`、`data`、`error` 和 `timestamp`
 - 前端独立 API 客户端、Vite 同源代理和非阻塞启动健康握手
 - 第一轮三份 Draft 2020-12 机器契约 Schema 的封闭本地 registry、严格未知字段/禁止状态字段校验、RFC 8785 与三项固定 SHA-256 conformance hash
 - 固定 SubjectBinding 测试装载、Vio 归属/来源验证、规范化逻辑请求构造，以及 requestId/createdAt/requestHash 跨重启恢复
 - Vio V3 正式本机 HTTP transport、delivery/outbox/attempt、timeout 后查询、`completed` / `recovery_required` / `not_found` 恢复、启动重放与 `disabled` / `ready` / `degraded` 健康状态
-- 最近完整后端回归基线为 `pnpm test` 220/220，覆盖既有平台能力、Vio V1–V5、RFC 8785、021/022 迁移、loopback Provider、门控、轮次幂等、锁定版本投影、S4-Live 沙箱、隔离、事务和重启恢复边界
+- 本轮 R1 三份后端专项在随机 loopback Provider 和临时 SQLite 下通过 61/61；受影响 V1—V5 组合 128/128，模型路由/权限/安全/预算组合 11/11；默认 `pnpm test` 共 399 项，398 通过、0 失败、1 条既有 RFC 跨仓对照因隔离路径不存在而跳过（未执行、不计通过）
 - S2/S3 正式本机 HTTP shared tests 15/15 通过；Vio V1 + RFC 8785 + V2 + V3 为 64/64，Engine crash-recovery 15/15、E4 67/67、全量 301/301 通过
 
 Vio V1 生成并保存逻辑请求，V2 严格保存 Engine 结果/投影，V3 负责可靠交付，V4 负责受控 Capability 执行与回传。V5 只编排现有能力：先原子保存用户 Message 与轮次计划，再持久化 V1 请求并驱动 V3/V4；完成时从 V2 首次稳定结果读取 Engine `response.content`，原子保存一条主体 Message 后标记轮次完成。Turn 投影始终读取账本锁定的精确 user/subject MessageVersion，不跟随通用 Message `currentVersionId`，因此后续编辑或 regeneration 不会改写历史轮次。Provider 候选不能绕过 Engine。等待确认、预算、重试和 outcome unknown 均为可查询状态；恢复不会新建 requestId、重复 Provider 调用或复制回复。前端 `src`、页面与 mock 未修改。
+
+R1 是与上段历史 V5 路径并列的 Vio 自有个人聊天边界。R1 不构造 V1 请求、不调用 V2—V5、不读取 Binding、SubjectState 或 Engine 结果；在独立模式中，Vio 对自身 turn/execution/attempt/result/usage 和最终 MessageVersion 负责。Provider 响应可能已经发送但无法确认时保持 `outcome_unknown`；只有能够证明未发送或明确 retryable 的 attempt 才可由新的恢复幂等键触发受控重试。
 
 ## 运行要求
 
@@ -426,7 +436,7 @@ backend/
 
 ## 数据库边界
 
-- 当前物理结构由 `001`—`020` 顺序迁移维护；`018` 保存第一轮固定 Binding fixture 和规范化逻辑请求，`019` 独立保存不可覆盖结果、投影版本/回执/当前指针和隔离事件，`020` 保存正式本机 HTTP delivery outbox/attempt 与恢复元数据，三者均不复用 legacy `state_updates`。
+- 当前物理结构由 `001`—`025` 顺序迁移维护；`018`—`022` 保留历史 Continuity V1—V5 与 Capability 事实，`023`—`024` 保存 R2 个人身份、加密凭据、配置和受控删除事实，`025` 独立保存 R1 默认会话映射、turn、逻辑 execution、Provider attempts、usage/cost、锁定 result 与 recovery actions。R1 不复用 Continuity 账本或 legacy `state_updates`。
 - User 创建与 User Space 建立在同一事务提交；首个 Subject 创建会在当前指针为空时原子选为当前助手。迁移为既有用户回填一个空间，并按最早活动 Subject 稳定选择当前助手。
 - 当前助手只是用户空间内的导航选择，不改变 Subject、Assistant Global Settings、Assistant Private Space、SubjectState、对话、事件或生活数据的既有归属。
 - 数据隔离仓储只使用预定义资源查询，并按资源要求组合 `user_id`、`assistant_id` 与资源 ID；不存在或错配组合统一按未找到处理，不通过先查全局 ID 再做应用层过滤。
@@ -449,7 +459,7 @@ backend/
 - 主体事件使用 `(user_id, subject_id)` 组合外键，数据库层同时保证用户和主体归属。
 - 事件按发生时间保存为 UTC ISO-8601，并为用户、主体、类型和状态查询建立索引。
 - Provider 归属于用户并保存 Base URL、接口格式、启停状态和测试状态；Model 同时保存用户和 Provider 归属、费用说明与测试状态，能力标签使用独立关系表。
-- 旧 `api_providers.api_key_secret_ref` 约束继续保持 `NULL`；V4 通过独立 `api_provider_credential_bindings` 只保存受限环境变量 secretRef。接口永不接受或返回 API Key 原值，Provider 投影也不回显 secretRef。
+- 旧 `api_providers.api_key_secret_ref` 约束继续保持 `NULL`；历史 V4 支持受限环境变量 secretRef，R2 个人路径改由独立 credential binding 指向加密 Vault 记录。R1 只在受控 Provider 调用瞬间解析当前所有者的有效凭据；接口、账本、日志与 Provider 投影均不保存或回显 Key 明文。
 - `model_routing_rules` 按用户和六类任务唯一保存默认模型、可选备用模型与启停状态；复合外键阻止跨用户模型引用，模型必须具备对应任务能力。
 - Router 优先使用启用规则的默认模型；默认 Provider 停用时选择已配置且 Provider 启用的备用模型。规则停用或不存在时才按稳定目录顺序回退，所有结果都标记模型与外部 API 未调用。
 - Permission 同时保存用户、主体、资源类型、资源 ID、操作、权限等级和状态；复合外键阻止跨用户主体规则。
@@ -463,7 +473,7 @@ backend/
 - `export_schema_versions`、`export_schema_types` 与 `export_schema_scopes` 固定保存 Schema 版本、三类导出类型及十二类范围；`data_export_records` 只保存选择、计数、完整性/安全结果和审计引用，不保存业务正文。
 - 导出记录必须按 `(user_id, subject_id, export_id)` 复合查询；`payload_status=not_generated`、`file_status=not_created`、`external_storage_status=not_connected`、`migration_status=not_executed` 由数据库约束固定。
 - `wake_rules`、`proactive_prompt_rules`、`token_budgets` 与 `assistant_background_policies` 均按用户/主体复合归属；提示记录绑定同用户触发 Event 和 Security AuditLog。
-- 旧 `token_usage_records` 保存显式上报的输入/输出/总 Token，并继续固定 `not_performed_by_platform/not_billed`。V4 每个 execution 的 usage/费用事实独立保存于 `continuity_capability_usage_facts`；预算只累计唯一 execution 的 `provider_reported` usage，未知或未发生的调用不计入，也不改变旧事实含义。
+- 旧 `token_usage_records` 保存显式上报的输入/输出/总 Token，并继续固定 `not_performed_by_platform/not_billed`。V4 usage/费用继续保存于 `continuity_capability_usage_facts`；R1 每个 Provider attempt 的真实 usage/cost 另存于 `standalone_chat_usage_facts`，只有 `provider_reported` Token 参与预算累计，未知或未发生的调用不伪造 Token 或费用，也不改变旧事实含义。
 - 内部嵌套写入加入同一最外层 SQLite 事务，保证安全确认、单次权限消费和审计结果一致。
 - 四类能力注册表均按用户归属，名称在用户范围内唯一；注册状态默认 `disabled`。Tool、MCP 和 Skill 分别关联现有 Permission 的 `tool`、`mcp`、`skill` 资源类型，Plugin 当前只保存注册元数据，不扩张 Permission 枚举或形成安装权限。
 - `tool_usage_records` 同时复合绑定用户、主体、Tool 和安全审计记录。当前数据库约束只允许 `execution_status=not_executed`，消费信息固定记录零外部调用、零 Token 和无计费结果。
@@ -476,12 +486,12 @@ backend/
 
 ## 系统边界
 
-通用责任：Vio Core 负责账号、助手、会话/消息、模型与供应商、MCP/Skill/Plugin/Tool、手机/设备、本地记忆与 Context、权限安全、工作流/生活数据、费用及导出/备份恢复。独立模式的正常回复由 Vio 自身模型执行链产生并按自身规则发布，不要求外部运行时；这是 R1 目标，当前尚未完成。外部模式只增加受控主体连续性、表达和投影，外部运行时不获得 Vio 数据库、密钥或执行权。两种模式的已有规则与实现差距见 [端口说明](docs/SUBJECT_RUNTIME_PORT_V1.md#mode-semantics)。
+通用责任：Vio Core 负责账号、助手、会话/消息、模型与供应商、MCP/Skill/Plugin/Tool、手机/设备、本地记忆与 Context、权限安全、工作流/生活数据、费用及导出/备份恢复。R1 已让独立模式的正常回复由 Vio 自有模型执行链产生并按自身规则发布，不要求外部运行时；后端隔离回归、前端接线和受控页面闭环均已完成，当前仍待阶段验收。外部模式只增加受控主体连续性、表达和投影，外部运行时不获得 Vio 数据库、密钥或执行权。两种模式的边界见 [端口说明](docs/SUBJECT_RUNTIME_PORT_V1.md#mode-semantics)。
 
 历史及现有 Continuity Engine 专用链路：在选用该适配器的合同范围内，Engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context、其唯一权威 SubjectState 和最终主体表达。V1–V4、S2/S3/S4、V5/F1 及首次 S4-Live 已验证的事实保留；固定本地 V5 仍只从 Engine 稳定结果发布主体 Message，Vio 不创建其 Event/StateMutation，也不改写 legacy SubjectState。上文适配器专用权威说明保持原意，不扩张为 Vio 通用依赖。
 
-R1 整理的是 Vio 自身适配边界与聊天解耦，不要求真实 Engine 陪同施工。首次彻底解耦后，未经用户另行要求重连，不探测、读取、启动或修改真实 Engine；通用接口须验证，真实引擎或同类运行时接入另行验收，不作为 Vio 完成或发布条件。将来优先用独立适配器或接口扩展接入，不擅改核心规则。
+R1 整理的是 Vio 自身适配边界与聊天解耦，不要求真实 Engine 陪同施工。当前 R1 个人生产路径完全不装配、不探测、不读取、不启动也不修改真实 Engine；通用接口须另行验证，真实引擎或同类运行时接入另行验收，不作为 Vio 完成或发布条件。将来优先用独立适配器或接口扩展接入，不擅改核心规则。
 
-V5 固定本地 Profile、F1、L1 与首次 S4-Live 的完成不等于完整产品。R0 已验收；R2 个人访问、多助手、加密密钥库和已批准 7/14/30 天政策的受控删除已于 2026-09-05 正式验收通过。手机实机、HTTPS、云部署、跨设备云端同步及本轮真实供应商验证未执行；独立聊天、通用外部身份/Binding、生产认证、多租户、无人值守密钥恢复、备份和部署仍待各归属阶段。当前不得公开部署，R1、R3 尚未开始。
+V5 固定本地 Profile、F1、L1 与首次 S4-Live 的完成不等于完整产品。R0 已验收；R2 个人访问、多助手、加密密钥库和已批准 7/14/30 天政策的受控删除，以及 R1 独立聊天后端、前端接线、隔离回归和受控页面闭环均已于 2026-09-05 正式验收通过；R3 多会话尚未开始。手机实机、HTTPS、云部署、跨设备云端同步、R1 真实供应商验证、通用外部身份/Binding、生产认证、多租户、无人值守密钥恢复、备份和部署仍待各归属阶段，当前不得公开部署。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

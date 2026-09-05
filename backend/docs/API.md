@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-R0 已验收并推送；通用状态 GET、健康摘要和设置页读取均已存在，现有 V5/F1 聊天尚未切换到通用端口。R2 已于 **2026-09-05 正式验收通过**：个人所有者访问、首次设置、多助手、资料、会话、审计/诊断、Provider/Model、加密凭据与认证连接检查，以及按已确认政策执行的账户删除、限权查询/撤销/重试均已完成本机闭环；邮箱、Google 和公开注册继续暂缓。精确字段、幂等、确认与恢复合同见 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md)。R1 独立聊天和 R3 多会话尚未开始。
+R0 已验收并推送；通用状态 GET、健康摘要和设置页读取均已存在，历史 V5/F1 聊天没有被改写为通用端口实现。R2 与 R1 均已于 **2026-09-05 正式验收通过**：R2 完成个人所有者访问、首次设置、多助手、资料、会话、审计/诊断、Provider/Model、加密凭据与认证连接检查，以及按已确认政策执行的账户删除、限权查询/撤销/重试；R1 完成每个已验证所有者/当前助手的隔离默认会话，并由 Vio 自己完成 Provider 执行和最终 MessageVersion 发布。邮箱、Google 和公开注册继续暂缓，R3 多会话尚未开始。精确 R2 与 R1 合同分别见 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md) 和 [`R1_STANDALONE_CHAT_CONTRACT.md`](R1_STANDALONE_CHAT_CONTRACT.md)。
 
 S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 v1.1 身份仅用于 `disposable_test` 验收且禁止晋升；Windows 创建和 doctor 以同一 240 字符门禁验证 Engine WakeSession 最终/原子临时文件的最坏路径，超限返回 `unsafe / engine_persistence_path_budget_exceeded`；推荐新建 `C:\VioS4\first-001` 这类仓库外短路径。cleanup 只允许整根删除：正常沙箱及唯一问题为历史路径超预算的旧沙箱均需通过其余全部严格校验，plan 返回 `cleanupEligible`、`legacyUnsafeReason` 和唯一 `deleteTargets=[canonicalSandboxRoot]`，apply 继续要求服务停止与整箱销毁双确认。
 
@@ -12,7 +12,7 @@ S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 
 - 开发服务默认地址：`http://127.0.0.1:8787`
 - 生产应用装配中的业务 API 必须先通过 R2 个人会话验证；开发身份头不再是授权依据。HTTPS、远程部署、公开注册和多租户仍未完成，不能直接公开部署。
 
-前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。R2 访问、首次设置、资料/助手、访问安全及 Provider/Model/凭据配置已接入个人 API；F1 对话页仍使用固定本地 Profile 的 V5 Turn/Message API，不能自动认领为 R2 身份，也不提前算作 R1 解耦。
+前端开发服务器通过同源 `/api` 与 `/health` 代理访问后端，不在后端开放通配 CORS。R2 访问、首次设置、资料/助手、访问安全及 Provider/Model/凭据配置已接入个人 API；六导航“对话”现已接入 R1 个人聊天接口。既有 F1 页面使用固定本地 Profile 的 V5 Turn/Message API，不能自动认领为 R2 身份，也不能冒充 R1 个人独立聊天证据。
 
 ## R2｜个人访问、设置与模型配置
 
@@ -32,6 +32,30 @@ S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 
 
 生产个人装配不接受 `x-vio-user-id`、前端自报 userId、固定测试 Profile 或“数据库第一位用户”作为身份。历史测试只在 `test-support/legacy-test-application.js` 显式注入访问替代，生产不存在环境开关。旧无归属缓存和固定试聊账本不自动迁入、重发或删除。
 
+## R1｜个人独立默认会话（后端合同已实现）
+
+所有入口都位于 `/api/v1/personal`，并只从已验证的 R2 `vio_personal_session` 取得所有者；助手由服务端保存的当前选择决定。请求体和路径不接受 userId、assistantId 或 conversationId。每个 `(owner, assistant)` 只有一个 R1 默认会话；切换助手只改变下一次入口选择，不迁移历史。R3 的会话列表、新建、重命名和删除尚未开始。
+
+| 方法 | 路径 | 语义 |
+| --- | --- | --- |
+| `GET` | `/chat/default` | 只读返回当前助手、默认会话、锁定消息和活动轮次；映射不存在时 `conversation=null`，且不因查询创建会话或调用 Provider |
+| `POST` | `/chat/turns` | 只接受精确正文 `{ "content": "..." }`；先持久化默认会话、用户 MessageVersion 和 turn，再在门控通过时执行 |
+| `GET` | `/chat/turns/:turnId` | 按当前所有者和当前助手查询一个既有 turn；不执行恢复、发布或 Provider 调用 |
+| `GET` | `/chat/turns/by-idempotency-key/:key` | 只读查询该所有者/助手下第一次提交的结果，使浏览器只需保留随机操作键而不缓存消息正文 |
+| `POST` | `/chat/turns/:turnId/recovery` | 只接受 `resume`、`retry` 或 `cancel` 以及对应可选 confirmation 标识；每次写入使用新的恢复幂等键 |
+
+两个 POST 都要求 R2 同源校验、`X-Vio-CSRF` 和 `Idempotency-Key`。创建 key 与规范化正文 hash、所有者和助手绑定：完全相同重放只返回首次事实，正文或作用域变化返回 `409`。恢复 key 与完整 action 绑定；精确重放不能新增 attempt、确认或 Provider 调用。已创建 turn 的配置、门控、预算或 Provider 结果保存在 turn 状态中并通过统一成功 envelope 返回，调用方必须读取 `data.status` 与脱敏的 `data.error`，不能把 HTTP 200 等同于模型成功。
+
+`GET /chat/default` 的 `data` 固定为 `{ assistant, conversation, messages, activeTurn, externalCall }`；turn 查询与写入的 `data` 固定为 `{ turnId, conversationId, status, createdAt, updatedAt, completedAt, userMessage, assistantMessage, confirmation, error, execution, externalCall }`。nullable 字段仍显式为 `null`。Message 投影只读取 R1 账本锁定的 MessageVersion；响应不含凭据、Authorization、Provider 原始正文、内部路径、Binding、SubjectState 或 Engine 字段。
+
+turn 状态为 `processing`、`waiting_confirmation`、`waiting_budget`、`ready`、`executing`、`retryable`、`outcome_unknown`、`result_ready`、`publishing`、`completed`、`failed`、`cancelled` 或 `quarantined`。每个 turn 最多一个逻辑 execution；明确且安全的 `retry` 只在同一 execution 下追加新的不可变 Provider attempt，并重新检查当前账户、助手、模型、Provider、凭据、Permission、Security/Confirmation 和 Token Budget。能够证明请求未发送的 attempt 可转为 `not_sent/retryable`；可能已发送但没有可恢复结果时必须保持 `outcome_unknown`，当前接口不提供 Provider reconciliation，因此禁止盲目重试。`result_ready` 已锁定候选和 usage，显式 `resume` 只做本地幂等 MessageVersion 发布，不再次调用 Provider。
+
+R1 只选择当前所有者已启用的 `defaultForChat` 模型，不静默 fallback。正式 Provider URL 必须为 HTTPS；发送前完成 DNS 解析并拒绝任一危险地址，当前只选择安全 IPv4 并将实际连接固定到该地址，拒绝重定向并限制连接、响应和正文大小。IPv6-only 返回明确的不支持结果；随机 loopback HTTP 只可由测试装配注入。凭据只在调用瞬间从 R2 加密 Vault 解开；模型调用还必须通过 `api:execute` Permission、`privacy_access_request + private_record` Security/Confirmation 和有限 Token Budget。
+
+迁移 `025` 以独立的 `standalone_chat_default_conversations`、`standalone_chat_turns`、`standalone_chat_model_executions`、`standalone_chat_provider_attempts`、`standalone_chat_usage_facts`、`standalone_chat_provider_results` 与 `standalone_chat_recovery_actions` 保存默认会话映射、逻辑执行、attempt、usage/cost、锁定结果和恢复事实。复合外键、活动 turn 唯一约束及不可变保护共同阻止跨所有者/助手串写、第二个活动轮次和覆盖历史；只有限定所有者删除授权可以清理该所有者事实。
+
+这是 Vio 自有独立模式，不构造 Continuity V1 请求，不进入 V2—V5，不读取 Binding、SubjectState 或 Engine 结果，也不探测、读取、启动或修改 Engine。生产个人会话对 legacy Conversation/Message/Continuity Turn/`state_update` 写入口返回 `PERSONAL_CHAT_ROUTE_REQUIRED`；历史数据、只读能力与 test-support 证据继续保留。后端三文件专项 61/61、受影响组合 128/128、默认全量 399 项中 398 通过且 1 条既有 RFC 跨仓对照按隔离条件跳过；该跳过未执行、不计通过。前端专项 26/26、全量 224/224、类型检查/构建及受控真实页面闭环也已完成；总体协调窗口于 2026-09-05 正式验收 R1 通过，R3 尚未开始。
+
 ## R0-A｜Subject Runtime Port v1（内部合同）
 
 R0-A 已实现 Vio 自己的 `vio-subject-runtime-port/v1`，详细字段、兼容表、状态转换、合法/非法样例和错误码见 [`SUBJECT_RUNTIME_PORT_V1.md`](SUBJECT_RUNTIME_PORT_V1.md)。R0-A 当时只建立进程内合同，没有新增公共 HTTP 路由，也没有把现有 V5/F1 聊天流程接到新端口；后续 R0-B 新增的只读接口见下一节，不能把 R0-A 历史范围当作当前无接口。
@@ -47,7 +71,7 @@ R0-A 已实现 Vio 自己的 `vio-subject-runtime-port/v1`，详细字段、兼�
 
 None Adapter 返回 `platformStatus=available` 与 `runtimeStatus=not_configured`。运行时专用请求稳定返回 `unavailable / SUBJECT_RUNTIME_NOT_CONFIGURED / never`，且 `expression=null`、`stateProjection=null`，不伪造 revision。
 
-`continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 和 `conversation_response` 继续由既有代码实现，但只属于 Continuity Engine Adapter；代码登记状态为 `registered_not_wired`。R0-A 没有改变这些合同、迁移、HTTP transport 或业务语义。R0-A 完成当时 R0 整体尚未完成；此后 R0 已完成整体验收，R1 仍尚未开始。
+`continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 和 `conversation_response` 继续由既有代码实现，但只属于 Continuity Engine Adapter；代码登记状态为 `registered_not_wired`。R0-A 没有改变这些合同、迁移、HTTP transport 或业务语义。R0-A 完成当时 R0 整体尚未完成；此后 R0 已完成整体验收，R1 个人独立聊天也已于 2026-09-05 正式验收通过。
 
 ## R0-B｜通用主体运行时状态（只读）
 
@@ -93,7 +117,7 @@ Adapter Manifest、连接快照或协商结果存在未知字段、非法状态�
 
 `subjectRuntime` 使用同一份已校验通用快照，默认返回 `platformStatus=available` 与 `runtimeStatus=not_configured`。历史 `continuityEngine` 值为兼容既有调用方而保留；新增 `continuityEngineCompatibility.scope=adapter_only_legacy` 明确它不是 Vio Core 的通用健康合同。
 
-R0-B 当时只增加通用状态装配和只读查询，没有运行时选择/连接/断开/重连写接口，没有创建 Continuity Engine Adapter，也没有切换 V1—V5/F1 聊天编排；R0 后续已完成整体验收，R1 仍尚未开始。
+R0-B 当时只增加通用状态装配和只读查询，没有运行时选择/连接/断开/重连写接口，没有创建 Continuity Engine Adapter，也没有切换 V1—V5/F1 聊天编排；R0 后续已完成整体验收。R1 新增的是与历史 V1—V5/F1 并列的 Vio 自有个人聊天路径，不把旧链路改写为通用 Adapter 调用；前后端闭环与隔离回归已完成，正式阶段验收尚未完成。
 
 ## 统一返回结构
 
@@ -170,7 +194,7 @@ R0-B 当时只增加通用状态装配和只读查询，没有运行时选择/�
 | 状态 | 接口/能力 | 说明 |
 | --- | --- | --- |
 | **已实现** | Vio User/Subject/Conversation/Message/Version、ConversationSummary、Event、AI Private Space 当前安全投影、Permission/Security/Token 接口 | 固定本地 Profile 的 Conversation Turn API 已串入正式 Engine 链路；其余通用对话入口保持原语义 |
-| **已实现但需收口** | `POST /api/v1/users/:userId/subjects/:subjectId/state-updates` | 当前接受开发调用方状态；不能成为未来权威写入口，历史数据须按 `legacy/unverified` 处理 |
+| **历史已实现；个人生产写入已收口** | `POST /api/v1/users/:userId/subjects/:subjectId/state-updates` | 历史数据与显式 test-support 证据保留；R1 生产个人会话拒绝该 legacy 写入口并返回 `PERSONAL_CHAT_ROUTE_REQUIRED`，不能绕过独立聊天或外部 Adapter 权威边界 |
 | **已实现但仅为事实来源** | `GET .../conversations/:conversationId/context` | 当前是只读平台事实投影，不是最终认知 Context |
 | **Vio V1 已实现（仅进程内构造）** | 三份严格 Schema/本地 validator、RFC 8785/hash、固定 SubjectBinding 测试装载、PlatformObservation/fact/request 构造、请求输入持久化与跨重启读取 | 没有公共路由；V1 不调用 Engine，V3 只读取并交付 V1 首次保存的原请求 |
 | **Engine E1—E4 已实现** | ContractTestAdapter、严格验证、确定性领域闭环、成功/错误 envelope、持久化结果账本、跨重启恢复，以及仅监听本机的正式 HTTP/JSON 服务 | E4/crash-recovery 基线 `189441f9bad2a34119b4ef10365a4385ed0949cc`；JSONL Runner 仍仅用于测试 |
@@ -695,7 +719,7 @@ Conversation/Message 服务自动生成的四类 Event 只保存用户/主体归
 
 所有来源和 `unresolvedEventIds` 都必须属于相同用户与主体。SubjectState 使用主体内单调 `stateVersion` 和独立当前指针；创建新版本只切换指针，不覆盖旧状态。写入状态、未解决事件引用和当前指针在同一事务提交。接口只是保存调用方提供的 `state_update`，没有模型响应解析、状态演化算法或 continuity-engine 调用。
 
-连接设计已决定 continuity-engine 是 SubjectState 唯一权威源。因此这个 POST 是**已实现但需收口的接入前开发接口**，不能作为未来引擎投影入口原样使用，也不能与引擎各自推进一套当前状态。后续需要服务身份、助手—引擎主体绑定、engine schema/revision/update ID、内容哈希、幂等和乱序对账；本轮没有修改接口或数据库。
+在历史 Continuity Engine Adapter 合同中，Engine 是 SubjectState 唯一权威源。因此这个 POST 仍是接入前遗留开发接口，不能作为外部投影入口原样使用，也不能与 Adapter 各自推进一套当前状态。R1 已在生产个人会话边界拒绝该写入并返回 `PERSONAL_CHAT_ROUTE_REQUIRED`；历史数据、读取能力与 test-support 兼容证据不删除。未来任何外部运行时状态投影只能经 Subject Runtime Port/适配器边界另行实现。
 
 ## Context API
 

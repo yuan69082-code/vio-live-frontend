@@ -32,6 +32,7 @@ import { createSqliteModelRepository } from './integrations/database/sqlite-mode
 import { createSqlitePermissionRepository } from './integrations/database/sqlite-permission-repository.js';
 import { createSqliteProactiveInteractionRepository } from './integrations/database/sqlite-proactive-interaction-repository.js';
 import { createSqliteSecurityPolicyRepository } from './integrations/database/sqlite-security-policy-repository.js';
+import { createSqliteStandaloneChatRepository } from './integrations/database/sqlite-standalone-chat-repository.js';
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
 import { createSqliteUserRepository } from './integrations/database/sqlite-user-repository.js';
@@ -86,6 +87,7 @@ import { createSubjectService } from './modules/subjects/subject-service.js';
 import { createSubjectStateService } from './modules/subject-states/subject-state-service.js';
 import { createNoneSubjectRuntimeAdapter } from './modules/subject-runtime/none-subject-runtime-adapter.js';
 import { createSubjectRuntimeStatusService } from './modules/subject-runtime/subject-runtime-status-service.js';
+import { createStandaloneChatService } from './modules/standalone-chat/standalone-chat-service.js';
 import { createToolUsageService } from './modules/tool-usage/tool-usage-service.js';
 import { createUserService } from './modules/users/user-service.js';
 import { createUserSpaceService } from './modules/user-spaces/user-space-service.js';
@@ -98,6 +100,7 @@ export function createApplication({
   credentialStore: providedCredentialStore = null,
   modelExecutor: providedModelExecutor = null,
   conversationTurnFaultInjector = null,
+  standaloneChatFaultInjector = null,
   subjectRuntimeAdapter: providedSubjectRuntimeAdapter = null,
   requestAccess = null,
   personalClock = () => new Date(),
@@ -164,6 +167,7 @@ export function createApplication({
   );
   const continuityConversationTurnRepository =
     createSqliteContinuityConversationTurnRepository(database.connection);
+  const standaloneChatRepository = createSqliteStandaloneChatRepository(database.connection);
   const legacyCredentialStore = providedCredentialStore ?? createEnvironmentApiCredentialStore(environment);
   const credentialStore = {
     describeApiKey(args) {
@@ -493,6 +497,26 @@ export function createApplication({
   });
   const personalIdentityService = createPersonalIdentityService({repository:personalRepository,userRepository,userSpaceRepository,
     subjectService,userSpaceService,permissionService,runInTransaction:database.runInTransaction,vault:personalVault,clock:personalClock});
+  const standaloneChatService = createStandaloneChatService({
+    repository: standaloneChatRepository,
+    subjectRuntimeStatusService,
+    personalIdentityService,
+    conversationService,
+    messageService,
+    messageRepository,
+    messageVersionRepository,
+    eventRepository,
+    modelRouterService,
+    apiProviderService,
+    securityService,
+    permissionService,
+    securityPolicyService,
+    proactiveInteractionService,
+    modelExecutor: configuredModelExecutor,
+    runInTransaction: database.runInTransaction,
+    clock: personalClock,
+    faultInjector: standaloneChatFaultInjector,
+  });
   const personalConfigurationService = createPersonalConfigurationService({repository:personalRepository,identityService:personalIdentityService,
     apiProviderService,modelService,modelRoutingRuleService,permissionService,securityService,confirmationService,
     credentialBindingRepository:apiProviderCredentialRepository,connectionChecker:providedConnectionChecker??createProviderConnectionChecker(),vault:personalVault,
@@ -501,7 +525,7 @@ export function createApplication({
   const personalDeletionService=createPersonalDeletionService({database,identityService:personalIdentityService,configurationService:personalConfigurationService,
     repository:personalRepository,vault:personalVault,managedCopies:personalManagedCopies,clock:personalClock,beforeOnlineDelete:personalDeletionBeforeOnlineDelete});
   const personalHttpAccess = createPersonalHttpAccess({identityService:personalIdentityService,configurationService:personalConfigurationService,deletionService:personalDeletionService,vault:personalVault,
-    secureCookies:config.personalAccess.secureCookies,allowedOrigin:config.personalAccess.allowedOrigin});
+    standaloneChatService,secureCookies:config.personalAccess.secureCookies,allowedOrigin:config.personalAccess.allowedOrigin});
   const router = createRouter({
     personalHttpAccess,
     requestAccess,
@@ -558,6 +582,7 @@ export function createApplication({
     personalConfigurationService,
     personalVault,
     personalDeletionService,
+    standaloneChatService,
     personalManagedCopies,
     continuityRequestService,
     continuityResultService,
@@ -582,6 +607,7 @@ export function createApplication({
         if(error.errcode!==5&&error.code!=='SQLITE_BUSY')throw error;
         logger.error?.('[vio] personal recovery deferred',{code:'PERSONAL_RECOVERY_DATABASE_BUSY'});
       }
+      await standaloneChatService.initialize();
       await continuityCapabilityService?.initialize();
       await continuityDeliveryService.initialize();
       await continuityConversationTurnService.initialize();

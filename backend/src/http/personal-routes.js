@@ -22,7 +22,23 @@ function cookie(token,secure=false,expired=false) {
   return `vio_personal_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${expired?0:30*86400}${secure?'; Secure':''}`;
 }
 function deletionCookie(token,secure=false,expired=false) {return `vio_deletion_access=${token}; Path=/api/v1/personal; HttpOnly; SameSite=Strict; Max-Age=${expired?0:90*86400}${secure?'; Secure':''}`;}
-export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,vault,secureCookies=false,allowedOrigin=null}) {
+function rejectChatIdentityFields(input) {
+  if(input===null||typeof input!=='object'||Array.isArray(input)) {
+    throw new ValidationError('Personal chat request body must be a JSON object.',{field:'body'});
+  }
+  const forbidden=['userId','assistantId','subjectId','conversationId'];
+  const fields=forbidden.filter(field=>Object.hasOwn(input,field));
+  if(fields.length) throw new ValidationError('Personal chat scope is derived from the verified session.',{unexpectedFields:fields});
+  return input;
+}
+function decodeChatPathSegment(value,field) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new ValidationError('Personal chat path contains malformed percent-encoding.',{field});
+  }
+}
+export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,standaloneChatService,vault,secureCookies=false,allowedOrigin=null}) {
   function authenticate(request,write=false) {
     const context=identity.authenticate(tokenFrom(request));
     if(write) {
@@ -46,6 +62,13 @@ export function createPersonalHttpAccess({identityService:identity,configuration
       const r2OwnedLegacyWrite=/^\/api\/v1\/users\/[^/]+\/(?:api-providers(?:\/|$)|models(?:\/|$)|model-routing-rules(?:\/|$)|user-space\/current-assistant$|subjects(?:\/[^/]+(?:\/global-settings)?)?$)/.test(url.pathname);
       if(!['GET','HEAD','OPTIONS'].includes(request.method)&&r2OwnedLegacyWrite) {
         throw new ApplicationError('Use the personal configuration route for this operation.',{code:'PERSONAL_WRITE_ROUTE_REQUIRED',statusCode:403});
+      }
+      // Personal chat writes are owned by the R1 ledger and its server-derived
+      // current-assistant scope. Historical read contracts remain available,
+      // while historical tests explicitly inject their test-only access port.
+      const r1OwnedLegacyWrite=/^\/api\/v1\/users\/[^/]+\/subjects\/[^/]+\/(?:state-updates(?:\/|$)|conversations(?:\/|$))/.test(url.pathname);
+      if(!['GET','HEAD','OPTIONS'].includes(request.method)&&r1OwnedLegacyWrite) {
+        throw new ApplicationError('Use the personal chat route for this operation.',{code:'PERSONAL_CHAT_ROUTE_REQUIRED',statusCode:403});
       }
       return context;
     },
@@ -104,6 +127,11 @@ export function createPersonalHttpAccess({identityService:identity,configuration
       else if(method==='GET'&&path==='/diagnostics') send(identity.diagnostics(user));
       else if(method==='GET'&&path==='/vault') send(vault.publicTransport(user));
       else if(method==='POST'&&path==='/vault/unlock') send(identity.unlock(context,await readJsonBody(request)));
+      else if(method==='GET'&&path==='/chat/default') send(await standaloneChatService.getDefaultChat(context));
+      else if(method==='POST'&&path==='/chat/turns') send(await standaloneChatService.createTurn(context,rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='GET'&&/^\/chat\/turns\/by-idempotency-key\/[^/]+$/.test(path)) send(await standaloneChatService.getTurnByIdempotencyKey(context,decodeChatPathSegment(path.split('/')[4],'idempotencyKey')));
+      else if(method==='GET'&&/^\/chat\/turns\/[^/]+$/.test(path)) send(await standaloneChatService.getTurn(context,decodeChatPathSegment(path.split('/')[3],'turnId')));
+      else if(method==='POST'&&/^\/chat\/turns\/[^/]+\/recovery$/.test(path)) send(await standaloneChatService.recoverTurn(context,decodeChatPathSegment(path.split('/')[3],'turnId'),rejectChatIdentityFields(await readJsonBody(request)),key));
       else if(method==='GET'&&path==='/providers')send(configurationService.providers(user));
       else if(method==='GET'&&path==='/operations')send(configurationService.operation(context,url.searchParams.get('operation'),url.searchParams.get('key')));
       else if(method==='POST'&&path==='/operation-cancellations')send(configurationService.cancelOperation(context,await readJsonBody(request)));

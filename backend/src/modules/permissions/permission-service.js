@@ -168,6 +168,27 @@ export function createPermissionService({
 
       return permission;
     },
+    inspectActivePermission(userId, value) {
+      const normalizedUserId = requireUser(userId);
+      const input = requireOnlyFields(value, [
+        'subjectId',
+        'resourceType',
+        'resourceId',
+        'action',
+      ]);
+      const subjectId = requireSubject(normalizedUserId, input.subjectId);
+      return permissionRepository.findActiveRule({
+        userId: normalizedUserId,
+        subjectId,
+        resourceType: requirePermissionValue(
+          input.resourceType,
+          'resourceType',
+          PERMISSION_RESOURCE_TYPES,
+        ),
+        resourceId: requireOpaqueResourceId(input.resourceId),
+        action: requirePermissionValue(input.action, 'action', PERMISSION_ACTIONS),
+      });
+    },
     listPermissions(userId, filters = {}) {
       const normalizedUserId = requireUser(userId);
       const subjectId = optionalString(filters.subjectId, 'subjectId', { maxLength: 128 });

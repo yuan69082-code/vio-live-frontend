@@ -1,6 +1,7 @@
 import type { FormEvent, KeyboardEvent } from 'react'
-import { MAX_CONVERSATION_CONTENT_LENGTH } from '../../api'
 import ConversationIcon, { ConversationIconName } from './ConversationIcon'
+
+const DEFAULT_MAX_LENGTH = 32_768
 
 const attachmentActions: Array<{
   label: string
@@ -15,6 +16,7 @@ type ConversationComposerProps = {
   value: string
   disabled: boolean
   busy: boolean
+  maxLength?: number
   onChange: (value: string) => void
   onSend: () => void
 }
@@ -23,6 +25,7 @@ function ConversationComposer({
   value,
   disabled,
   busy,
+  maxLength = DEFAULT_MAX_LENGTH,
   onChange,
   onSend,
 }: ConversationComposerProps) {
@@ -44,7 +47,7 @@ function ConversationComposer({
         aria-label="输入消息"
         placeholder="提问、聊天或下一个任务…"
         rows={1}
-        maxLength={MAX_CONVERSATION_CONTENT_LENGTH}
+        maxLength={maxLength}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
@@ -65,7 +68,7 @@ function ConversationComposer({
           ))}
         </div>
         <span className="composer-count" aria-label="消息字数">
-          {value.length}/{MAX_CONVERSATION_CONTENT_LENGTH}
+          {value.length}/{maxLength}
         </span>
         <button
           className="conversation-send"

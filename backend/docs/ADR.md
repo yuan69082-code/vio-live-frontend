@@ -1,5 +1,17 @@
 # Vio Live 后端 ADR 决策记录
 
+## BE-ADR-042：个人独立聊天由 Vio 自有执行账本负责，外部主体运行时不参与
+
+- 日期：2026-09-05
+- 状态：已采用；R1 后端实现、三文件专项 61/61、受影响组合 128/128 与默认全量 398/399（1 条既有隔离跳过，未执行、不计通过）已完成；前端接线、26/26 专项、224/224 全量、类型/构建及受控页面闭环也已完成；总体协调窗口于 2026-09-05 正式验收 R1 通过，R3 尚未开始
+- 身份与会话：R1 入口只认 R2 `vio_personal_session`，所有者与当前助手都由服务端事实确定，不接受前端 userId、开发身份头、固定 Profile 或数据库第一位用户。每个 `(owner, assistant)` 只有一个隔离默认会话；助手切换不迁移历史，R3 的会话列表、新建、重命名和删除不在本决策内。
+- 执行权威：独立模式由 Vio 选择当前所有者启用的 `defaultForChat` 模型，依次检查加密 Vault 凭据、`api:execute` Permission、`privacy_access_request + private_record` Security/Confirmation 和 Token Budget。输入只含当前助手明确设定、同一默认会话最多 12 个已完成 turn 的锁定 MessageVersion 和当前用户消息；严格 Provider 成功事实落盘后，由 Vio 发布锁定的普通 `subject` MessageVersion。
+- 持久化与恢复：迁移 `025` 独立保存默认会话映射、turn、每 turn 唯一逻辑 execution、0..N 个不可变 Provider attempt、usage/cost、唯一锁定结果及 recovery action。相同创建/恢复幂等键精确重放；安全显式重试只在同一 execution 下追加 attempt。能够证明未发送的启动中断转为 `not_sent/retryable`，可能已发送的中断转为 `outcome_unknown`，两者都不会在启动或读取时自动调用 Provider。`result_ready` 恢复只发布已锁定结果，不重复收费调用。
+- Provider 安全：正式 `openai_compatible` 请求只允许 HTTPS；DNS 解析后拒绝任一危险地址，选择安全 IPv4 并固定实际连接地址，禁止重定向并设置连接、响应和正文上限。IPv6-only 明确不支持；loopback HTTP 只允许显式测试装配。凭据仅在调用瞬间解密，不进入响应、账本、日志或测试快照。
+- 旧入口收口：生产个人会话拒绝 legacy Conversation、Message、Continuity Turn 和 `state_update` 写入口，返回 `PERSONAL_CHAT_ROUTE_REQUIRED`；历史数据、只读能力与显式 test-support 兼容证据保留，不删除也不冒充 R1 结果。
+- Engine 边界：R1 不构造 Continuity V1 请求，不进入 V2—V5，不读取 Binding、SubjectState 或 Engine result，也不探测、读取、启动或修改 Engine。历史 V1—V5、F1、S4/S4-Live 继续作为 Continuity Engine Adapter 专用证据保留，不是 R1 生产路径的依赖或验收替代。
+- 交付边界：总体协调窗口于 2026-09-05 正式验收 R1 通过。真实供应商、手机实机、云部署、跨设备同步和 R3 多会话均未执行；受控 loopback 测试不是外部供应商验收。
+
 ## BE-ADR-041：个人自用阶段以受控所有者会话替代公开注册，并由同一安全链管理模型凭据
 
 - 日期：2026-09-04
@@ -20,7 +32,7 @@
 - 后端落实边界：现有开发期 User Space/助手列表/指针只是数据基础，不等于 R2 真实登录和多助手产品验收。R1 使用 R2 正式身份完成模式分流及聊天解耦，不依赖真实 Engine 在场；通用接口必须验证，具体外部运行时接入不作为 Vio 发布条件。
 - 独立性：首次彻底解耦后，无用户另行重连授权就不探测、读取、启动或修改真实引擎。未来通过独立适配器或接口扩展接入，不能擅改 Vio 核心。已有 v1.1 和 BE-ADR-035 的适配器专用权威保持，README 原第43行已限定原第45行，旧报告误判正式撤回。
 - 本次影响：仅 Markdown 文档、索引、决策、日志与 [R0 证据矩阵](SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)；无源码、接口合同、测试、配置、迁移或 Word 修改，无服务/回归执行、Engine 访问、真实调用或费用。历史证据不冒称本轮测试通过，未开始 R2 或 R1，未推送。
-- 现行状态（2026-09-05）：上项保留当时施工事实；R0 后续已完成整体验收并推送，R2 已正式验收通过，R1 尚未开始。
+- 现行状态（2026-09-05）：上项保留当时施工事实；R0 后续已完成整体验收并推送，R2 与 R1 均已正式验收通过，R3 尚未开始。
 
 ## BE-ADR-039：Vio Core 只依赖通用 Subject Runtime Port，外部运行时为可选适配器
 
@@ -31,7 +43,7 @@
 - Continuity 限定：`continuity-integration/v1.1`、`continuity-capability/v1`、CapabilityRequest/CapabilityResult、`model.generate` 与 `conversation_response` 全部登记为 Continuity Engine Adapter 专用合同，不是 Vio Core 合同。BE-ADR-035 的 SubjectState/最终表达权威只在用户选择该适配器及其既有合同范围内继续成立；它不构成 Vio 的启动依赖。
 - R0-A 影响：新增纯本地合同、状态机、None Adapter、样例、兼容表和测试，当时未修改应用装配、聊天业务、V1—V5、数据库、HTTP API、前端或 Continuity Engine。
 - R0-B 推进：应用默认装配 None Adapter；新增 `GET /api/v1/subject-runtime/status` 和 `/health.subjectRuntime`，只返回经 R0-A 校验并冻结的通用快照。旧 `continuityEngine` 健康值仅按 `adapter_only_legacy` 兼容保留。查询不执行运行时操作，不连接外部运行时。R0-C 已完成设置页读取；聊天分流和 Vio 自身适配边界整理仍属于 R1，具体真实 Engine 重连不是该阶段或发布的前置条件。
-- 现行状态（2026-09-05）：原状态行保留 R0 当时进度；R0 已完成整体验收并推送，R2 已正式验收通过，R1 尚未开始。
+- 现行状态（2026-09-05）：原状态行保留 R0 当时进度；R0 已完成整体验收并推送，R2 与 R1 均已正式验收通过，R3 尚未开始。
 
 ## BE-ADR-038：首次真实供应商验收只能证明可销毁测试身份下的本机链路
 

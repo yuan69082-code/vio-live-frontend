@@ -1,8 +1,18 @@
 # 后端测试策略
 
+## R1 独立聊天当前专项
+
+R1 后端三个专项当前合计 **61/61**，0 失败、0 跳过：
+
+- `standalone-chat-r1-flow.test.js`：验证 R2 个人会话和当前助手是唯一身份来源、每助手唯一默认会话、双助手历史隔离、有界多轮输入、默认模型/Provider/凭据/Permission/Security/Token Budget 门控、真实随机 loopback `openai_compatible` 调用、Vio 锁定结果后发布最终 `subject` MessageVersion，以及查询和幂等重放零模型调用。
+- `standalone-chat-r1-recovery.test.js`：验证一个 turn 只保留一个 logical execution，明确 retry 才增加 Provider attempt；多次 429、`not_sent`、`outcome_unknown`、结果落盘后发布前崩溃、启动恢复、会话撤销/退出/删除等待、并发和恢复 Idempotency-Key 均保持 fail closed 与精确重放。
+- `standalone-chat-r1-migration.test.js`：验证 `025` fresh、`001–024` upgrade、迁移故障整体回滚、外键、复合归属、不可变事实、单活动 turn、per-attempt usage、Provider attempt 状态约束和治理删除范围。
+
+本轮还通过隔离启动器完成受影响 V1—V5 八文件组合 **128/128**、模型路由/权限/安全/预算 **11/11**，以及默认后端全量 **399 项：398 通过、0 失败、1 条既有 RFC 跨仓实现对照条件跳过**。该跳过未执行、不计通过；测试不访问真实 Engine 或公网，不使用真实凭据或收费 Provider。前端交接记录为专项 26/26、全量 224/224、类型检查/构建通过及受控页面闭环完成；总体协调窗口于 2026-09-05 正式验收 R1 通过。
+
 ## R2 当前专项与隔离边界
 
-R2 已于 **2026-09-05 正式验收通过**；本节保留所有首次失败、中间数量和最终验证来源。`PLANNING_CONFLICT = NONE`，`EVIDENCE_CONFLICT = NONE`。R1 独立聊天与 R3 多会话尚未开始。
+R2 已于 **2026-09-05 正式验收通过**；本节保留所有首次失败、中间数量和最终验证来源。`PLANNING_CONFLICT = NONE`，`EVIDENCE_CONFLICT = NONE`。R2 验收当时 R1 独立聊天与 R3 多会话尚未开始；当前 R1 后端专项状态以上一节为准，R3 仍未开始。
 
 2026-09-05 当前 R2 后端专项为十文件 **53/53**，0 失败、0 跳过：
 

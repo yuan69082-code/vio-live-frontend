@@ -1534,6 +1534,45 @@ input[type="text"]:focus {
   font-weight: 700;
 }
 
+.conversation-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.personal-chat-boundary {
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(225, 219, 232, 0.62);
+  color: #746584;
+  background: rgba(255, 255, 255, 0.48);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.personal-chat-boundary strong {
+  color: #574366;
+}
+
+.personal-chat-status-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.personal-chat-status-actions button {
+  min-height: 29px;
+}
+
 .conversation-heading {
   min-width: 0;
 }
@@ -1966,6 +2005,18 @@ input[type="text"]:focus {
   box-shadow: 0 7px 20px rgba(68, 50, 99, 0.05);
   font-size: 10px;
   line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 420px) {
+  .conversation-status {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .personal-chat-status-actions {
+    justify-content: flex-start;
+  }
 }
 
 .is-user .message-bubble {

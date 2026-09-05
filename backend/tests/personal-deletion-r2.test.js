@@ -4,15 +4,20 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createApplication as createLegacyTestApplication } from '../test-support/legacy-test-application.js';
 import { startPersonalTestApplication, sealTestCredential } from '../test-support/personal-test-application.js';
 
 const DAY = 86400000;
 const PASSPHRASE = 'controlled-personal-test-passphrase';
 const START = Date.parse('2026-09-05T00:00:00.000Z');
 
-async function fixture(t, options = {}) {
+async function fixture(t, options = {}, supportOptions = {}) {
   let now = START;
-  const f = await startPersonalTestApplication(t, { ...options, personalClock: () => new Date(now) });
+  const f = await startPersonalTestApplication(
+    t,
+    { ...options, personalClock: () => new Date(now) },
+    supportOptions,
+  );
   return { f, advance: amount => { now += amount; }, set: value => { now = value; } };
 }
 
@@ -222,7 +227,7 @@ test('R2 failed online deletion is atomic and resumes the same task after databa
 });
 
 test('R2 scoped deletion removes cyclic immutable message history while preserving a different owner and normal protection', async t => {
-  const { f, advance } = await fixture(t);
+  const { f, advance } = await fixture(t, {}, { applicationFactory: createLegacyTestApplication });
   const initial = await f.initialize();
   const owner = initial.data.user.userId;
   const onboarding = await f.call('/onboarding', 'POST', {

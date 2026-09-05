@@ -310,6 +310,7 @@ test('an existing 001-020 database upgrades to 021 without changing old facts', 
   remove(join(migrations020, '022_create_continuity_conversation_turn_ledger.sql'));
   remove(join(migrations020, '023_create_personal_identity_and_access.sql'));
   remove(join(migrations020, '024_create_governed_personal_deletion.sql'));
+  remove(join(migrations020, '025_create_standalone_chat_ledger.sql'));
   const old = createSqliteDatabase({ databasePath, migrationsPath: migrations020 });
   old.connection.prepare(`INSERT INTO users (user_id,primary_email,display_name,status,created_at,updated_at) VALUES ('kept-user','kept@example.com','Kept','active',?,?)`).run('2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
   old.close();
@@ -330,6 +331,7 @@ test('a failing 021 migration rolls back without partial V4 tables or migration 
   rmSync(join(migrations020, '022_create_continuity_conversation_turn_ledger.sql'));
   rmSync(join(migrations020, '023_create_personal_identity_and_access.sql'));
   rmSync(join(migrations020, '024_create_governed_personal_deletion.sql'));
+  rmSync(join(migrations020, '025_create_standalone_chat_ledger.sql'));
   const before = createSqliteDatabase({ databasePath, migrationsPath: migrations020 });
   before.close();
   cpSync(resolve('migrations'), brokenMigrations, { recursive: true });

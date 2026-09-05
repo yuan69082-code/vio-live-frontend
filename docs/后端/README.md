@@ -4,7 +4,7 @@
 
 本目录保留《Vio Live 产品与开发总规划 v2.4｜平台后端与前端版》的历史来源；现行阶段顺序与职责按《Vio 完整工程施工监工规划 R0-R13 独立架构版》2026-09-04 四项决定修订执行，见 [ADR-034](../决策记录.md#adr-034) 与 [现行路线](13-部署运维测试与路线图.md#r0-r13-order)。
 
-R0-A/B/C 及 R0 整阶段已验收并推送；当前聊天仍沿用既有链路，状态卡不证明独立聊天完成。R2 已于 **2026-09-05 正式验收通过**：个人所有者访问、首次设置、同用户多助手、会话撤销、访问审计/诊断、Provider/Model、加密凭据、认证连接检查及 7/14/30 天政策下的受控账户删除均完成本机闭环。邮箱、Google 和公开注册继续暂缓；R1 独立聊天与 R3 多会话尚未开始。
+R0-A/B/C 及 R0 整阶段已验收并推送；状态卡本身不证明独立聊天完成。R2 个人所有者访问、首次设置、同用户多助手、会话撤销、访问审计/诊断、Provider/Model、加密凭据、认证连接检查及 7/14/30 天政策下的受控账户删除，以及 R1 真实个人会话/当前助手范围的独立聊天合同、迁移 `025` 与 Vio 自有执行/恢复边界，均已于 **2026-09-05 正式验收通过**。邮箱、Google 和公开注册继续暂缓，R3 多会话尚未开始。
 
 已确认产品顺序：R0 → R2 → R1 → R3 至 R13，编号不变；R2 已正式验收，下一阶段仍须单独授权。R2 完成个人访问和同一用户多个助手的创建、列表、选择与普通切换；R3 再完成每个助手多个会话及隔离。R8 完成公共机制及截至 R7 已完成模块的前端接线；R9—R11 各自完成对应前后端真实联调，R13 全量复验；保留工作台、对话、连续性、AI 私域、能力、我的六个导航。后续元素不能算作 R8 已完成，不扩展助手市场或多助手协作，不减少原真实功能或安全墙要求。
 
@@ -25,7 +25,7 @@ R0-A/B/C 及 R0 整阶段已验收并推送；当前聊天仍沿用既有链路�
 ## 当前状态
 
 - 项目当前包含 React + Vite + TypeScript 前端，以及独立的 Node.js 平台后端工程。
-- 历史 F1 代码仍读取固定本地 Profile 的 V5 Message/Turn，新个人主入口不挂载它、不认领旧缓存；R2 的访问、首次设置、资料/助手、访问安全与能力配置页已接真实个人 API。R1 身份化独立聊天尚未实现。
+- 历史 F1 代码仍读取固定本地 Profile 的 V5 Message/Turn，新个人主入口不挂载它、不认领旧缓存；R2 的访问、首次设置、资料/助手、访问安全与能力配置页已接真实个人 API。六导航“对话”现已接入 R1 `/api/v1/personal/chat/*`，历史 F1 不能冒充该个人独立聊天入口。
 - 已建立独立 `backend/` 工程、README、后端 ADR、开发日志和阶段实施路线。
 - 后端可以独立启动，并提供统一响应、健康检查、User/User Space/Subject/Dashboard、当前助手与数据隔离检查、Assistant Global Settings、Conversation/Message/MessageVersion、Event、Provider/Model、Model Routing Rule、扩展/设备、主动交互、Data Export、Permission、Security Policy、安全偏好、Security、Confirmation 和 AuditLog 基础接口。
 - 主动交互基础支持四类 Wake、Event 驱动提示、四级消息优先级、每日/会话 Token 预算、显式使用账本和 `idle` / `active` 后台策略；所有运行能力固定未连接或未执行。
@@ -33,10 +33,12 @@ R0-A/B/C 及 R0 整阶段已验收并推送；当前聊天仍沿用既有链路�
 - 已完成核心逻辑数据模型，并使用开发期 SQLite 实现账号/主体、设定/私域、对话/摘要/状态、事件、模型路由、能力/设备、主动交互、Export Schema/DataExportRecord、权限/安全/确认/审计及迁移记录。
 - R2 个人所有者拥有一个 User Space，可真实创建、读取、修改、选择多个助手；切换不能改变设定、私域、消息、记忆、上下文或费用的既有归属。R3 的各助手多个会话尚未实施。
 - R2 账户整体删除通过既有账户级高风险确认，立即撤销旧会话并阻止业务与凭据使用；独立删除访问能力只可查任务、受控撤销或到期重试。迁移 `024` 以任务/所有者/实际行范围授权删除，保留普通历史不可变保护；状态区分在线数据、受管文件/备份和 SQLite/WAL，不声明物理擦除用户自存副本。接口与期限以 [R2 个人合同](../../backend/docs/R2_PERSONAL_CONTRACT.md) 为准，不冒充 R3 单消息删除或 R11 完整备份。
+- R1 独立聊天只接受 R2 服务端个人会话和当前助手，每助手一个默认会话；客户端不能自报身份或沿用固定 Profile。迁移 `025` 分别保存 turn、logical execution、Provider attempt、usage/cost、锁定 result 与 recovery action；用户级 Idempotency-Key、单活动轮次、复合 owner/assistant 归属和不可变保护阻止重复调用与跨助手串写。精确接口和状态见 [R1 独立聊天合同](../../backend/docs/R1_STANDALONE_CHAT_CONTRACT.md)。
+- R1 独立执行由 Vio 选择 R2 `defaultForChat` Model/Provider，瞬时解析加密 Vault 凭据并重新执行 Permission、外发安全和 Token Budget。查询/刷新/启动不调用模型；`outcome_unknown` 不盲重试，锁定结果只恢复发布。生产 HTTPS/SSRF/重定向保护不因 loopback 测试注入而放宽；外部模式必须另经 Subject Runtime Port，R1 不探测或依赖真实 Engine。
 - 统一数据隔离检查覆盖用户、AI、设备、生活和事件五类资源，先执行数据库复合归属过滤，再对私域/设备/生活资源执行 Permission 与 Security Policy；所有结果固定未执行。
-- Conversation 当前只支持主体范围的线性文本流；Message 保存稳定顺序和当前版本指针，MessageVersion 保存不可覆盖的原始、编辑和重生成记录。
+- R1 每个助手只登记一个默认独立 Conversation；Message 保存稳定顺序和当前版本指针，MessageVersion 保存不可覆盖的原始、编辑和重生成记录。R1 turn 只引用其锁定版本并支持连续多轮；R3 才新增每助手多个会话、列表、重命名和删除。
 - ConversationSummary 按会话不可变追加并引用 MessageVersion/Event 来源；跨窗口只读取同主体其他 Conversation 的最新摘要。
-- legacy/unverified SubjectState 仍保存开发调用方 `state_update`；R1 须收口普通写入口并保留历史来源，不把旧状态当作外部权威。仅在选择 Engine 适配器时，Engine 对其 SubjectState 唯一权威，Vio 只存受控投影；独立模式仍拥有自己的业务事实，但不伪造外部状态。
+- legacy/unverified SubjectState 的历史数据、读取与测试事实保留；正式个人访问已拒绝可绕过 R1 的 legacy conversation/message/continuity-turn/state-update 写入口，测试兼容只能显式注入 test-support。仅在选择 Engine 适配器时，Engine 对其 SubjectState 唯一权威，Vio 只存受控投影；独立模式拥有自己的消息/执行事实，但不伪造外部状态。
 - AI Assistant Global Settings 一对一绑定 Subject，支持长期身份与偏好读取/更新；它不会创建、覆盖或切换动态 SubjectState。
 - 现有 Context API 只读投影设定、状态记录、事件、近期消息和跨窗口摘要，Memory 等仍为占位；该端点不调用模型。独立模式的自有 Context/记忆由 Vio 负责，在后续阶段完成；仅在既有 Engine 合同内，Vio 提供经权限筛选的事实，Engine 组织其最终认知 Context。
 - AI Private Space 当前只有显式输入、不可变版本、安全投影和导出准备基础，不自动进入通用 Context。v1.1 的三域分隔及绑定主体引擎决定私域内容创建/编辑是特定适配器的历史合同规则，继续保留；不能据此要求独立 Vio 安装 Engine 或取消其自有记忆/私域职责。完整私域产品在 R10 验收，跨系统读写当时不在第一轮最小测试内。
@@ -57,7 +59,7 @@ R0-A/B/C 及 R0 整阶段已验收并推送；当前聊天仍沿用既有链路�
 - V3 默认关闭，不提供公共交付路由；显式启用时只连接本机 Engine，Engine 不可达不会阻止 Vio 启动。共享子进程 transport 仍只在 `test-support` 和独立共享测试中启用。
 - 历史 S2/S3 正式本机连接状态：V1 → V3 → Engine E4 → V2 已通过真实 loopback HTTP 正常、错误、崩溃与重启恢复验收；历史 S4 在 E5-A 上验证 V1 → V3 → V4 → Engine → V2 Capability 闭环。两阶段的 Wake、Thinking、Event、StateUpdateRecord、revision、result、projection 和 receipt 均保持幂等。
 - V5 固定本地 Profile 公共轮次 API、迁移 `022` 和恢复账本已完成；用户 Message 可经 V1 → V3 → Engine E5-A → V4 → V2 形成唯一 Engine 最终主体 Message。
-- F1 真实页面回复和首次真实供应商试聊已通过；Vio 费用账本为 `not_reported`，不把供应商概览的 ¥0 当作最终账单。R2 个人访问、多助手及账户整体删除已完成本机验证，最终证据在 R2 合同/日志；独立聊天、通用外部 Binding、生产认证、多租户和部署仍未完成。
+- F1 真实页面回复和首次真实供应商试聊已通过；Vio 费用账本为 `not_reported`，不把供应商概览的 ¥0 当作最终账单。R2 个人访问、多助手及账户整体删除已完成本机验证。R1 独立聊天使用 R2 当前助手、default chat Model/Provider、加密凭据、Permission/Security/Token Budget，并以迁移 `025` 保存可恢复执行事实；后端隔离回归、前端接线及受控页面闭环完成后已于 2026-09-05 正式验收通过。通用外部 Binding、生产认证、多租户和部署仍未完成。
 - 分支、消息删除、窗口重置、真实摘要生成、语义检索、私域披露/删除、真实导出文件/下载/外部存储、备份恢复、生活记录删除、自动提醒、健康设备、真实语音/系统唤醒、后台调度、消息投递、正式数据库、公共 Capability 产品入口、通用对话 Profile 与其前端接线、真实 MCP、插件安装、Skill/Tool 执行、真实设备/机器人连接控制、载体迁移及其他厂商 API/外部执行仍待归属阶段；仅已有固定 V5/F1 和状态页接线可记为已实现。V4/S4-Live 已有一次真实 usage 事实，不代表完整费用管理或最终账单对账完成；支付/银行接入未实现，真实转账、代扣、账户冻结及助手市场/协作仍暂缓，不因本轮文档收尾扩展范围。
 - GitHub 只保存代码和文档，不保存运行数据、用户数据或密钥。
 
@@ -65,6 +67,7 @@ R0-A/B/C 及 R0 整阶段已验收并推送；当前聊天仍沿用既有链路�
 
 - [Subject Runtime Port v1 后端合同](../../backend/docs/SUBJECT_RUNTIME_PORT_V1.md)
 - [R0 要求与验收证据矩阵](../../backend/docs/SUBJECT_RUNTIME_PORT_V1.md#r0-evidence)
+- [R1 独立聊天合同](../../backend/docs/R1_STANDALONE_CHAT_CONTRACT.md)
 - [四项决定 ADR-034](../决策记录.md#adr-034)
 - [R0-R13 现行施工顺序](13-部署运维测试与路线图.md#r0-r13-order)
 

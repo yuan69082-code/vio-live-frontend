@@ -6,6 +6,7 @@ import type { AssistantList, PersonalAccess, PersonalApi, PersonalSession } from
 import { personalError } from '../components/personal/useScopedAction'
 import { parseDeletionAccess } from '../api/personal-deletion'
 import type { DeletionAccess } from '../api/personal-deletion'
+import { clearPersonalChatRecoveryForOwner } from '../api/personal-chat-recovery'
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'access'; access: PersonalAccess; message?: string } | { kind: 'ready'; session: PersonalSession } | { kind: 'deletion'; access: DeletionAccess } | { kind: 'deletion-receipt-expired' }
 type PersonalContextValue = {
@@ -67,6 +68,10 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
   }, [invalidate])
 
   const expire = useCallback(() => {
+    const ownerId = current.current?.user.userId
+    if (ownerId) {
+      try { clearPersonalChatRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
+    }
     invalidate()
     setState({ kind: 'access', access: { status: 'authentication_required', registration: 'disabled' }, message: '访问已结束或失效，请重新验证。' })
   }, [invalidate])
@@ -76,7 +81,11 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
       || typeof value.onboardingCompleted !== 'boolean' || value.storage?.actualLocation !== 'server_database' || value.storage.cloudSync !== false) {
       throw new ApiClientError('Invalid session response', { code: 'invalid_response', status: null })
     }
-    const identityChanged = current.current?.session.sessionId !== value.session.sessionId || current.current?.user.userId !== value.user.userId
+    const previousOwnerId = current.current?.user.userId
+    const identityChanged = current.current?.session.sessionId !== value.session.sessionId || previousOwnerId !== value.user.userId
+    if (previousOwnerId && previousOwnerId !== value.user.userId) {
+      try { clearPersonalChatRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
+    }
     if (identityChanged) invalidate()
     else if (current.current && value.selectionVersion < current.current.selectionVersion) {
       value = { ...value, currentAssistantId: current.current.currentAssistantId, selectionVersion: current.current.selectionVersion }
@@ -179,7 +188,12 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
   }, [api, guarded])
 
   useEffect(() => {
-    api.onUnauthorized(() => { if (current.current || currentDeletion.current) void restore() })
+    api.onUnauthorized(() => {
+      if (current.current) {
+        try { clearPersonalChatRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
+      }
+      if (current.current || currentDeletion.current) void restore()
+    })
     let active = true
     queueMicrotask(() => { if (active) void restore() })
     return () => { active = false; generation.current++; requests.current.forEach((request) => request.abort()); requests.current.clear(); api.onUnauthorized(undefined) }

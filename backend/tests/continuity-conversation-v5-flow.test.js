@@ -102,6 +102,7 @@ test('001-021 upgrades to 022 and a broken migration rolls back completely', () 
   rmSync(join(migrations021, '022_create_continuity_conversation_turn_ledger.sql'));
   rmSync(join(migrations021, '023_create_personal_identity_and_access.sql'));
   rmSync(join(migrations021, '024_create_governed_personal_deletion.sql'));
+  rmSync(join(migrations021, '025_create_standalone_chat_ledger.sql'));
   const old = createSqliteDatabase({ databasePath: upgradePath, migrationsPath: migrations021 });
   old.connection.prepare(`INSERT INTO users
     (user_id,primary_email,display_name,status,created_at,updated_at)

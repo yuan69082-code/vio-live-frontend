@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react'
-import type { ConversationMessage } from '../../api'
-import MessageBubble from './MessageBubble'
+import MessageBubble, { type ConversationMessageView } from './MessageBubble'
 
 type MessageListProps = {
-  messages: ConversationMessage[]
+  messages: ConversationMessageView[]
   agentAvatar: string
+  agentAvatarImage?: string | null
+  agentName?: string
+  emptyDescription?: string
   loading: boolean
 }
 
@@ -15,7 +17,7 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
-function MessageList({ messages, agentAvatar, loading }: MessageListProps) {
+function MessageList({ messages, agentAvatar, agentAvatarImage, agentName, emptyDescription = '消息将通过 Vio 后端进入连续性链路。', loading }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -29,7 +31,7 @@ function MessageList({ messages, agentAvatar, loading }: MessageListProps) {
       ) : messages.length === 0 ? (
         <div className="conversation-empty">
           <strong>开始一段新对话</strong>
-          <span>消息将通过 Vio 后端进入连续性链路。</span>
+          <span>{emptyDescription}</span>
         </div>
       ) : (
         messages.map((message, index) => {
@@ -44,7 +46,7 @@ function MessageList({ messages, agentAvatar, loading }: MessageListProps) {
                   <span>{currentDate}</span>
                 </div>
               )}
-              <MessageBubble message={message} agentAvatar={agentAvatar} />
+              <MessageBubble message={message} agentAvatar={agentAvatar} agentAvatarImage={agentAvatarImage} agentName={agentName} />
             </div>
           )
         })

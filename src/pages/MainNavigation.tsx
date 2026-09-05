@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import CapabilityCenterPage from './CapabilityCenterPage'
 import ConversationPage from './ConversationPage'
+import PersonalConversationPage from './PersonalConversationPage'
 import ContinuityPage from './ContinuityPage'
 import PrivateDomainPage from './PrivateDomainPage'
 import ProfilePage from './ProfilePage'
@@ -134,7 +135,7 @@ function MainNavigation() {
           {activeKey === 'workspace' ? (
             <WorkspacePage assistant={currentAssistant} />
           ) : activeKey === 'conversation' ? (
-            personal ? <section className={personalStyles.body}><h1>对话</h1><p>当前助手：{currentAssistant?.name ?? '尚未读取'}</p><p>个人身份已接通。独立聊天将在 R1 接续，多会话在 R3 完成；当前不会调用旧固定聊天身份。</p><p>旧恢复缓存未读取、未导入、未删除，不会自动归属当前身份。</p><button type="button" onClick={() => setActiveKey('profile')}>管理当前助手</button></section> : <ConversationPage />
+            personal ? <PersonalConversationPage assistant={currentAssistant ?? null} assistantsLoaded={personal.assistants !== null} onNavigate={setActiveKey} /> : <ConversationPage />
           ) : activeKey === 'continuity' ? (
             <ContinuityPage />
           ) : activeKey === 'private' ? (

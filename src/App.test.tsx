@@ -18,7 +18,9 @@ function apiFixture(authenticated = true) {
   vi.spyOn(api, 'profile').mockResolvedValue(profileFixture())
   vi.spyOn(api, 'assistant').mockResolvedValue(assistantFixture())
   vi.spyOn(api, 'sessions').mockResolvedValue({ items: [] })
-  vi.spyOn(api, 'request').mockResolvedValue({ items: [] })
+  vi.spyOn(api, 'request').mockImplementation(async (path) => path === '/chat/default'
+    ? { assistant: { assistantId: 'test-alpha', name: '测试助手一' }, conversation: null, messages: [], activeTurn: null, externalCall: 'not_performed' }
+    : { items: [] })
   return api
 }
 afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); localStorage.clear() })
@@ -82,7 +84,7 @@ describe('R2 personal application entry', () => {
     expect(api.session).toHaveBeenCalledTimes(1)
     expect(within(nav).getAllByRole('button')).toHaveLength(6)
     fireEvent.click(within(nav).getByRole('button', { name: '对话' }))
-    expect(screen.getByText(/旧恢复缓存未读取、未导入、未删除/)).toBeInTheDocument()
+    expect(await screen.findByText(/每个助手仅显示唯一默认会话/)).toBeInTheDocument()
     expect(screen.queryByText('old-account-content')).not.toBeInTheDocument()
     expect(sessionStorage.getItem('vio-live:conversation:pending-turn:v1')).toBe(old)
   })

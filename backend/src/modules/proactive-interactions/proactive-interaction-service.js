@@ -233,6 +233,51 @@ export function createProactiveInteractionService({
     return { ready: true, reason: 'background_policy_ready', policy };
   }
 
+  function inspectTokenBudget(scope, estimatedTokensValue, budgetSessionIdValue) {
+    const budget = proactiveInteractionRepository.findTokenBudget(
+      scope.userId,
+      scope.subjectId,
+    );
+    if (!budget) throw new NotFoundError('Token budget was not found in this scope.');
+    if (budget.status !== 'enabled') throw new ConflictError('Token budget is disabled.');
+    const estimatedTokens = requireInteger(
+      estimatedTokensValue,
+      'estimatedTokens',
+      { min: 1, max: 100_000_000 },
+    );
+    const budgetSessionId = requireOpaqueResourceId(
+      budgetSessionIdValue,
+      'budgetSessionId',
+    );
+    const now = clock().toISOString();
+    const [dayStart, nextDayStart] = dayBounds(now);
+    const usage = proactiveInteractionRepository.summarizeTokenUsage(
+      scope.userId,
+      scope.subjectId,
+      dayStart,
+      nextDayStart,
+      budgetSessionId,
+    );
+    const projection = {
+      dailyUsed: usage.dailyUsed,
+      dailyProjected: usage.dailyUsed + estimatedTokens,
+      dailyLimit: budget.dailyTokenLimit,
+      sessionUsed: usage.sessionUsed,
+      sessionProjected: usage.sessionUsed + estimatedTokens,
+      sessionLimit: budget.sessionTokenLimit,
+    };
+    const exceeded = projection.dailyProjected > projection.dailyLimit
+      || projection.sessionProjected > projection.sessionLimit;
+    const decision = !exceeded
+      ? 'allow'
+      : budget.overagePolicy === 'block'
+        ? 'deny'
+        : budget.overagePolicy === 'defer'
+          ? 'defer'
+          : 'confirm';
+    return { budget, projection, estimatedTokens, budgetSessionId, decision };
+  }
+
   return {
     createWakeRule(userId, subjectId, value) {
       const scope = requireScope(userId, subjectId);
@@ -635,46 +680,40 @@ export function createProactiveInteractionService({
       if (!budget) throw new NotFoundError('Token budget was not found in this scope.');
       return budget;
     },
+    previewTokenBudget(userId, subjectId, value) {
+      const scope = requireScope(userId, subjectId);
+      const input = requireOnlyFields(value, ['estimatedTokens', 'budgetSessionId']);
+      const inspected = inspectTokenBudget(
+        scope,
+        input.estimatedTokens,
+        input.budgetSessionId,
+      );
+      return {
+        decision: inspected.decision,
+        operationStatus: {
+          allow: 'within_budget',
+          deny: 'blocked_by_budget',
+          defer: 'deferred_by_budget',
+          confirm: 'confirmation_required',
+        }[inspected.decision],
+        budget: inspected.budget,
+        projection: inspected.projection,
+        security: null,
+        execution: executionBoundary(),
+      };
+    },
     checkTokenBudget(userId, subjectId, value) {
       const scope = requireScope(userId, subjectId);
       const input = requireOnlyFields(value, [
         'estimatedTokens', 'budgetSessionId', 'confirmationId', 'securitySessionId',
       ]);
-      const budget = proactiveInteractionRepository.findTokenBudget(
-        scope.userId,
-        scope.subjectId,
-      );
-      if (!budget) throw new NotFoundError('Token budget was not found in this scope.');
-      if (budget.status !== 'enabled') throw new ConflictError('Token budget is disabled.');
-      const estimatedTokens = requireInteger(
+      const inspected = inspectTokenBudget(
+        scope,
         input.estimatedTokens,
-        'estimatedTokens',
-        { min: 1, max: 100_000_000 },
-      );
-      const budgetSessionId = requireOpaqueResourceId(
         input.budgetSessionId,
-        'budgetSessionId',
       );
-      const now = clock().toISOString();
-      const [dayStart, nextDayStart] = dayBounds(now);
-      const usage = proactiveInteractionRepository.summarizeTokenUsage(
-        scope.userId,
-        scope.subjectId,
-        dayStart,
-        nextDayStart,
-        budgetSessionId,
-      );
-      const projection = {
-        dailyUsed: usage.dailyUsed,
-        dailyProjected: usage.dailyUsed + estimatedTokens,
-        dailyLimit: budget.dailyTokenLimit,
-        sessionUsed: usage.sessionUsed,
-        sessionProjected: usage.sessionUsed + estimatedTokens,
-        sessionLimit: budget.sessionTokenLimit,
-      };
-      const exceeded = projection.dailyProjected > projection.dailyLimit
-        || projection.sessionProjected > projection.sessionLimit;
-      if (!exceeded) {
+      const { budget, projection } = inspected;
+      if (inspected.decision === 'allow') {
         if (input.confirmationId || input.securitySessionId) {
           throw new ValidationError(
             'Confirmation metadata is only accepted for confirmation-required overage.',
@@ -689,7 +728,7 @@ export function createProactiveInteractionService({
           execution: executionBoundary(),
         };
       }
-      if (budget.overagePolicy === 'block') {
+      if (inspected.decision === 'deny') {
         if (input.confirmationId || input.securitySessionId) {
           throw new ValidationError(
             'Confirmation metadata is not accepted by the block overage policy.',
@@ -704,7 +743,7 @@ export function createProactiveInteractionService({
           execution: executionBoundary(),
         };
       }
-      if (budget.overagePolicy === 'defer') {
+      if (inspected.decision === 'defer') {
         if (input.confirmationId || input.securitySessionId) {
           throw new ValidationError(
             'Confirmation metadata is not accepted by the defer overage policy.',
