@@ -38,7 +38,7 @@ function decodeChatPathSegment(value,field) {
     throw new ValidationError('Personal chat path contains malformed percent-encoding.',{field});
   }
 }
-export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,standaloneChatService,vault,secureCookies=false,allowedOrigin=null}) {
+export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,standaloneChatService,multiConversationService,vault,secureCookies=false,allowedOrigin=null}) {
   function authenticate(request,write=false) {
     const context=identity.authenticate(tokenFrom(request));
     if(write) {
@@ -127,6 +127,33 @@ export function createPersonalHttpAccess({identityService:identity,configuration
       else if(method==='GET'&&path==='/diagnostics') send(identity.diagnostics(user));
       else if(method==='GET'&&path==='/vault') send(vault.publicTransport(user));
       else if(method==='POST'&&path==='/vault/unlock') send(identity.unlock(context,await readJsonBody(request)));
+      else if(method==='GET'&&path==='/chat/conversations') send(multiConversationService.listConversations(context,{
+        status:url.searchParams.get('status')??undefined,query:url.searchParams.get('query')??undefined,
+        sort:url.searchParams.get('sort')??undefined,cursor:url.searchParams.get('cursor')??undefined,
+        limit:url.searchParams.get('limit')??undefined,
+      }));
+      else if(method==='POST'&&path==='/chat/conversations') send(multiConversationService.createConversation(context,rejectChatIdentityFields(await readJsonBody(request)),key),201);
+      else if(method==='GET'&&path==='/chat/conversations/current') send(multiConversationService.getCurrent(context));
+      else if(method==='GET'&&/^\/chat\/conversations\/[^/]+$/.test(path)) send(multiConversationService.getConversation(context,decodeChatPathSegment(path.split('/')[3],'conversationId')));
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/selection$/.test(path)) send(multiConversationService.selectConversation(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='PATCH'&&/^\/chat\/conversations\/[^/]+$/.test(path)) send(multiConversationService.renameConversation(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/(archive|restore|deletion)$/.test(path)) {const parts=path.split('/');send(multiConversationService.transitionConversation(context,decodeChatPathSegment(parts[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key,{archive:'archive',restore:'restore',deletion:'delete'}[parts[4]]));}
+      else if(method==='GET'&&/^\/chat\/conversations\/[^/]+\/branches$/.test(path)) send(multiConversationService.listBranches(context,decodeChatPathSegment(path.split('/')[3],'conversationId')));
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/branches$/.test(path)) send(multiConversationService.createBranch(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key),201);
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/branches\/[^/]+\/selection$/.test(path)) {const parts=path.split('/');send(multiConversationService.selectBranch(context,decodeChatPathSegment(parts[3],'conversationId'),decodeChatPathSegment(parts[5],'branchId'),rejectChatIdentityFields(await readJsonBody(request)),key));}
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/clear$/.test(path)) send(multiConversationService.clearBranch(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='GET'&&/^\/chat\/conversations\/[^/]+\/messages\/[^/]+\/versions$/.test(path)) {const parts=path.split('/');send(multiConversationService.listVersions(context,decodeChatPathSegment(parts[3],'conversationId'),decodeChatPathSegment(parts[5],'messageId')));}
+      else if(method==='PATCH'&&/^\/chat\/conversations\/[^/]+\/messages\/[^/]+$/.test(path)) {const parts=path.split('/');send(multiConversationService.editMessage(context,decodeChatPathSegment(parts[3],'conversationId'),decodeChatPathSegment(parts[5],'messageId'),rejectChatIdentityFields(await readJsonBody(request)),key));}
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/messages\/[^/]+\/regenerations$/.test(path)) {const parts=path.split('/');send(await multiConversationService.regenerate(context,decodeChatPathSegment(parts[3],'conversationId'),decodeChatPathSegment(parts[5],'messageId'),rejectChatIdentityFields(await readJsonBody(request)),key));}
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/messages\/[^/]+\/version-selection$/.test(path)) {const parts=path.split('/');send(multiConversationService.selectMessageVersion(context,decodeChatPathSegment(parts[3],'conversationId'),decodeChatPathSegment(parts[5],'messageId'),rejectChatIdentityFields(await readJsonBody(request)),key));}
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/messages\/[^/]+\/deletion$/.test(path)) {const parts=path.split('/');send(multiConversationService.hideMessage(context,decodeChatPathSegment(parts[3],'conversationId'),decodeChatPathSegment(parts[5],'messageId'),rejectChatIdentityFields(await readJsonBody(request)),key));}
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/turns$/.test(path)) send(await multiConversationService.createTurn(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/attachments$/.test(path)) send(multiConversationService.createAttachment(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key),201);
+      else if(method==='GET'&&/^\/chat\/conversations\/[^/]+\/attachments\/[^/]+$/.test(path)) {const parts=path.split('/');send(multiConversationService.getAttachment(context,decodeChatPathSegment(parts[3],'conversationId'),decodeChatPathSegment(parts[5],'attachmentId')));}
+      else if(method==='GET'&&/^\/chat\/conversations\/[^/]+\/attachments\/[^/]+\/content$/.test(path)) {const parts=path.split('/');send(multiConversationService.getAttachment(context,decodeChatPathSegment(parts[3],'conversationId'),decodeChatPathSegment(parts[5],'attachmentId'),{content:true}));}
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/attachments\/[^/]+\/deletion$/.test(path)) {const parts=path.split('/');send(multiConversationService.deleteAttachment(context,decodeChatPathSegment(parts[3],'conversationId'),decodeChatPathSegment(parts[5],'attachmentId'),rejectChatIdentityFields(await readJsonBody(request)),key));}
+      else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/exports$/.test(path)) send(multiConversationService.exportConversation(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='GET'&&/^\/chat\/operations\/by-idempotency-key\/[^/]+$/.test(path)) send(multiConversationService.getOperation(context,decodeChatPathSegment(path.split('/')[4],'idempotencyKey')));
       else if(method==='GET'&&path==='/chat/default') send(await standaloneChatService.getDefaultChat(context));
       else if(method==='POST'&&path==='/chat/turns') send(await standaloneChatService.createTurn(context,rejectChatIdentityFields(await readJsonBody(request)),key));
       else if(method==='GET'&&/^\/chat\/turns\/by-idempotency-key\/[^/]+$/.test(path)) send(await standaloneChatService.getTurnByIdempotencyKey(context,decodeChatPathSegment(path.split('/')[4],'idempotencyKey')));

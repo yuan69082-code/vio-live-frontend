@@ -2006,6 +2006,7 @@ input[type="text"]:focus {
   font-size: 10px;
   line-height: 1.65;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 420px) {
@@ -2063,6 +2064,35 @@ input[type="text"]:focus {
 .message-actions .conversation-icon {
   width: 12px;
   height: 12px;
+}
+
+.message-attachments {
+  display: grid;
+  gap: 3px;
+  max-width: 100%;
+  margin: 5px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.message-attachments li {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 7px;
+  border: 1px solid rgba(126, 98, 192, 0.14);
+  border-radius: 8px;
+  color: #71627d;
+  background: rgba(246, 242, 252, 0.9);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-version-kind {
+  display: block;
+  margin-top: 4px;
+  color: #95899d;
+  font-size: 7px;
 }
 
 .conversation-composer {

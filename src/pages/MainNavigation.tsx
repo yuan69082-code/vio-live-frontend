@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import CapabilityCenterPage from './CapabilityCenterPage'
 import ConversationPage from './ConversationPage'
-import PersonalConversationPage from './PersonalConversationPage'
+import PersonalMultiConversationPage from './PersonalMultiConversationPage'
 import ContinuityPage from './ContinuityPage'
 import PrivateDomainPage from './PrivateDomainPage'
 import ProfilePage from './ProfilePage'
@@ -135,7 +135,7 @@ function MainNavigation() {
           {activeKey === 'workspace' ? (
             <WorkspacePage assistant={currentAssistant} />
           ) : activeKey === 'conversation' ? (
-            personal ? <PersonalConversationPage assistant={currentAssistant ?? null} assistantsLoaded={personal.assistants !== null} onNavigate={setActiveKey} /> : <ConversationPage />
+            personal ? <PersonalMultiConversationPage assistant={currentAssistant ?? null} assistantsLoaded={personal.assistants !== null} onNavigate={setActiveKey} /> : <ConversationPage />
           ) : activeKey === 'continuity' ? (
             <ContinuityPage />
           ) : activeKey === 'private' ? (

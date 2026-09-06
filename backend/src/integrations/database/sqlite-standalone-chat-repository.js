@@ -30,6 +30,7 @@ function mapDefaultConversation(row) {
     userId: row.user_id,
     assistantId: row.assistant_id,
     conversationId: row.conversation_id,
+    isR1Default: row.is_r1_default === 1,
     createdAt: row.created_at,
   };
 }
@@ -289,12 +290,12 @@ export function createSqliteStandaloneChatRepository(connection) {
   const budgetApprovalSelect = 'SELECT * FROM standalone_chat_budget_approvals';
 
   const findDefaultConversation = connection.prepare(`
-    ${defaultSelect} WHERE user_id = ? AND assistant_id = ?
+    ${defaultSelect} WHERE user_id = ? AND assistant_id = ? AND is_r1_default = 1
   `);
   const insertDefaultConversation = connection.prepare(`
     INSERT INTO standalone_chat_default_conversations (
-      user_id, assistant_id, conversation_id, created_at
-    ) VALUES (?, ?, ?, ?)
+      user_id, assistant_id, conversation_id, is_r1_default, created_at
+    ) VALUES (?, ?, ?, 1, ?)
   `);
 
   const findTurn = connection.prepare(`

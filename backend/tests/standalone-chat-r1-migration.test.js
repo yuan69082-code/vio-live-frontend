@@ -240,9 +240,13 @@ test('R1 migration 025 installs fresh with complete ledger constraints and no fo
 test('R1 migration upgrades an exact 001-024 database without claiming or changing old facts', () => {
   const root = mkdtempSync(join(tmpdir(), 'vio-r1-upgrade-migration-'));
   const migrations024 = join(root, 'migrations-024');
+  const migrations025 = join(root, 'migrations-025');
   const databasePath = join(root, 'upgrade.sqlite');
-  cpSync(resolve('migrations'), migrations024, { recursive: true });
+  cpSync(resolve('migrations'), migrations025, { recursive: true });
+  rmSync(join(migrations025, '026_create_personal_multi_conversation.sql'));
+  cpSync(migrations025, migrations024, { recursive: true });
   rmSync(join(migrations024, MIGRATION));
+  let upgraded = null;
   try {
     const before = createSqliteDatabase({ databasePath, migrationsPath: migrations024 });
     before.connection.prepare(`
@@ -256,7 +260,7 @@ test('R1 migration upgrades an exact 001-024 database without claiming or changi
     assert.equal(previousMigrationCount, 24);
     before.close();
 
-    const upgraded = createSqliteDatabase(loadConfig({ VIO_BACKEND_DB_PATH: databasePath }));
+    upgraded = createSqliteDatabase({ databasePath, migrationsPath: migrations025 });
     assert.deepEqual({ ...upgraded.connection.prepare(
       "SELECT user_id,display_name,status FROM users WHERE user_id='retained-r1-owner'",
     ).get() }, {
@@ -271,8 +275,8 @@ test('R1 migration upgrades an exact 001-024 database without claiming or changi
       assert.equal(upgraded.connection.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0);
     }
     assert.deepEqual(upgraded.connection.prepare('PRAGMA foreign_key_check').all(), []);
-    upgraded.close();
   } finally {
+    upgraded?.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -284,6 +288,7 @@ test('R1 migration 025 failure rolls back the whole migration and preserves 001-
   const databasePath = join(root, 'rollback.sqlite');
   cpSync(resolve('migrations'), migrations024, { recursive: true });
   rmSync(join(migrations024, MIGRATION));
+  rmSync(join(migrations024, '026_create_personal_multi_conversation.sql'));
   try {
     const before = createSqliteDatabase({ databasePath, migrationsPath: migrations024 });
     before.close();

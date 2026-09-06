@@ -32,18 +32,26 @@ function rejectBroadRoot(path) {
 }
 
 function authorizedRoot(root,allowed) {
-  if(typeof root!=='string'||typeof allowed!=='string'||!isAbsolute(root)||!isAbsolute(allowed))fail('MANAGED_COPY_UNSAFE_PATH');
+  const allowedRoots=(Array.isArray(allowed)?allowed:[allowed]).filter(value=>typeof value==='string');
+  if(typeof root!=='string'||!isAbsolute(root)||allowedRoots.length===0||allowedRoots.some(value=>!isAbsolute(value)))fail('MANAGED_COPY_UNSAFE_PATH');
   // Reject forbidden broad targets before any filesystem access. This also
   // keeps denied roots independent of their accessibility on the host.
-  rejectBroadRoot(root);rejectBroadRoot(allowed);
-  assertAncestors(allowed);
-  const actualAllowed=realpathSync.native(allowed);
-  rejectBroadRoot(actualAllowed);
-  if(!same(root,allowed)&&!same(root,actualAllowed))fail('MANAGED_COPY_UNSAFE_PATH');
+  rejectBroadRoot(root);
+  let selected=null;
+  for(const configured of allowedRoots) {
+    rejectBroadRoot(configured);const syntactic=same(root,configured);
+    try {
+      assertAncestors(configured);const actual=realpathSync.native(configured);rejectBroadRoot(actual);
+      if(syntactic||same(root,actual)){selected={configured,actual};break;}
+    } catch(error) {
+      if(syntactic||error?.code!=='ENOENT')throw error;
+    }
+  }
+  if(!selected)fail('MANAGED_COPY_UNSAFE_PATH');
   const canonical=resolve(root);
   assertAncestors(canonical);
   const actual=realpathSync.native(canonical);
-  if(!same(actual,actualAllowed))fail('MANAGED_COPY_UNSAFE_PATH');
+  if(!same(actual,selected.actual))fail('MANAGED_COPY_UNSAFE_PATH');
   rejectBroadRoot(actual);
   assertAncestors(actual);return actual;
 }
@@ -109,6 +117,26 @@ export function createPersonalManagedCopies({db,clock=()=>new Date(),allowedRoot
       db.prepare("INSERT INTO personal_managed_copies(copy_id,owner_user_id,owner_fingerprint,kind,root_path,relative_path,content_hash,status,created_at) VALUES(?,?,?,?,?,?,?,'active',?)")
         .run(copyId,ownerUserId,fingerprint(ownerUserId),kind,root,path.relativePath,fact.hash,nowText(clock));
       return {copyId};
+    },
+    remove({ownerUserId,copyId}) {
+      if(typeof ownerUserId!=='string'||!ownerUserId||typeof copyId!=='string'||!copyId)fail('MANAGED_COPY_SCOPE_CONFLICT');
+      if(!activeOwner(ownerUserId)||blocked(fingerprint(ownerUserId)))fail('MANAGED_COPY_OWNER_UNAVAILABLE');
+      const row=db.prepare('SELECT * FROM personal_managed_copies WHERE copy_id=?').get(copyId);
+      if(!row||row.owner_user_id!==ownerUserId||row.kind!=='file'||row.owner_fingerprint!==fingerprint(ownerUserId))fail('MANAGED_COPY_SCOPE_CONFLICT');
+      if(row.status==='removed')return {copyId:row.copy_id,status:'removed'};
+      try {
+        const root=authorizedRoot(row.root_path,allowedRootRequired);const path=targetFor(root,row.relative_path);
+        let fact;
+        try {fact=fileFact(path.target);}catch(error){if(error?.code!=='ENOENT')throw error;}
+        if(fact) {
+          if(fact.hash!==row.content_hash)fail('MANAGED_COPY_HASH_CONFLICT');
+          unlinkSync(path.target);
+        }
+      } catch(error){fail(safeReason(error));}
+      const changed=db.prepare("UPDATE personal_managed_copies SET status='removed',removed_at=? WHERE copy_id=? AND owner_user_id=? AND status='active'")
+        .run(nowText(clock),row.copy_id,ownerUserId);
+      if(changed.changes!==1)fail('MANAGED_COPY_SCOPE_CONFLICT');
+      return {copyId:row.copy_id,status:'removed'};
     },
     inventory,
     cleanup(ownerUserId) {

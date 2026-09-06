@@ -249,6 +249,7 @@ describe('R1 personal standalone conversation page', () => {
 
   it('clears recovery indexes on expiry and identity change without clearing unrelated storage', async () => {
     sessionStorage.setItem('vio:personal:chat:recovery:v1:test-owner:test-alpha', JSON.stringify({ version: 1, kind: 'turn', idempotencyKey: 'vio-chat-11111111-1111-4111-8111-111111111111' }))
+    sessionStorage.setItem('vio:personal:chat:r3:recovery:v1:test-owner:test-alpha', JSON.stringify({ version: 1, idempotencyKey: 'vio-r3-11111111-1111-4111-8111-111111111111', operationType: 'conversation.turn' }))
     sessionStorage.setItem('unrelated', 'keep')
     function Controls() {
       const personal = usePersonal()
@@ -259,14 +260,17 @@ describe('R1 personal standalone conversation page', () => {
     await screen.findByRole('button', { name: '测试退出' })
     fireEvent.click(screen.getByRole('button', { name: '测试退出' }))
     expect(sessionStorage.getItem('vio:personal:chat:recovery:v1:test-owner:test-alpha')).toBeNull()
+    expect(sessionStorage.getItem('vio:personal:chat:r3:recovery:v1:test-owner:test-alpha')).toBeNull()
     expect(sessionStorage.getItem('unrelated')).toBe('keep')
     view.unmount()
 
     sessionStorage.setItem('vio:personal:chat:recovery:v1:test-owner:test-alpha', JSON.stringify({ version: 1, kind: 'turn', idempotencyKey: 'vio-chat-22222222-2222-4222-8222-222222222222' }))
+    sessionStorage.setItem('vio:personal:chat:r3:recovery:v1:test-owner:test-alpha', JSON.stringify({ version: 1, idempotencyKey: 'vio-r3-22222222-2222-4222-8222-222222222222', operationType: 'conversation.turn' }))
     render(<PersonalProvider api={personalApi()}><Controls /></PersonalProvider>)
     await screen.findByRole('button', { name: '测试换身份' })
     fireEvent.click(screen.getByRole('button', { name: '测试换身份' }))
     expect(sessionStorage.getItem('vio:personal:chat:recovery:v1:test-owner:test-alpha')).toBeNull()
+    expect(sessionStorage.getItem('vio:personal:chat:r3:recovery:v1:test-owner:test-alpha')).toBeNull()
   })
 
   it('aborts a pending read on unmount and does not expose fixed legacy identity tokens', async () => {

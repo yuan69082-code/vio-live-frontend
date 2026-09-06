@@ -8,9 +8,9 @@ import {createSqliteDatabase} from '../src/integrations/database/sqlite-database
 
 const migration='024_create_governed_personal_deletion.sql';
 test('024 fresh and 001-023 upgrade retain old identities and ordinary immutable guards',()=>{
- const root=mkdtempSync(join(tmpdir(),'vio-r2-delete-migration-'));
- try {
-  const oldPath=join(root,'old');cpSync(resolve('migrations'),oldPath,{recursive:true});rmSync(join(oldPath,migration));rmSync(join(oldPath,'025_create_standalone_chat_ledger.sql'));
+  const root=mkdtempSync(join(tmpdir(),'vio-r2-delete-migration-'));
+  try {
+  const oldPath=join(root,'old');cpSync(resolve('migrations'),oldPath,{recursive:true});rmSync(join(oldPath,migration));rmSync(join(oldPath,'025_create_standalone_chat_ledger.sql'));rmSync(join(oldPath,'026_create_personal_multi_conversation.sql'));
   const file=join(root,'db.sqlite');const old=createSqliteDatabase({databasePath:file,migrationsPath:oldPath});
   old.connection.prepare("INSERT INTO users VALUES('retained','retained@example.test','Retained','active','2026-01-01','2026-01-01')").run();
   const guards=old.connection.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND sql LIKE '%BEFORE UPDATE%'").all();old.close();
@@ -19,7 +19,7 @@ test('024 fresh and 001-023 upgrade retain old identities and ordinary immutable
    assert.equal(upgraded.connection.prepare("SELECT display_name FROM users WHERE user_id='retained'").get().display_name,'Retained');
    for(const g of guards)assert.equal(upgraded.connection.prepare('SELECT sql FROM sqlite_master WHERE name=?').get(g.name).sql,g.sql);
    assert.equal(upgraded.connection.prepare("SELECT vio_owner_deletion_authorized('message_versions',1) allowed").get().allowed,0);
-   assert.equal(upgraded.connection.prepare("SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND sql LIKE '%WHEN vio_owner_deletion_authorized%'").get().n,32);
+   assert.equal(upgraded.connection.prepare("SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND sql LIKE '%WHEN vio_owner_deletion_authorized%'").get().n,43);
    assert.equal(upgraded.connection.prepare('SELECT count(*) n FROM personal_deletion_tasks').get().n,0);
    assert.deepEqual(upgraded.connection.prepare('PRAGMA foreign_key_check').all(),[]);
   } finally { upgraded.close(); }

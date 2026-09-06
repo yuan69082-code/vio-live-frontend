@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-R0 已验收并推送；通用状态 GET、健康摘要和设置页读取均已存在，历史 V5/F1 聊天没有被改写为通用端口实现。R2 与 R1 均已于 **2026-09-05 正式验收通过**：R2 完成个人所有者访问、首次设置、多助手、资料、会话、审计/诊断、Provider/Model、加密凭据与认证连接检查，以及按已确认政策执行的账户删除、限权查询/撤销/重试；R1 完成每个已验证所有者/当前助手的隔离默认会话，并由 Vio 自己完成 Provider 执行和最终 MessageVersion 发布。邮箱、Google 和公开注册继续暂缓，R3 多会话尚未开始。精确 R2 与 R1 合同分别见 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md) 和 [`R1_STANDALONE_CHAT_CONTRACT.md`](R1_STANDALONE_CHAT_CONTRACT.md)。
+R0 已验收并推送；通用状态 GET、健康摘要和设置页读取均已存在，历史 V5/F1 聊天没有被改写为通用端口实现。R2 与 R1 均已于 **2026-09-05 正式验收通过**。R3 已冻结并实现真实个人会话下的每助手多会话合同，沿用 Vio 自有 Provider 执行边界，不连接外部主体运行时；前后端实现、受控页面闭环和阶段证据已于 **2026-09-06 正式验收通过**。精确合同见 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md)、[`R1_STANDALONE_CHAT_CONTRACT.md`](R1_STANDALONE_CHAT_CONTRACT.md) 与 [`R3_MULTI_CONVERSATION_CONTRACT.md`](R3_MULTI_CONVERSATION_CONTRACT.md)。
 
 S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 v1.1 身份仅用于 `disposable_test` 验收且禁止晋升；Windows 创建和 doctor 以同一 240 字符门禁验证 Engine WakeSession 最终/原子临时文件的最坏路径，超限返回 `unsafe / engine_persistence_path_budget_exceeded`；推荐新建 `C:\VioS4\first-001` 这类仓库外短路径。cleanup 只允许整根删除：正常沙箱及唯一问题为历史路径超预算的旧沙箱均需通过其余全部严格校验，plan 返回 `cleanupEligible`、`legacyUnsafeReason` 和唯一 `deleteTargets=[canonicalSandboxRoot]`，apply 继续要求服务停止与整箱销毁双确认。
 
@@ -34,7 +34,7 @@ S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 
 
 ## R1｜个人独立默认会话（后端合同已实现）
 
-所有入口都位于 `/api/v1/personal`，并只从已验证的 R2 `vio_personal_session` 取得所有者；助手由服务端保存的当前选择决定。请求体和路径不接受 userId、assistantId 或 conversationId。每个 `(owner, assistant)` 只有一个 R1 默认会话；切换助手只改变下一次入口选择，不迁移历史。R3 的会话列表、新建、重命名和删除尚未开始。
+所有入口都位于 `/api/v1/personal`，并只从已验证的 R2 `vio_personal_session` 取得所有者；助手由服务端保存的当前选择决定。请求体和路径不接受 userId、assistantId 或 conversationId。每个 `(owner, assistant)` 只有一个 R1 默认会话；切换助手只改变下一次入口选择，不迁移历史。R3 已在独立合同中扩展多会话；这些 R1 入口继续保留原语义。
 
 | 方法 | 路径 | 语义 |
 | --- | --- | --- |
@@ -54,7 +54,13 @@ R1 只选择当前所有者已启用的 `defaultForChat` 模型，不静默 fall
 
 迁移 `025` 以独立的 `standalone_chat_default_conversations`、`standalone_chat_turns`、`standalone_chat_model_executions`、`standalone_chat_provider_attempts`、`standalone_chat_usage_facts`、`standalone_chat_provider_results` 与 `standalone_chat_recovery_actions` 保存默认会话映射、逻辑执行、attempt、usage/cost、锁定结果和恢复事实。复合外键、活动 turn 唯一约束及不可变保护共同阻止跨所有者/助手串写、第二个活动轮次和覆盖历史；只有限定所有者删除授权可以清理该所有者事实。
 
-这是 Vio 自有独立模式，不构造 Continuity V1 请求，不进入 V2—V5，不读取 Binding、SubjectState 或 Engine 结果，也不探测、读取、启动或修改 Engine。生产个人会话对 legacy Conversation/Message/Continuity Turn/`state_update` 写入口返回 `PERSONAL_CHAT_ROUTE_REQUIRED`；历史数据、只读能力与 test-support 证据继续保留。后端三文件专项 61/61、受影响组合 128/128、默认全量 399 项中 398 通过且 1 条既有 RFC 跨仓对照按隔离条件跳过；该跳过未执行、不计通过。前端专项 26/26、全量 224/224、类型检查/构建及受控真实页面闭环也已完成；总体协调窗口于 2026-09-05 正式验收 R1 通过，R3 尚未开始。
+这是 Vio 自有独立模式，不构造 Continuity V1 请求，不进入 V2—V5，不读取 Binding、SubjectState 或 Engine 结果，也不探测、读取、启动或修改 Engine。生产个人会话对 legacy Conversation/Message/Continuity Turn/`state_update` 写入口返回 `PERSONAL_CHAT_ROUTE_REQUIRED`；历史数据、只读能力与 test-support 证据继续保留。后端三文件专项 61/61、受影响组合 128/128、默认全量 399 项中 398 通过且 1 条既有 RFC 跨仓对照按隔离条件跳过；该跳过未执行、不计通过。前端专项 26/26、全量 224/224、类型检查/构建及受控真实页面闭环也已完成；总体协调窗口于 2026-09-05 正式验收 R1 通过。R3 的新增入口和证据见下一节及独立合同。
+
+## R3｜个人多会话（2026-09-06 正式验收通过）
+
+所有入口继续位于 `/api/v1/personal/chat`，身份只来自 R2 服务端会话与当前助手。`GET/POST /conversations` 提供过滤、搜索、稳定排序、opaque cursor 与幂等创建；`GET /conversations/current`、`GET/PATCH /conversations/:id`、`POST .../selection|archive|restore|deletion` 提供只读当前选择和显式生命周期操作。消息版本、重新生成、分支、清空窗口、附件、JSON/Markdown 导出及操作查询的精确路径、DTO 和错误码只在 [`R3_MULTI_CONVERSATION_CONTRACT.md`](R3_MULTI_CONVERSATION_CONTRACT.md) 维护，避免在本索引复制第二套合同。
+
+迁移 `026` 将每个 R1 默认会话精确登记为该助手的第一个 R3 会话，并保留原 Conversation/Message/MessageVersion、R1 turn/execution/attempt/usage/cost/result 与 Event。一个会话同一时间只允许一个活动 turn；普通查询、切换、版本读取和导出均不调用 Provider。明确重新生成必须使用新操作键并重新经过当前模型/凭据/Permission/Security/Token Budget；请求可能已发送的 UNKNOWN 保持 fail closed。附件正文只从受管根按精确登记读取，不在 API 暴露路径；账户删除继续通过 owner-scoped 受管副本登记清理。
 
 ## R0-A｜Subject Runtime Port v1（内部合同）
 
@@ -117,7 +123,7 @@ Adapter Manifest、连接快照或协商结果存在未知字段、非法状态�
 
 `subjectRuntime` 使用同一份已校验通用快照，默认返回 `platformStatus=available` 与 `runtimeStatus=not_configured`。历史 `continuityEngine` 值为兼容既有调用方而保留；新增 `continuityEngineCompatibility.scope=adapter_only_legacy` 明确它不是 Vio Core 的通用健康合同。
 
-R0-B 当时只增加通用状态装配和只读查询，没有运行时选择/连接/断开/重连写接口，没有创建 Continuity Engine Adapter，也没有切换 V1—V5/F1 聊天编排；R0 后续已完成整体验收。R1 新增的是与历史 V1—V5/F1 并列的 Vio 自有个人聊天路径，不把旧链路改写为通用 Adapter 调用；前后端闭环与隔离回归已完成，正式阶段验收尚未完成。
+R0-B 当时只增加通用状态装配和只读查询，没有运行时选择/连接/断开/重连写接口，没有创建 Continuity Engine Adapter，也没有切换 V1—V5/F1 聊天编排；R0 后续已完成整体验收。R1 新增的是与历史 V1—V5/F1 并列的 Vio 自有个人聊天路径，不把旧链路改写为通用 Adapter 调用，并已于 2026-09-05 正式验收。R3 在该独立路径上扩展多会话，实现与受控证据已于 2026-09-06 正式验收通过。
 
 ## 统一返回结构
 

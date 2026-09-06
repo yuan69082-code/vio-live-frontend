@@ -7,6 +7,7 @@ import { personalError } from '../components/personal/useScopedAction'
 import { parseDeletionAccess } from '../api/personal-deletion'
 import type { DeletionAccess } from '../api/personal-deletion'
 import { clearPersonalChatRecoveryForOwner } from '../api/personal-chat-recovery'
+import { clearMultiChatRecoveryForOwner } from '../api/personal-multi-chat-recovery'
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'access'; access: PersonalAccess; message?: string } | { kind: 'ready'; session: PersonalSession } | { kind: 'deletion'; access: DeletionAccess } | { kind: 'deletion-receipt-expired' }
 type PersonalContextValue = {
@@ -71,6 +72,7 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
     const ownerId = current.current?.user.userId
     if (ownerId) {
       try { clearPersonalChatRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
+      try { clearMultiChatRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
     }
     invalidate()
     setState({ kind: 'access', access: { status: 'authentication_required', registration: 'disabled' }, message: '访问已结束或失效，请重新验证。' })
@@ -85,6 +87,7 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
     const identityChanged = current.current?.session.sessionId !== value.session.sessionId || previousOwnerId !== value.user.userId
     if (previousOwnerId && previousOwnerId !== value.user.userId) {
       try { clearPersonalChatRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
+      try { clearMultiChatRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
     }
     if (identityChanged) invalidate()
     else if (current.current && value.selectionVersion < current.current.selectionVersion) {
@@ -191,6 +194,7 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
     api.onUnauthorized(() => {
       if (current.current) {
         try { clearPersonalChatRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
+        try { clearMultiChatRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
       }
       if (current.current || currentDeletion.current) void restore()
     })

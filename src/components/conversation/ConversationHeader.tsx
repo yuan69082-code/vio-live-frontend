@@ -7,6 +7,9 @@ type ConversationHeaderProps = {
   sessionName: string
   sessionLabel?: string
   sessionTitle?: string
+  sessionDisabled?: boolean
+  sessionExpanded?: boolean
+  onSessionSwitch?: () => void
 }
 
 function ConversationHeader({
@@ -16,6 +19,9 @@ function ConversationHeader({
   sessionName,
   sessionLabel = '本地试聊',
   sessionTitle = '当前仅开放固定本地试聊会话',
+  sessionDisabled = true,
+  sessionExpanded,
+  onSessionSwitch,
 }: ConversationHeaderProps) {
   return (
     <header className="conversation-header">
@@ -29,8 +35,11 @@ function ConversationHeader({
       <button
         className="session-switch"
         type="button"
-        disabled
+        disabled={sessionDisabled}
+        aria-expanded={sessionExpanded}
+        aria-label={`切换会话，当前：${sessionName}`}
         title={sessionTitle}
+        onClick={onSessionSwitch}
       >
         {sessionLabel}
         <ConversationIcon name="chevron" />

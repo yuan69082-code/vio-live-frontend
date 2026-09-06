@@ -1,4 +1,5 @@
-import type { FormEvent, KeyboardEvent } from 'react'
+import { useRef } from 'react'
+import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import ConversationIcon, { ConversationIconName } from './ConversationIcon'
 
 const DEFAULT_MAX_LENGTH = 32_768
@@ -19,6 +20,8 @@ type ConversationComposerProps = {
   maxLength?: number
   onChange: (value: string) => void
   onSend: () => void
+  onAttachment?: (kind: 'image' | 'file' | 'audio', file: File) => void
+  attachmentsDisabled?: boolean
 }
 
 function ConversationComposer({
@@ -28,7 +31,10 @@ function ConversationComposer({
   maxLength = DEFAULT_MAX_LENGTH,
   onChange,
   onSend,
+  onAttachment,
+  attachmentsDisabled = false,
 }: ConversationComposerProps) {
+  const inputs = useRef<Record<'image' | 'file' | 'audio', HTMLInputElement | null>>({ image: null, file: null, audio: null })
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!disabled && value.trim()) onSend()
@@ -39,6 +45,17 @@ function ConversationComposer({
       event.preventDefault()
       if (!disabled && value.trim()) onSend()
     }
+  }
+
+  const chooseAttachment = (kind: 'image' | 'file' | 'audio') => {
+    if (!onAttachment || disabled || attachmentsDisabled) return
+    inputs.current[kind]?.click()
+  }
+
+  const selected = (kind: 'image' | 'file' | 'audio', event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file) onAttachment?.(kind, file)
   }
 
   return (
@@ -55,13 +72,15 @@ function ConversationComposer({
       />
       <div className="composer-toolbar">
         <div className="attachment-actions">
+          {(['image', 'file', 'audio'] as const).map((kind) => <input key={kind} ref={(element) => { inputs.current[kind] = element }} className="visually-hidden" type="file" tabIndex={-1} aria-label={`${kind === 'image' ? '图片' : kind === 'audio' ? '语音' : '文件'}附件选择`} accept={kind === 'image' ? 'image/*' : kind === 'audio' ? 'audio/*' : undefined} onChange={(event) => selected(kind, event)} />)}
           {attachmentActions.map((action) => (
             <button
               key={action.label}
               type="button"
-              aria-label={`${action.label}，暂未接入`}
-              title="暂未接入"
-              disabled
+              aria-label={onAttachment ? (action.icon === 'voice' ? '添加音频' : action.label) : `${action.label}，暂未接入`}
+              title={onAttachment ? (action.icon === 'voice' ? '添加音频' : action.label) : '暂未接入'}
+              disabled={!onAttachment || disabled || attachmentsDisabled}
+              onClick={() => chooseAttachment(action.icon === 'image' ? 'image' : action.icon === 'voice' ? 'audio' : 'file')}
             >
               <ConversationIcon name={action.icon} />
             </button>

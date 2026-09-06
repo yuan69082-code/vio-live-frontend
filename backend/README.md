@@ -4,9 +4,9 @@
 
 长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 的 Binding 导出、live-chat plan/apply 和只读 doctor 已用于一次可销毁、短路径、固定测试身份的真实 `openai_compatible` 验收，结论为 PASS；该结论不等于通用身份或生产部署已完成。
 
-R0-A/B/C 及 R0 整阶段已验收并推送。R2 已于 2026-09-05 正式验收通过：受控个人所有者初始化、HttpOnly 会话/CSRF/同源保护、首次设置、个人资料、同一所有者多助手、会话撤销、访问审计/诊断、Provider/Model、加密凭据及受限认证连接检查均已完成；邮箱、Google 与公开注册按最新决定暂缓。账户/空间删除采用 7 天撤销、实际删除、受管副本 14 天期限、最小凭据 30 天期限及重启/失败恢复。R1 独立聊天现已落地：它只认 R2 个人会话和服务端当前助手，每个助手拥有一个隔离的默认会话，由 Vio 自己完成路由、门控、Provider 执行、结果锁定和最终消息发布；后端隔离回归、前端接线、前端自动化和受控真实页面闭环均已完成，正式阶段验收仍待总体协调窗口，R3 多会话尚未开始。历史 V5/F1 固定 Profile/Engine 链路继续作为独立的既有证据保留，不参与 R1 生产个人聊天路径。
+R0-A/B/C 及 R0 整阶段已验收并推送。R2 已于 2026-09-05 正式验收通过：受控个人所有者初始化、HttpOnly 会话/CSRF/同源保护、首次设置、个人资料、同一所有者多助手、会话撤销、访问审计/诊断、Provider/Model、加密凭据及受限认证连接检查均已完成；邮箱、Google 与公开注册按最新决定暂缓。账户/空间删除采用 7 天撤销、实际删除、受管副本 14 天期限、最小凭据 30 天期限及重启/失败恢复。R1 独立聊天也已正式验收。R3 的每助手多个会话、消息版本/分支/附件/导出、明确重新生成和操作恢复后端合同、迁移 `026`、前端接线及受控本机 loopback 页面闭环已于 2026-09-06 正式验收通过。历史 V5/F1 固定 Profile/Engine 链路继续作为独立的既有证据保留，不参与 R1/R3 生产个人聊天路径。
 
-2026-09-04 决定：R0 后先 R2、再 R1，然后 R3 至 R13，编号不变。R2 删除政策阻塞已解除，实现、专项与页面证据见 [R2 合同](docs/R2_PERSONAL_CONTRACT.md) 和开发日志；总体协调窗口于 **2026-09-05 正式验收 R2 通过**。R1 后端施工状态与接口见 [R1 独立聊天合同](docs/R1_STANDALONE_CHAT_CONTRACT.md)；它不是 R3 的会话列表、新建、重命名或删除能力。顺序见 [ADR-034](../docs/决策记录.md#adr-034)。
+2026-09-04 决定：R0 后先 R2、再 R1，然后 R3 至 R13，编号不变。R2 与 R1 均已正式验收。R3 的精确接口、状态、幂等与恢复语义见 [多会话合同](docs/R3_MULTI_CONVERSATION_CONTRACT.md)；R1 旧默认会话事实仅作为 R3 第一个会话迁移来源保留。顺序见 [ADR-034](../docs/决策记录.md#adr-034)。
 
 S4-Live 可销毁沙箱通过严格 `sandbox.manifest.json` 把固定 `user-001 / assistant-001 / subject-001 / conversation-001 / binding-001` 标记为一次性验收身份（`promotionAllowed=false`）。`create:live-chat-sandbox` 只在仓库外创建同根 Binding/Vio data/Engine data 骨架；Windows 下会在任何写入前按 Engine WakeSession 最终文件及 `NamedTemporaryFile` 原子临时文件的最坏路径执行 240 字符安全预算，超限以 `unsafe / engine_persistence_path_budget_exceeded` 拒绝且不留半成品。doctor 对已有 manifest 使用同一门禁。推荐每次使用全新短路径，例如 `C:\VioS4\first-001`；不得移动、截断或用链接绕过。`cleanup:live-chat-sandbox` 只对“唯一不安全原因是历史路径超预算”的旧沙箱提供受限兼容：重新执行全部严格校验，plan 明示兼容原因，apply 仍需双确认且只能整根删除；其他错误一律 fail closed。它不提供逐表、逐行、逐 JSON 或 revision 回滚。
 
@@ -486,12 +486,12 @@ backend/
 
 ## 系统边界
 
-通用责任：Vio Core 负责账号、助手、会话/消息、模型与供应商、MCP/Skill/Plugin/Tool、手机/设备、本地记忆与 Context、权限安全、工作流/生活数据、费用及导出/备份恢复。R1 已让独立模式的正常回复由 Vio 自有模型执行链产生并按自身规则发布，不要求外部运行时；后端隔离回归、前端接线和受控页面闭环均已完成，当前仍待阶段验收。外部模式只增加受控主体连续性、表达和投影，外部运行时不获得 Vio 数据库、密钥或执行权。两种模式的边界见 [端口说明](docs/SUBJECT_RUNTIME_PORT_V1.md#mode-semantics)。
+通用责任：Vio Core 负责账号、助手、会话/消息、模型与供应商、MCP/Skill/Plugin/Tool、手机/设备、本地记忆与 Context、权限安全、工作流/生活数据、费用及导出/备份恢复。R1 已让独立模式的正常回复由 Vio 自有模型执行链产生并按自身规则发布，不要求外部运行时；后端隔离回归、前端接线和受控页面闭环已于 2026-09-05 正式验收，R3 多会话于 2026-09-06 正式验收。外部模式只增加受控主体连续性、表达和投影，外部运行时不获得 Vio 数据库、密钥或执行权。两种模式的边界见 [端口说明](docs/SUBJECT_RUNTIME_PORT_V1.md#mode-semantics)。
 
 历史及现有 Continuity Engine 专用链路：在选用该适配器的合同范围内，Engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context、其唯一权威 SubjectState 和最终主体表达。V1–V4、S2/S3/S4、V5/F1 及首次 S4-Live 已验证的事实保留；固定本地 V5 仍只从 Engine 稳定结果发布主体 Message，Vio 不创建其 Event/StateMutation，也不改写 legacy SubjectState。上文适配器专用权威说明保持原意，不扩张为 Vio 通用依赖。
 
 R1 整理的是 Vio 自身适配边界与聊天解耦，不要求真实 Engine 陪同施工。当前 R1 个人生产路径完全不装配、不探测、不读取、不启动也不修改真实 Engine；通用接口须另行验证，真实引擎或同类运行时接入另行验收，不作为 Vio 完成或发布条件。将来优先用独立适配器或接口扩展接入，不擅改核心规则。
 
-V5 固定本地 Profile、F1、L1 与首次 S4-Live 的完成不等于完整产品。R0 已验收；R2 个人访问、多助手、加密密钥库和已批准 7/14/30 天政策的受控删除，以及 R1 独立聊天后端、前端接线、隔离回归和受控页面闭环均已于 2026-09-05 正式验收通过；R3 多会话尚未开始。手机实机、HTTPS、云部署、跨设备云端同步、R1 真实供应商验证、通用外部身份/Binding、生产认证、多租户、无人值守密钥恢复、备份和部署仍待各归属阶段，当前不得公开部署。
+V5 固定本地 Profile、F1、L1 与首次 S4-Live 的完成不等于完整产品。R0 已验收；R2 个人访问、多助手、加密密钥库和已批准 7/14/30 天政策的受控删除，以及 R1 独立聊天均已于 2026-09-05 正式验收通过；R3 多会话的实现、隔离回归和受控页面闭环已于 2026-09-06 正式验收通过。手机实机、HTTPS、云部署、跨设备云端同步、真实供应商验证、通用外部身份/Binding、生产认证、多租户、无人值守密钥恢复、备份和部署仍待各归属阶段，当前不得公开部署。
 
 稳定规划见 [`../docs/后端/README.md`](../docs/后端/README.md)，当前连接契约见 [`../docs/后端/14-continuity-engine连接契约v1.1.md`](../docs/后端/14-continuity-engine连接契约v1.1.md)，历史 v1 继续保留在 [`14-continuity-engine连接契约v1.md`](../docs/后端/14-continuity-engine连接契约v1.md)，逻辑数据模型见 [`../docs/后端/数据库设计.md`](../docs/后端/数据库设计.md)，技术决策见 [`docs/ADR.md`](docs/ADR.md)。

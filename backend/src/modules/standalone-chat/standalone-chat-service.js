@@ -218,6 +218,7 @@ export function createStandaloneChatService({
   clock = () => new Date(),
   idFactory = createId,
   faultInjector = null,
+  multiConversationPort = null,
 }) {
   function assertStandaloneMode() {
     const runtime = subjectRuntimeStatusService.getStatus();
@@ -353,6 +354,13 @@ export function createStandaloneChatService({
   }
 
   function providerMessages(scope, turn) {
+    const scopedMessages = multiConversationPort?.providerMessagesForTurn?.(turn);
+    if (scopedMessages) {
+      return Object.freeze([
+        systemMessage(scope.assistant),
+        ...scopedMessages.slice(-(MAX_HISTORY_TURNS * 2 + 1)),
+      ].map((message) => Object.freeze(message)));
+    }
     const completed = repository.listTurns(
       turn.userId,
       turn.assistantId,
@@ -1090,6 +1098,7 @@ export function createStandaloneChatService({
         turn.conversationId,
         { senderType: 'subject', content: result.result.responseCandidate },
       );
+      multiConversationPort?.linkAssistantMessage?.(turn, message);
       const attached = repository.attachAssistantMessage(turn.turnId, 'result_ready', {
         assistantMessageId: message.messageId,
         assistantMessageVersionId: message.currentVersionId,
@@ -1319,6 +1328,77 @@ export function createStandaloneChatService({
     return publicTurn(await advance(context, scope, turn, {}, 'initial'));
   }
 
+  async function createConversationTurn(context, value, idempotencyKey, target) {
+    const scope = currentScope(context);
+    assertCurrentSession(context);
+    const content = requireMessageContent(value?.content);
+    const branchId = requireOpaqueResourceId(target?.branchId, 'branchId');
+    const conversationId = requireOpaqueResourceId(target?.conversationId, 'conversationId');
+    const attachmentIds = Array.isArray(value?.attachmentIds) ? value.attachmentIds : [];
+    const input = Object.freeze({content, branchId, attachmentIds});
+    const key = requireIdempotencyKey(idempotencyKey);
+    const hash = inputHash(input);
+    const existing = repository.findTurnByOwnerIdempotencyKey(scope.userId, key);
+    if (existing) {
+      const binding = multiConversationPort?.findTurnBinding?.(existing.turnId);
+      if (existing.assistantId !== scope.assistantId
+        || existing.conversationId !== conversationId
+        || binding?.branchId !== branchId
+        || existing.inputContentHash !== hash) {
+        throw new ConflictError('Idempotency-Key is bound to a different chat operation.');
+      }
+      return publicTurn(existing);
+    }
+
+    const turn = runInTransaction(() => {
+      const active = repository.findActiveTurn(
+        scope.userId, scope.assistantId, conversationId,
+      );
+      if (active) {
+        throw codedError('TURN_ALREADY_ACTIVE', 'This conversation already has an active turn.');
+      }
+      const userMessage = messageService.createMessage(
+        scope.userId,
+        scope.assistantId,
+        conversationId,
+        {senderType: 'user', content},
+      );
+      const sourceEvent = eventRepository.findMessageCreatedByMessage(
+        scope.userId, scope.assistantId, userMessage.messageId,
+      );
+      if (!sourceEvent) {
+        throw codedError('STANDALONE_LEDGER_INCONSISTENT', 'User message event is missing.', 500);
+      }
+      const persisted = repository.insertTurn({
+        turnId: idFactory(),
+        userId: scope.userId,
+        assistantId: scope.assistantId,
+        conversationId,
+        createdBySessionId: scope.sessionId,
+        idempotencyKey: key,
+        inputContentHash: hash,
+        userMessageId: userMessage.messageId,
+        userMessageVersionId: userMessage.currentVersionId,
+        sourceEventId: sourceEvent.eventId,
+        createdAt: clock().toISOString(),
+      });
+      multiConversationPort?.linkTurnAndUserMessage?.({
+        turnId: persisted.turnId,
+        userId: persisted.userId,
+        assistantId: persisted.assistantId,
+        conversationId: persisted.conversationId,
+        branchId,
+        userMessageId: userMessage.messageId,
+        userMessageVersionId: userMessage.currentVersionId,
+        sequenceNumber: userMessage.sequenceNumber,
+        attachments: target.attachments ?? [],
+        createdAt: persisted.createdAt,
+      });
+      return persisted;
+    });
+    return publicTurn(await advance(context, scope, turn, {}, 'initial'));
+  }
+
   function validateRecoveryIntent(turn, input) {
     if (turn.status === 'result_ready' || turn.status === 'publishing') {
       if (input.action !== 'resume') {
@@ -1530,6 +1610,12 @@ export function createStandaloneChatService({
     },
 
     createTurn,
+    createConversationTurn,
+
+    findActiveTurn(userId, assistantId, conversationId) {
+      const turn = repository.findActiveTurn(userId, assistantId, conversationId);
+      return turn ? publicTurn(turn) : null;
+    },
 
     getTurn(context, turnId) {
       const scope = currentScope(context);

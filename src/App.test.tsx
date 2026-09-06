@@ -18,9 +18,12 @@ function apiFixture(authenticated = true) {
   vi.spyOn(api, 'profile').mockResolvedValue(profileFixture())
   vi.spyOn(api, 'assistant').mockResolvedValue(assistantFixture())
   vi.spyOn(api, 'sessions').mockResolvedValue({ items: [] })
-  vi.spyOn(api, 'request').mockImplementation(async (path) => path === '/chat/default'
-    ? { assistant: { assistantId: 'test-alpha', name: '测试助手一' }, conversation: null, messages: [], activeTurn: null, externalCall: 'not_performed' }
-    : { items: [] })
+  vi.spyOn(api, 'request').mockImplementation(async (path) => {
+    if (path.startsWith('/chat/conversations?')) return { assistant: { assistantId: 'test-alpha', name: '测试助手一' }, conversations: [], selectionVersion: 0, nextCursor: null, externalCall: 'not_performed' }
+    if (path === '/chat/conversations/current') return { assistant: { assistantId: 'test-alpha', name: '测试助手一' }, conversation: null, selectionVersion: 0, messages: [], activeTurn: null, externalCall: 'not_performed' }
+    if (path === '/chat/default') return { assistant: { assistantId: 'test-alpha', name: '测试助手一' }, conversation: null, messages: [], activeTurn: null, externalCall: 'not_performed' }
+    return { items: [] }
+  })
   return api
 }
 afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); localStorage.clear() })
@@ -84,7 +87,9 @@ describe('R2 personal application entry', () => {
     expect(api.session).toHaveBeenCalledTimes(1)
     expect(within(nav).getAllByRole('button')).toHaveLength(6)
     fireEvent.click(within(nav).getByRole('button', { name: '对话' }))
-    expect(await screen.findByText(/每个助手仅显示唯一默认会话/)).toBeInTheDocument()
+    expect(await screen.findByText(/独立多会话/)).toBeInTheDocument()
+    expect(api.request).toHaveBeenCalledWith(expect.stringMatching(/^\/chat\/conversations\?/), 'GET', undefined, expect.anything())
+    expect(api.request).not.toHaveBeenCalledWith('/chat/default', expect.anything(), expect.anything(), expect.anything())
     expect(screen.queryByText('old-account-content')).not.toBeInTheDocument()
     expect(sessionStorage.getItem('vio-live:conversation:pending-turn:v1')).toBe(old)
   })

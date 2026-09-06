@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 import MessageBubble, { type ConversationMessageView } from './MessageBubble'
 
 type MessageListProps = {
@@ -8,6 +9,7 @@ type MessageListProps = {
   agentName?: string
   emptyDescription?: string
   loading: boolean
+  renderActions?: (message: ConversationMessageView) => ReactNode
 }
 
 function formatDate(value: string) {
@@ -17,7 +19,7 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
-function MessageList({ messages, agentAvatar, agentAvatarImage, agentName, emptyDescription = '消息将通过 Vio 后端进入连续性链路。', loading }: MessageListProps) {
+function MessageList({ messages, agentAvatar, agentAvatarImage, agentName, emptyDescription = '消息将通过 Vio 后端进入连续性链路。', loading, renderActions }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -46,7 +48,7 @@ function MessageList({ messages, agentAvatar, agentAvatarImage, agentName, empty
                   <span>{currentDate}</span>
                 </div>
               )}
-              <MessageBubble message={message} agentAvatar={agentAvatar} agentAvatarImage={agentAvatarImage} agentName={agentName} />
+              <MessageBubble message={message} agentAvatar={agentAvatar} agentAvatarImage={agentAvatarImage} agentName={agentName} actions={renderActions?.(message)} />
             </div>
           )
         })
