@@ -166,6 +166,10 @@ export function createSqliteContextAssemblyRepository(connection) {
      slot,origin,status,reason,source_conversation_id,source_branch_id,message_id,message_version_id,
      event_id,summary_id,content_hash,estimated_tokens,source_json,evidence_json,created_at)
      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const insertMemorySourceLink = connection.prepare(`INSERT INTO personal_context_memory_source_links
+    (assembly_id,source_phase,source_order,user_id,assistant_id,memory_id,memory_version_id,
+     memory_content_hash,primary_source_ref,primary_source_content_hash)
+    VALUES(?,?,?,?,?,?,?,?,?,?)`);
   const listAssemblySources = connection.prepare(`SELECT * FROM personal_context_assembly_sources
     WHERE assembly_id=? AND source_phase=? ORDER BY source_order`);
   const findEvidence = connection.prepare(`SELECT * FROM personal_context_assembly_sources
@@ -177,6 +181,24 @@ export function createSqliteContextAssemblyRepository(connection) {
      action_type,status,created_at) VALUES(?,?,?,?,?,?,?,?,'retry_fold','pending',?)`);
   const completeRecovery = connection.prepare(`UPDATE personal_context_recovery_actions
     SET status=?,completed_at=? WHERE recovery_id=? AND status='pending'`);
+
+  function insertAssemblySources(record, sourcePhase, sources) {
+    sources.forEach((item, index) => {
+      insertAssemblySource.run(record.assemblyId, sourcePhase, index,
+        record.userId, record.assistantId, record.conversationId, record.branchId,
+        item.sourceRef, item.sourceType, item.slot, item.origin, item.status,
+        item.reason ?? null, item.sourceConversationId ?? null, item.sourceBranchId ?? null,
+        item.messageId ?? null, item.messageVersionId ?? null, item.eventId ?? null,
+        item.summaryId ?? null, item.contentHash, item.estimatedTokens,
+        JSON.stringify(item.source), JSON.stringify(item.evidence), item.createdAt);
+      if (item.sourceType === 'memory_slot') {
+        insertMemorySourceLink.run(record.assemblyId, sourcePhase, index,
+          record.userId, record.assistantId, item.evidence.memoryId,
+          item.evidence.memoryVersionId, item.evidence.memoryContentHash,
+          item.evidence.sourceRef, item.evidence.sourceContentHash);
+      }
+    });
+  }
 
   return Object.freeze({
     findSettings(userId, assistantId, conversationId) {
@@ -289,13 +311,7 @@ export function createSqliteContextAssemblyRepository(connection) {
           record.providerMessages ? JSON.stringify(record.providerMessages) : null,
           record.providerMessagesHash ?? null,
           record.failureCode ?? null, record.createdAt, record.lockedAt ?? null);
-        sources.forEach((item, index) => insertAssemblySource.run(record.assemblyId, sourcePhase, index,
-          record.userId, record.assistantId, record.conversationId, record.branchId,
-          item.sourceRef, item.sourceType, item.slot, item.origin, item.status,
-          item.reason ?? null, item.sourceConversationId ?? null, item.sourceBranchId ?? null,
-          item.messageId ?? null, item.messageVersionId ?? null, item.eventId ?? null,
-          item.summaryId ?? null, item.contentHash, item.estimatedTokens,
-          JSON.stringify(item.source), JSON.stringify(item.evidence), item.createdAt));
+        insertAssemblySources(record, sourcePhase, sources);
         return assembly(findAssemblyByTurn.get(record.turnId));
       }, 'Context assembly conflicts with an existing turn snapshot.');
     },
@@ -311,13 +327,7 @@ export function createSqliteContextAssemblyRepository(connection) {
         record.providerMessagesHash, record.lockedAt, record.assemblyId);
       if (changed.changes !== 1) throw new ConflictError('Context assembly state conflicts.');
       // The failed candidate set remains immutable; recovery appends a distinct locked set.
-      sources.forEach((item, index) => insertAssemblySource.run(record.assemblyId, 'locked', index,
-        record.userId, record.assistantId, record.conversationId, record.branchId,
-        item.sourceRef, item.sourceType, item.slot, item.origin, item.status,
-        item.reason ?? null, item.sourceConversationId ?? null, item.sourceBranchId ?? null,
-        item.messageId ?? null, item.messageVersionId ?? null, item.eventId ?? null,
-        item.summaryId ?? null, item.contentHash, item.estimatedTokens,
-        JSON.stringify(item.source), JSON.stringify(item.evidence), item.createdAt));
+      insertAssemblySources(record, 'locked', sources);
       return assembly(findAssemblyByTurn.get(record.turnId));
     },
     listAssemblySources(assemblyId, sourcePhase = 'locked') {

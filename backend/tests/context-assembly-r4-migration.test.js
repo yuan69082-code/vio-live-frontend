@@ -34,6 +34,7 @@ function migrationsThrough026(root) {
   const path = join(root, 'migrations-026');
   cpSync(resolve('migrations'), path, { recursive: true });
   rmSync(join(path, MIGRATION));
+  rmSync(join(path, '028_create_local_long_term_memory.sql'));
   return path;
 }
 

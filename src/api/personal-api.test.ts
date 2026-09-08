@@ -68,4 +68,14 @@ describe('personal session client boundary', () => {
       expect.objectContaining({ method: 'GET' }),
     )
   })
+
+  it('sends R5 sensitive read context only in GET headers and never in its URL', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(envelope({}))
+    const api = createPersonalApi(createApiClient({ fetchImplementation: fetcher }))
+    await api.request('/memories/memory-r5', 'GET', undefined, { confirmationId: 'confirmation-r5', securitySessionId: 'security-session-r5' })
+    expect(fetcher).toHaveBeenCalledWith('/api/v1/personal/memories/memory-r5', expect.objectContaining({
+      method: 'GET', headers: expect.objectContaining({ 'X-Vio-Confirmation-Id': 'confirmation-r5', 'X-Vio-Security-Session-Id': 'security-session-r5' }),
+    }))
+    expect(String(fetcher.mock.calls[0][0])).not.toMatch(/confirmation|security/)
+  })
 })

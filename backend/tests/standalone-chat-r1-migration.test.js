@@ -245,6 +245,7 @@ test('R1 migration upgrades an exact 001-024 database without claiming or changi
   cpSync(resolve('migrations'), migrations025, { recursive: true });
   rmSync(join(migrations025, '026_create_personal_multi_conversation.sql'));
   rmSync(join(migrations025, '027_create_context_assembly_ledger.sql'));
+  rmSync(join(migrations025, '028_create_local_long_term_memory.sql'));
   cpSync(migrations025, migrations024, { recursive: true });
   rmSync(join(migrations024, MIGRATION));
   let upgraded = null;
@@ -291,6 +292,7 @@ test('R1 migration 025 failure rolls back the whole migration and preserves 001-
   rmSync(join(migrations024, MIGRATION));
   rmSync(join(migrations024, '026_create_personal_multi_conversation.sql'));
   rmSync(join(migrations024, '027_create_context_assembly_ledger.sql'));
+  rmSync(join(migrations024, '028_create_local_long_term_memory.sql'));
   try {
     const before = createSqliteDatabase({ databasePath, migrationsPath: migrations024 });
     before.close();

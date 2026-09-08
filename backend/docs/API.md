@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-R0 已验收并推送；通用状态 GET、健康摘要和设置页读取均已存在，历史 V5/F1 聊天没有被改写为通用端口实现。R2 与 R1 均已于 **2026-09-05 正式验收通过**。R3 已冻结并实现真实个人会话下的每助手多会话合同，沿用 Vio 自有 Provider 执行边界，不连接外部主体运行时；前后端实现、受控页面闭环和阶段证据已于 **2026-09-06 正式验收通过**。R4 已冻结并实现 Vio 自有上下文装配合同，接入同一 R1/R3 turn 与 Provider execution，并于 **2026-09-08 正式验收通过**。精确合同见 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md)、[`R1_STANDALONE_CHAT_CONTRACT.md`](R1_STANDALONE_CHAT_CONTRACT.md)、[`R3_MULTI_CONVERSATION_CONTRACT.md`](R3_MULTI_CONVERSATION_CONTRACT.md) 与 [`R4_CONTEXT_ASSEMBLY_CONTRACT.md`](R4_CONTEXT_ASSEMBLY_CONTRACT.md)。
+R0 已验收并推送；通用状态 GET、健康摘要和设置页读取均已存在，历史 V5/F1 聊天没有被改写为通用端口实现。R2 与 R1 均已于 **2026-09-05 正式验收通过**。R3 已冻结并实现真实个人会话下的每助手多会话合同，沿用 Vio 自有 Provider 执行边界，不连接外部主体运行时；前后端实现、受控页面闭环和阶段证据已于 **2026-09-06 正式验收通过**。R4 已冻结并实现 Vio 自有上下文装配合同，接入同一 R1/R3 turn 与 Provider execution，并于 **2026-09-08 正式验收通过**。R5 当前已冻结并实现 Vio 自有本地长期记忆合同、迁移 `028`、个人记忆 API 与 R4 `long_term_memory` 来源接入，正在完成阶段复验，尚未经总体协调窗口正式验收。精确合同见 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md)、[`R1_STANDALONE_CHAT_CONTRACT.md`](R1_STANDALONE_CHAT_CONTRACT.md)、[`R3_MULTI_CONVERSATION_CONTRACT.md`](R3_MULTI_CONVERSATION_CONTRACT.md)、[`R4_CONTEXT_ASSEMBLY_CONTRACT.md`](R4_CONTEXT_ASSEMBLY_CONTRACT.md) 与 [`R5_LOCAL_MEMORY_CONTRACT.md`](R5_LOCAL_MEMORY_CONTRACT.md)。
 
 S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 v1.1 身份仅用于 `disposable_test` 验收且禁止晋升；Windows 创建和 doctor 以同一 240 字符门禁验证 Engine WakeSession 最终/原子临时文件的最坏路径，超限返回 `unsafe / engine_persistence_path_budget_exceeded`；推荐新建 `C:\VioS4\first-001` 这类仓库外短路径。cleanup 只允许整根删除：正常沙箱及唯一问题为历史路径超预算的旧沙箱均需通过其余全部严格校验，plan 返回 `cleanupEligible`、`legacyUnsafeReason` 和唯一 `deleteTargets=[canonicalSandboxRoot]`，apply 继续要求服务停止与整箱销毁双确认。
 
@@ -64,7 +64,7 @@ R1 只选择当前所有者已启用的 `defaultForChat` 模型，不静默 fall
 
 ## R4｜独立聊天上下文装配（2026-09-08 正式验收通过）
 
-R4 不新增第二条模型执行路径。创建 R1/R3 turn 时，后端按固定顺序装配系统规则、当前助手明确设定、可选已验证运行时投影、未解决 Event、近期原始 MessageVersion、明确未实现的 R5 memory 槽和当前用户消息；预算、裁剪、折叠、来源引用与最终 Provider messages 被锁定为该 turn 唯一不可变快照，快照 hash 写入原 standalone execution。精确 DTO、状态、幂等和错误码只在 [`R4_CONTEXT_ASSEMBLY_CONTRACT.md`](R4_CONTEXT_ASSEMBLY_CONTRACT.md) 维护。
+R4 不新增第二条模型执行路径。创建 R1/R3 turn 时，后端按固定顺序装配系统规则、当前助手明确设定、可选已验证运行时投影、未解决 Event、近期原始 MessageVersion、R5 授权记忆来源和当前用户消息；预算、裁剪、折叠、来源引用与最终 Provider messages 被锁定为该 turn 唯一不可变快照，快照 hash 写入原 standalone execution。精确 DTO、状态、幂等和错误码只在 [`R4_CONTEXT_ASSEMBLY_CONTRACT.md`](R4_CONTEXT_ASSEMBLY_CONTRACT.md) 维护。
 
 | 方法 | 路径 | 语义 |
 | --- | --- | --- |
@@ -74,7 +74,23 @@ R4 不新增第二条模型执行路径。创建 R1/R3 turn 时，后端按固�
 | `GET` | `/api/v1/personal/chat/context-sources/:sourceRef` | 只读返回该所有者/助手已引用的精确 MessageVersion、Event 或结构化 summary 证据 |
 | `POST` | `/api/v1/personal/chat/turns/:turnId/context-recovery` | 在 Provider 尚未开始且 fold_failed 时，用新幂等键显式重试同一来源集合的折叠 |
 
-模式为 `concise`、`balanced`、`complete` 或 `custom`；仅 custom 可排除非强制来源。估算使用保守、确定性的 `utf8-byte-upper-bound/v1`，先保留输出预算再裁剪输入；强制来源仍超限时持久化 `budget_blocked` 并在调用 Provider 前返回 `CONTEXT_BUDGET_EXCEEDED`。折叠失败时，原文仍能安全装入则记录 `failed_fallback_original`；否则保持 `fold_failed`，不调用 Provider。R5 memory 继续显式为 `not_implemented`，受控测试注入的 runtime projection 不代表真实 Engine 或其他运行时已连接。
+模式为 `concise`、`balanced`、`complete` 或 `custom`；仅 custom 可排除非强制来源。估算使用保守、确定性的 `utf8-byte-upper-bound/v1`，先保留输出预算再裁剪输入；强制来源仍超限时持久化 `budget_blocked` 并在调用 Provider 前返回 `CONTEXT_BUDGET_EXCEEDED`。折叠失败时，原文仍能安全装入则记录 `failed_fallback_original`；否则保持 `fold_failed`，不调用 Provider。R5 只选择当前 owner/assistant 下处于 active、明确允许进入 Context 且通过原权限/安全链的记忆版本，并把精确 memory/version/source hash 锁进现有 R4 快照；受控测试注入的 runtime projection 仍不代表真实 Engine 或其他运行时已连接。
+
+## R5｜本地长期记忆（实现完成，等待阶段验收）
+
+所有入口位于 `/api/v1/personal/memories`，身份和当前助手只来自 R2 服务端会话。列表/详情/版本/引用均为只读；创建、完整替换更新、上下文参与、归档/恢复、引用、导入导出和删除操作要求 CSRF 与 `Idempotency-Key`，并复用既有 Permission、Security、Confirmation 和审计链。完整 DTO、联合规则、错误和恢复语义只在 [`R5_LOCAL_MEMORY_CONTRACT.md`](R5_LOCAL_MEMORY_CONTRACT.md) 维护。
+
+| 范围 | 入口 | 语义 |
+| --- | --- | --- |
+| 列表与检索 | `GET /api/v1/personal/memories` | 确定性本地检索、筛选、稳定游标；不调用模型或外部服务 |
+| 记忆与版本 | `POST /memories`、`GET/PATCH /memories/:memoryId`、`GET .../versions` | 一个稳定记忆标识对应不可变版本链；更新不覆盖旧正文 |
+| Context 控制 | `POST .../context-inclusion` | 用户显式控制后续 R4 装配是否可选择该记忆，不改写已锁定 turn |
+| 来源引用 | `GET/POST .../references`、`POST .../references/:referenceId/deletion` | 精确引用同 owner/assistant 的 MessageVersion 或 Event，引用可受控撤销 |
+| 生命周期 | `POST .../archive|restore|deletion|deletion-cancellation|deletion-finalization`、`GET /memories/deletions/:deletionId` | 归档可恢复；删除采用等待期与独立最终化事实，普通不可变保护保持有效 |
+| 导入导出 | `POST /memories/imports|exports` | 严格本地 JSON 事实、逐项结果和可恢复操作；不冒充 R11 备份/云同步 |
+| 操作恢复 | `GET /memories/operations/by-idempotency-key/:idempotencyKey` | 纯查询首次操作事实；重启不重复写入、导入或删除 |
+
+迁移 `028` 将 inbox/版本、引用、操作、导入导出项目、删除任务及 R4 memory source link 分开保存。每个记忆版本、来源、导入项目和删除事实都按 owner + assistant 复合归属校验；同一幂等键同内容精确重放、异内容冲突。R5 与旧生活模块 `local_memories`、AI 私域及外部 Subject Runtime/Engine Memory 不合并，也不读取真实 Engine、Provider 或密钥。
 
 ## R0-A｜Subject Runtime Port v1（内部合同）
 

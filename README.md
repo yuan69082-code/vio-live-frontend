@@ -1,6 +1,6 @@
 # Vio Live
 
-Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。**R2 与 R1 均已于 2026-09-05 正式验收通过，R3 已于 2026-09-06 正式验收通过，R4 已于 2026-09-08 正式验收通过**：R2 完成受控个人所有者初始化、真实会话访问、首次设置、同一所有者多助手、个人资料、会话撤销、访问审计/诊断、Provider/Model、加密凭据、认证连接检查及受控账户删除；R1 完成真实个人会话和当前助手范围内的 Vio 独立聊天；R3 完成每助手多会话、会话选择/搜索/排序/归档、消息版本/分支/隐藏、受控重新生成、附件、导出及可恢复操作的前后端实现与本机 loopback 联调；R4 完成 Vio 自有上下文计划、不可变锁定快照、来源证据、跨窗口筛选、折叠、预算裁剪和失败恢复，并接入 R1/R3 独立聊天。邮箱、Google 与公开注册继续暂缓。账户/空间删除继续按已确认的 7 天可撤销、实际删除后 14 天受管副本处理及 30 天最小凭据政策执行。历史 F1 固定 Profile 的 V5 对话代码和证据继续保留；R4 不连接真实 Engine。R5 未开始。
+Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。**R2 与 R1 均已于 2026-09-05 正式验收通过，R3 已于 2026-09-06 正式验收通过，R4 已于 2026-09-08 正式验收通过**：R2 完成受控个人所有者初始化和访问/配置/删除边界；R1—R4 已完成独立聊天、多会话和可审计上下文装配。R5 当前已实现 Vio 自有、按所有者与当前助手隔离的本地长期记忆合同、迁移 `028`、版本/来源/检索/引用/上下文参与/导入导出/受控删除及前端接线，正在完成阶段复验，尚未经总体协调窗口正式验收。邮箱、Google 与公开注册继续暂缓；历史 F1 固定 Profile 的 V5/Engine 代码和证据继续隔离保留，R5 不访问或依赖真实 Engine。
 
 R0-A 已冻结 Vio 自己的 [`Subject Runtime Port v1`](backend/docs/SUBJECT_RUNTIME_PORT_V1.md)：Vio Core 永久负责账号、助手、会话/消息、模型/Provider、扩展能力、设备、本地记忆、Context、权限安全、工作流/生活数据及费用/导出/备份恢复；外部主体运行时只是可选增强。R0-B/C 已完成通用只读状态装配与“我的”页展示。R0 已于 2026-09-04 验收；它没有切换聊天编排。当前 R1 后端独立路径直接使用 Vio Core 的模型、凭据、权限、安全和预算边界，不探测或依赖外部运行时；Continuity Engine 在通用端口中仍只是 `registered_not_wired` 的可选适配器。
 
@@ -22,7 +22,7 @@ R8 完成公共机制及截至 R7 已完成模块的前端接线；R9—R11 各�
 
 R0 冻结规则本身不代表独立聊天已实现；R1 随后已按该边界建立 Vio 自有执行链路、完成隔离回归并接入个人“对话”页，并于 2026-09-05 正式验收通过。未经用户另行要求重连，Vio 施工、测试和发布不探测、读取、启动或修改真实 Engine；通用端口必须验证，真实外部运行时接入另行处理，不作为 Vio 完成和发布前置条件。新增对接优先通过独立适配器或接口扩展，不擅改 Vio 核心。
 
-R0-A/B/C 及整阶段已验收并推送。R2 正式验收范围与保留边界见 [R2 个人访问合同](backend/docs/R2_PERSONAL_CONTRACT.md) 和 [前端交接](docs/R2_FRONTEND_HANDOFF.md)；R1 合同见 [独立聊天合同](backend/docs/R1_STANDALONE_CHAT_CONTRACT.md)，R3 合同见 [多会话合同](backend/docs/R3_MULTI_CONVERSATION_CONTRACT.md)，R4 当前冻结合同见 [上下文装配合同](backend/docs/R4_CONTEXT_ASSEMBLY_CONTRACT.md)。完整顺序见 [ADR-034](docs/决策记录.md#adr-034) 和 [现行路线图](docs/后端/13-部署运维测试与路线图.md#r0-r13-order)。
+R0-A/B/C 及整阶段已验收并推送。R2 正式验收范围与保留边界见 [R2 个人访问合同](backend/docs/R2_PERSONAL_CONTRACT.md) 和 [前端交接](docs/R2_FRONTEND_HANDOFF.md)；R1—R4 合同分别见 [独立聊天](backend/docs/R1_STANDALONE_CHAT_CONTRACT.md)、[多会话](backend/docs/R3_MULTI_CONVERSATION_CONTRACT.md) 与 [上下文装配](backend/docs/R4_CONTEXT_ASSEMBLY_CONTRACT.md)，R5 当前冻结合同见 [本地长期记忆合同](backend/docs/R5_LOCAL_MEMORY_CONTRACT.md)。完整顺序见 [ADR-034](docs/决策记录.md#adr-034) 和 [现行路线图](docs/后端/13-部署运维测试与路线图.md#r0-r13-order)。
 
 ## 前后端本地运行
 
@@ -106,7 +106,7 @@ pnpm test
 - test-only JSONL Runner 仍只由独立共享测试显式启动，不会被应用、HTTP、前端或正式 transport 装配。S2/S3 已使用 Engine E4 正式 HTTP Server、Vio V3 正式 transport、V1/V2/V3 账本和临时双数据库完成 15/15 共享验收；正式 transport 仍默认关闭且没有公共或前端直连入口。
 - AI 助手全局设定只保存用户明确配置的长期身份与行为偏好，不能覆盖平台安全规则，也不会自动形成或修改 SubjectState。
 - 用户安全策略只能在已有 Permission 上继续收紧；`session_allow` 使用的开发期安全会话 ID 不是认证凭证，且只在明确确认后的精确范围内短时有效。
-- 没有通用 Memory，也没有在仓库、数据库或文档保存真实 API Key。V4 的 `openai_compatible` HTTP adapter 已通过一次可销毁 S4-Live 真实供应商试聊验收；这只是固定测试身份下的本机受控证据，不是生产 Provider、通用身份或公开部署验收。`anthropic_messages`、`glm_compatible` 和 `custom_http` 仍 fail closed。AI Private Space 只有显式输入的数据层、版本、权限安全联动、独立 Context 投影与导出清单预留，不包含意识、自主行为、开放判断或 continuity-engine 生成。MCP/Skill/Plugin/Tool 目前只有注册、权限投影和未执行准备记录；设备目前只有注册、能力描述、授权和未执行操作日志。没有真实 MCP 连接、插件安装、Tool/Skill 执行、设备连接或控制、厂商 API、支付或真实 AI 私域决策。
+- R5 已实现 Vio 自有本地长期记忆，但没有云同步或 R11 完整备份，也没有在仓库、数据库或文档保存真实 API Key。V4 的 `openai_compatible` HTTP adapter 已通过一次可销毁 S4-Live 真实供应商试聊验收；这只是固定测试身份下的本机受控证据，不是生产 Provider、通用身份或公开部署验收。`anthropic_messages`、`glm_compatible` 和 `custom_http` 仍 fail closed。AI Private Space 只有显式输入的数据层、版本、权限安全联动、独立 Context 投影与导出清单预留，不包含意识、自主行为、开放判断或 continuity-engine 生成。MCP/Skill/Plugin/Tool 目前只有注册、权限投影和未执行准备记录；设备目前只有注册、能力描述、授权和未执行操作日志。没有真实 MCP 连接、插件安装、Tool/Skill 执行、设备连接或控制、厂商 API、支付或真实 AI 私域决策。
 - 生活管理只保存显式输入并进行本地统计；提醒不执行，AI 建议不生成，本地记忆不自动进入通用 Context。没有支付、银行同步、健康设备数据、医疗诊断、真实导出或自动数据删除。
 - 未认证后端不能直接公开部署。
 

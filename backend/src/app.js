@@ -36,6 +36,7 @@ import { createSqliteSecurityPolicyRepository } from './integrations/database/sq
 import { createSqliteStandaloneChatRepository } from './integrations/database/sqlite-standalone-chat-repository.js';
 import { createSqliteMultiConversationRepository } from './integrations/database/sqlite-multi-conversation-repository.js';
 import { createSqliteContextAssemblyRepository } from './integrations/database/sqlite-context-assembly-repository.js';
+import { createSqliteLocalMemoryRepository } from './integrations/database/sqlite-local-memory-repository.js';
 import { createManagedChatAttachmentStore } from './integrations/storage/managed-chat-attachment-store.js';
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
@@ -77,6 +78,7 @@ import { createDashboardService } from './modules/dashboard/dashboard-service.js
 import { createDeviceService } from './modules/devices/device-service.js';
 import { createEventService } from './modules/events/event-service.js';
 import { createLifeManagementService } from './modules/life-management/life-management-service.js';
+import { createLocalMemoryService } from './modules/memories/local-memory-service.js';
 import { createModelRouterService } from './modules/model-router/model-router-service.js';
 import { createModelRoutingRuleService } from './modules/model-routing-rules/model-routing-rule-service.js';
 import { createModelService } from './modules/models/model-service.js';
@@ -181,6 +183,7 @@ export function createApplication({
   const standaloneChatRepository = createSqliteStandaloneChatRepository(database.connection);
   const multiConversationRepository = createSqliteMultiConversationRepository(database.connection);
   const contextAssemblyRepository = createSqliteContextAssemblyRepository(database.connection);
+  const localMemoryRepository = createSqliteLocalMemoryRepository(database);
   const legacyCredentialStore = providedCredentialStore ?? createEnvironmentApiCredentialStore(environment);
   const credentialStore = {
     describeApiKey(args) {
@@ -529,6 +532,17 @@ export function createApplication({
       return standaloneChatService?.recoverTurn(context, turnId, { action: 'retry' }, idempotencyKey);
     },
   });
+  const localMemoryService = createLocalMemoryService({
+    repository: localMemoryRepository,
+    personalIdentityService,
+    permissionChecker,
+    securityService,
+    messageVersionRepository,
+    eventRepository,
+    multiConversationRepository,
+    runInTransaction: database.runInTransaction,
+    clock: personalClock,
+  });
   const contextAssemblyService = createContextAssemblyService({
     repository: contextAssemblyRepository,
     personalIdentityService,
@@ -538,6 +552,7 @@ export function createApplication({
     modelRouterService,
     subjectRuntimeStatusService,
     runtimeProjectionPort,
+    memoryPort: localMemoryService,
     ...(modelContextLimitPort ? { modelContextLimitPort } : {}),
     ...(contextSourceAccessPort ? { sourceAccessPort: contextSourceAccessPort } : {}),
     ...(contextSummaryBuilder ? { summaryBuilder: contextSummaryBuilder } : {}),
@@ -600,7 +615,8 @@ export function createApplication({
   const personalDeletionService=createPersonalDeletionService({database,identityService:personalIdentityService,configurationService:personalConfigurationService,
     repository:personalRepository,vault:personalVault,managedCopies:personalManagedCopies,clock:personalClock,beforeOnlineDelete:personalDeletionBeforeOnlineDelete});
   const personalHttpAccess = createPersonalHttpAccess({identityService:personalIdentityService,configurationService:personalConfigurationService,deletionService:personalDeletionService,vault:personalVault,
-    standaloneChatService,multiConversationService,contextAssemblyService,secureCookies:config.personalAccess.secureCookies,allowedOrigin:config.personalAccess.allowedOrigin});
+    standaloneChatService,multiConversationService,contextAssemblyService,localMemoryService,
+    secureCookies:config.personalAccess.secureCookies,allowedOrigin:config.personalAccess.allowedOrigin});
   const router = createRouter({
     personalHttpAccess,
     requestAccess,
@@ -660,6 +676,7 @@ export function createApplication({
     standaloneChatService,
     multiConversationService,
     contextAssemblyService,
+    localMemoryService,
     personalManagedCopies,
     continuityRequestService,
     continuityResultService,
@@ -680,6 +697,10 @@ export function createApplication({
     proactiveInteractionService,
     async start() {
       try{personalDeletionService.sweep();}catch{logger.error?.('[vio] deletion maintenance deferred',{code:'DELETION_MAINTENANCE_DEFERRED'});}
+      try{localMemoryService.initialize();}catch(error){
+        if(error.errcode!==5&&error.code!=='SQLITE_BUSY')throw error;
+        logger.error?.('[vio] memory recovery deferred',{code:'MEMORY_RECOVERY_DATABASE_BUSY'});
+      }
       try{personalConfigurationService.initialize();}catch(error){
         if(error.errcode!==5&&error.code!=='SQLITE_BUSY')throw error;
         logger.error?.('[vio] personal recovery deferred',{code:'PERSONAL_RECOVERY_DATABASE_BUSY'});

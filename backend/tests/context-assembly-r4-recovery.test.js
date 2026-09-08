@@ -204,7 +204,18 @@ test('R4 fold failure is durable and explicit recovery locks one snapshot before
   assert.equal(relational.folding_status, recoveredSnapshot.folding.status);
   assert.equal(relational.summary_id, recoveredSnapshot.folding.summaryId);
   assert.equal(relational.runtime_projection_status, recoveredSnapshot.runtimeProjection.status);
-  assert.deepEqual(JSON.parse(relational.selection_json), recoveredSnapshot.selection);
+  const persistedSelection = JSON.parse(relational.selection_json);
+  assert.deepEqual({
+    strategy: persistedSelection.strategy,
+    status: persistedSelection.status,
+    querySource: persistedSelection.querySource,
+    crossWindowCandidateCount: persistedSelection.crossWindowCandidateCount,
+    crossWindowSelectedCount: persistedSelection.crossWindowSelectedCount,
+  }, recoveredSnapshot.selection);
+  assert.deepEqual({
+    memoryEligibleCount: persistedSelection.memoryEligibleCount,
+    memoryUnavailableCount: persistedSelection.memoryUnavailableCount,
+  }, { memoryEligibleCount: 0, memoryUnavailableCount: 0 });
   assert.equal(relational.provider_messages_hash, recoveredSnapshot.providerMessagesHash);
   assert.equal(relational.created_at, recoveredSnapshot.createdAt);
   assert.equal(relational.locked_at, recoveredSnapshot.lockedAt);

@@ -86,7 +86,9 @@ test('R2 startup defers due deletion under a real writer lock and still exposes 
   const address=await app.start();
   const response=await fetch(`http://127.0.0.1:${address.port}/api/v1/personal/deletions/current`,{headers:{cookie:`vio_deletion_access=${accepted.token}`}});
   assert.equal(response.status,200);assert.equal((await response.json()).data.deletion.status,'waiting');
-  assert.ok(messages.includes('DELETION_MAINTENANCE_DEFERRED'));assert.ok(messages.includes('PERSONAL_RECOVERY_DATABASE_BUSY'));
+  assert.ok(messages.includes('DELETION_MAINTENANCE_DEFERRED'));
+  assert.ok(messages.includes('MEMORY_RECOVERY_DATABASE_BUSY'));
+  assert.ok(messages.includes('PERSONAL_RECOVERY_DATABASE_BUSY'));
   other.exec('ROLLBACK');other.close();other=null;
   assert.equal(app.personalDeletionService.sweep()[0].status,'completed');
  }finally{if(other){other.exec('ROLLBACK');other.close();}await app.stop();temp.remove();}

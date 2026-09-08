@@ -33,11 +33,11 @@ function r4Plan(conversationId = 'alpha-main', branchId = `branch-${conversation
   return {
     contractVersion: 'vio-context-assembly/v1', schemaVersion: 'vio-context-assembly-snapshot/v1', assemblyId: null, turnId: null, conversationId, branchId, mode: 'balanced', controlsSource: 'turn', state: 'planned',
     scope: { currentOwner: true, currentAssistant: true, currentConversationExcludedFromCrossWindow: true }, controls: { excludedSourceRefs: [], unavailableExcludedSourceRefs: [] },
-    slots: ['system_rules', 'assistant_settings', 'runtime_projection', 'unresolved_events', 'recent_original_text', 'long_term_memory', 'current_user_message'].map((slot) => ({ slot: slot as ContextAssembly['slots'][number]['slot'], status: slot === 'long_term_memory' ? 'not_implemented' : slot === 'runtime_projection' ? 'not_available' : 'included' })),
+    slots: ['system_rules', 'assistant_settings', 'runtime_projection', 'unresolved_events', 'recent_original_text', 'long_term_memory', 'current_user_message'].map((slot) => ({ slot: slot as ContextAssembly['slots'][number]['slot'], status: slot === 'long_term_memory' ? 'empty' : slot === 'runtime_projection' ? 'not_available' : 'included' })),
     sources: [], budget: { estimationMethod: 'utf8-byte-upper-bound/v1', contextLimitTokens: 16384, reservedOutputTokens: 4096, inputBudgetTokens: 12288, rawEstimatedInputTokens: 120, estimatedInputTokens: 120, withinLimit: true, foldPlanned: false, trimmingApplied: false, trimmingReason: null },
     folding: { status: 'not_required', summaryId: null, reason: null, sourceSetHash: null, sourceCount: 0, recoveryAction: null },
     selection: { strategy: 'lexical-overlap-recency/v1', status: 'provisional', querySource: 'conversation_history', crossWindowCandidateCount: 0, crossWindowSelectedCount: 0 },
-    runtimeProjection: { status: 'not_available', sourceRef: null }, memory: { status: 'not_implemented' }, planHash: contextHash, providerMessagesHash: null, snapshotHash: null, createdAt: at, lockedAt: null, externalCall: 'not_performed',
+    runtimeProjection: { status: 'not_available', sourceRef: null }, memory: { status: 'empty', selectionStrategy: 'lexical-overlap-recency/v1', eligibleCount: 0, selectedCount: 0 }, planHash: contextHash, providerMessagesHash: null, snapshotHash: null, createdAt: at, lockedAt: null, externalCall: 'not_performed',
   }
 }
 function r4Api(overrides: Partial<PersonalContextApi> = {}): PersonalContextApi {
@@ -749,6 +749,48 @@ describe('R3 personal multi-conversation page', () => {
     fireEvent.change(input, { target: { value: '第二轮' } }); fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
     await waitFor(() => expect(api.createTurn).toHaveBeenCalledTimes(2))
     expect(sentPlans).toEqual([contextHash, nextHash])
+  })
+
+  it('replans instead of reusing a stale hash after R5 memory eligibility changes', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const nextHash = `sha256:${'e'.repeat(64)}`
+    let plans = 0
+    const context = r4Api({ plan: vi.fn().mockImplementation(() => Promise.resolve({ ...r4Plan(), planHash: ++plans === 1 ? contextHash : nextHash })) })
+    const api = chatApi({
+      conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)),
+      createTurn: vi.fn().mockRejectedValue(new ApiClientError('stale after memory edit', { code: 'CONTEXT_PLAN_STALE', status: 409 })),
+    })
+    renderPage(api, assistant, false, context)
+    const input = await screen.findByLabelText('输入消息')
+    await waitFor(() => expect(input).toBeEnabled())
+    fireEvent.change(input, { target: { value: '使用最新记忆' } }); fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('上下文来源已经变化')
+    await waitFor(() => expect(context.plan).toHaveBeenCalledTimes(2))
+    expect(api.createTurn).toHaveBeenCalledWith('alpha-main', expect.objectContaining({ context: expect.objectContaining({ expectedPlanHash: contextHash }) }), expect.any(String), expect.anything())
+    expect(await screen.findByText('上下文设置和预览已由服务端恢复。')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['unavailable', '当前不可用', 0],
+    ['trimmed', '已裁剪', 1],
+  ] as const)('shows an R5 %s memory slot without disabling an otherwise valid chat', async (status, label, eligibleCount) => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const base = r4Plan()
+    const plan: ContextAssembly = {
+      ...base,
+      slots: base.slots.map((slot) => slot.slot === 'long_term_memory' ? { ...slot, status } : slot),
+      memory: { ...base.memory, status, eligibleCount, selectedCount: 0 },
+    }
+    const context = r4Api({ plan: vi.fn().mockResolvedValue(plan) })
+    const api = chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)) })
+    renderPage(api, assistant, false, context)
+    await waitFor(() => expect(screen.getByLabelText('输入消息')).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: /上下文模式/ }))
+    const boundaries = await screen.findByRole('region', { name: '上下文边界' })
+    expect(boundaries).toHaveTextContent('长期记忆')
+    expect(boundaries).toHaveTextContent(label)
   })
 
   it('blocks an over-budget plan before Provider execution and explains that the current instruction is retained', async () => {

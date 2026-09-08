@@ -24,7 +24,7 @@ export type OnboardingInput = {
 export type AccessSession = { sessionId: string; deviceName: string; createdAt: string; lastSeenAt: string; expiresAt: string; current: boolean; status: string }
 export type Vault = { status: 'locked' | 'ready' | 'unavailable'; transport: { keyId: string; algorithm: 'RSA-OAEP-256+A256GCM'; publicKeySpki: string } }
 export type Confirmation = { operationStatus: 'confirmation_required'; security: { confirmation: { confirmationId: string; status: string; [key: string]: unknown } } }
-export type PersonalRequestOptions = RequestOptions & { idempotencyKey?: string }
+export type PersonalRequestOptions = RequestOptions & { idempotencyKey?: string; confirmationId?: string; securitySessionId?: string }
 export type OperationRecovery = { status: 'completed' | 'confirmation_required' | 'cancelled' | 'not_found'; result?: Record<string, unknown>; confirmation?: Record<string, unknown> }
 
 /** Single same-origin personal contract; credentials and CSRF never enter storage. */
@@ -39,6 +39,8 @@ export function createPersonalApi(client = createApiClient()) {
         headers: {
           ...(method !== 'GET' && requestCsrf ? { 'X-Vio-CSRF': requestCsrf } : {}),
           ...(options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
+          ...(method === 'GET' && options.confirmationId ? { 'X-Vio-Confirmation-Id': options.confirmationId } : {}),
+          ...(method === 'GET' && options.securitySessionId ? { 'X-Vio-Security-Session-Id': options.securitySessionId } : {}),
         },
       })
       if (options.signal?.aborted) throw new ApiClientError('Cancelled', { code: 'request_aborted', status: null })

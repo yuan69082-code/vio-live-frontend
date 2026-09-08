@@ -635,12 +635,16 @@ export default function PersonalMultiConversationPage({ assistant, assistantsLoa
       setNotice(''); showError(caught)
       if (responseReceived || !isUncertain(caught)) savePending(null)
       if (caught instanceof ApiClientError && ['CONVERSATION_VERSION_CONFLICT', 'CONVERSATION_SELECTION_CONFLICT', 'BRANCH_VERSION_CONFLICT', 'MESSAGE_VERSION_CONFLICT'].includes(caught.code)) await refresh(scope.conversationId)
+      if (caught instanceof ApiClientError && caught.code === 'CONTEXT_PLAN_STALE' && scope.conversationId && scope.branchId) {
+        setContextOpen(true)
+        await loadContext(scope.conversationId, scope.branchId)
+      }
     } finally {
       release(request)
       if (lock.current === lockToken) lock.current = null
       if (current(version)) setBusy(false)
     }
-  }, [current, makeController, pending, refresh, release, safeRetry, savePending, showError])
+  }, [current, loadContext, makeController, pending, refresh, release, safeRetry, savePending, showError])
 
   const requiredVersion = (value: number | undefined, label: string) => {
     if (value !== undefined) return value

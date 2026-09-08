@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { useScopedAction } from './useScopedAction'
+import { ApiClientError } from '../../api/client'
+import { personalError, useScopedAction } from './useScopedAction'
 
 function pending() {
   let resolve!: (value: string) => void
@@ -20,6 +21,13 @@ function Harness({ scope, work, accept }: {
 }
 
 describe('scoped async view state', () => {
+  it('maps R5 fail-closed memory errors without exposing raw server text', () => {
+    expect(personalError(new ApiClientError('raw body path', { code: 'MEMORY_SOURCE_NOT_FOUND', status: 404 }))).toContain('拒绝返回整条记忆')
+    expect(personalError(new ApiClientError('raw deleted body', { code: 'MEMORY_BODY_UNAVAILABLE', status: 410 }))).toContain('不能恢复正文')
+    expect(personalError(new ApiClientError('raw stale version', { code: 'MEMORY_VERSION_CONFLICT', status: 409 }))).toContain('重新读取')
+    expect(personalError(new ApiClientError('raw ledger detail', { code: 'MEMORY_LEDGER_INCONSISTENT', status: 500 }))).not.toMatch(/raw|ledger detail/)
+  })
+
   it('holds a synchronous mutex, even before controls can rerender', async () => {
     const job = pending(); const work = vi.fn(() => job.promise); const accept = vi.fn()
     render(<Harness scope="a" work={work} accept={accept} />)

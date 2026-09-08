@@ -31,6 +31,15 @@ function rejectChatIdentityFields(input) {
   if(fields.length) throw new ValidationError('Personal chat scope is derived from the verified session.',{unexpectedFields:fields});
   return input;
 }
+function rejectMemoryIdentityFields(input) {
+  if(input===null||typeof input!=='object'||Array.isArray(input)) {
+    throw new ValidationError('Personal memory request body must be a JSON object.',{field:'body'});
+  }
+  const unexpectedFields=['userId','assistantId','subjectId'].filter(field=>Object.hasOwn(input,field));
+  if(unexpectedFields.length) throw new ValidationError(
+    'Personal memory scope is derived from the verified session.',{unexpectedFields});
+  return input;
+}
 function decodeChatPathSegment(value,field) {
   try {
     return decodeURIComponent(value);
@@ -38,7 +47,15 @@ function decodeChatPathSegment(value,field) {
     throw new ValidationError('Personal chat path contains malformed percent-encoding.',{field});
   }
 }
-export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,standaloneChatService,multiConversationService,contextAssemblyService,vault,secureCookies=false,allowedOrigin=null}) {
+function memoryReadContext(request) {
+  const confirmationId=request.headers['x-vio-confirmation-id'];
+  const securitySessionId=request.headers['x-vio-security-session-id'];
+  if(Array.isArray(confirmationId)||Array.isArray(securitySessionId)) {
+    throw new ValidationError('Only one memory security context value is allowed.');
+  }
+  return {confirmationId:confirmationId??null,securitySessionId:securitySessionId??null};
+}
+export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,standaloneChatService,multiConversationService,contextAssemblyService,localMemoryService,vault,secureCookies=false,allowedOrigin=null}) {
   function authenticate(request,write=false) {
     const context=identity.authenticate(tokenFrom(request));
     if(write) {
@@ -127,6 +144,28 @@ export function createPersonalHttpAccess({identityService:identity,configuration
       else if(method==='GET'&&path==='/diagnostics') send(identity.diagnostics(user));
       else if(method==='GET'&&path==='/vault') send(vault.publicTransport(user));
       else if(method==='POST'&&path==='/vault/unlock') send(identity.unlock(context,await readJsonBody(request)));
+      else if(method==='GET'&&path==='/memories') send(localMemoryService.list(context,{
+        query:url.searchParams.get('query')??undefined,kind:url.searchParams.get('kind')??undefined,
+        status:url.searchParams.get('status')??undefined,
+        includeInContext:url.searchParams.get('includeInContext')??undefined,
+        cursor:url.searchParams.get('cursor')??undefined,limit:url.searchParams.get('limit')??undefined,
+      },memoryReadContext(request)));
+      else if(method==='POST'&&path==='/memories') {const value=localMemoryService.create(context,rejectMemoryIdentityFields(await readJsonBody(request)),key);send(value,value.operationStatus==='completed'?201:200);}
+      else if(method==='POST'&&path==='/memories/imports') send(localMemoryService.createImport(context,rejectMemoryIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&path==='/memories/exports') send(localMemoryService.createExport(context,rejectMemoryIdentityFields(await readJsonBody(request)),key));
+      else if(method==='GET'&&/^\/memories\/deletions\/[^/]+$/.test(path)) send(localMemoryService.deletion(context,decodeChatPathSegment(path.split('/')[3],'deletionId')));
+      else if(method==='GET'&&/^\/memories\/operations\/by-idempotency-key\/[^/]+$/.test(path)) send(localMemoryService.operation(context,decodeChatPathSegment(path.split('/')[4],'idempotencyKey')));
+      else if(method==='GET'&&/^\/memories\/[^/]+\/versions$/.test(path)) send(localMemoryService.versions(context,decodeChatPathSegment(path.split('/')[2],'memoryId'),memoryReadContext(request)));
+      else if(method==='GET'&&/^\/memories\/[^/]+\/references$/.test(path)) send(localMemoryService.references(context,decodeChatPathSegment(path.split('/')[2],'memoryId'),memoryReadContext(request)));
+      else if(method==='POST'&&/^\/memories\/[^/]+\/references\/[^/]+\/deletion$/.test(path)) {const parts=path.split('/');send(localMemoryService.deleteReference(context,decodeChatPathSegment(parts[2],'memoryId'),decodeChatPathSegment(parts[4],'referenceId'),rejectMemoryIdentityFields(await readJsonBody(request)),key));}
+      else if(method==='POST'&&/^\/memories\/[^/]+\/references$/.test(path)) send(localMemoryService.createReference(context,decodeChatPathSegment(path.split('/')[2],'memoryId'),rejectMemoryIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&/^\/memories\/[^/]+\/context-inclusion$/.test(path)) send(localMemoryService.setContextInclusion(context,decodeChatPathSegment(path.split('/')[2],'memoryId'),rejectMemoryIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&/^\/memories\/[^/]+\/(archive|restore)$/.test(path)) {const parts=path.split('/');send(localMemoryService.transition(context,decodeChatPathSegment(parts[2],'memoryId'),rejectMemoryIdentityFields(await readJsonBody(request)),key,parts[3]));}
+      else if(method==='POST'&&/^\/memories\/[^/]+\/deletion$/.test(path)) send(localMemoryService.requestDeletion(context,decodeChatPathSegment(path.split('/')[2],'memoryId'),rejectMemoryIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&/^\/memories\/[^/]+\/deletion-cancellation$/.test(path)) send(localMemoryService.cancelDeletion(context,decodeChatPathSegment(path.split('/')[2],'memoryId'),rejectMemoryIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&/^\/memories\/[^/]+\/deletion-finalization$/.test(path)) send(localMemoryService.finalizeDeletion(context,decodeChatPathSegment(path.split('/')[2],'memoryId'),rejectMemoryIdentityFields(await readJsonBody(request)),key));
+      else if(method==='GET'&&/^\/memories\/[^/]+$/.test(path)) send(localMemoryService.get(context,decodeChatPathSegment(path.split('/')[2],'memoryId'),memoryReadContext(request)));
+      else if(method==='PATCH'&&/^\/memories\/[^/]+$/.test(path)) send(localMemoryService.edit(context,decodeChatPathSegment(path.split('/')[2],'memoryId'),rejectMemoryIdentityFields(await readJsonBody(request)),key));
       else if(method==='GET'&&path==='/chat/conversations') send(multiConversationService.listConversations(context,{
         status:url.searchParams.get('status')??undefined,query:url.searchParams.get('query')??undefined,
         sort:url.searchParams.get('sort')??undefined,cursor:url.searchParams.get('cursor')??undefined,

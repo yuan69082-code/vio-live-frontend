@@ -137,7 +137,7 @@ function MainNavigation() {
           ) : activeKey === 'conversation' ? (
             personal ? <PersonalMultiConversationPage assistant={currentAssistant ?? null} assistantsLoaded={personal.assistants !== null} onNavigate={setActiveKey} /> : <ConversationPage />
           ) : activeKey === 'continuity' ? (
-            <ContinuityPage />
+            <ContinuityPage assistant={currentAssistant ?? null} />
           ) : activeKey === 'private' ? (
             <PrivateDomainPage />
           ) : activeKey === 'capability' ? (

@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { runMigrations } from './migrations.js';
 import { installOwnerDeletionAuthority } from './personal-deletion-scope.js';
+import { installMemoryDeletionAuthority } from './local-memory-deletion-scope.js';
 
 export function createSqliteDatabase({ databasePath, migrationsPath }) {
   if (databasePath !== ':memory:') {
@@ -12,6 +13,7 @@ export function createSqliteDatabase({ databasePath, migrationsPath }) {
 
   const connection = new DatabaseSync(databasePath);
   const withOwnerDeletion = installOwnerDeletionAuthority(connection);
+  const withMemoryDeletion = installMemoryDeletionAuthority(connection);
   let transactionDepth = 0;
   try {
     connection.exec('PRAGMA foreign_keys = ON;');
@@ -34,6 +36,14 @@ export function createSqliteDatabase({ databasePath, migrationsPath }) {
       return withOwnerDeletion(taskId,owner,rows,()=>{
         const result=operation();
         if(result&&typeof result.then==='function')throw new Error('Owner deletion authority cannot cross an asynchronous boundary.');
+        return result;
+      });
+    },
+    withMemoryDeletion(deletionId,userId,assistantId,memoryId,rows,operation) {
+      if(transactionDepth<1)throw new Error('Memory deletion requires an active managed transaction.');
+      return withMemoryDeletion(deletionId,userId,assistantId,memoryId,rows,()=>{
+        const result=operation();
+        if(result&&typeof result.then==='function')throw new Error('Memory deletion authority cannot cross an asynchronous boundary.');
         return result;
       });
     },

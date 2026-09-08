@@ -22,7 +22,7 @@ const originLabels: Record<string, string> = {
   system: '系统', assistant: '当前助手', runtime: '运行时投影', current_conversation: '当前会话', cross_window: '同助手跨窗口', event: '事件', memory: '记忆', current_turn: '本轮',
 }
 const statusLabels: Record<string, string> = {
-  included: '已纳入', excluded: '已排除', trimmed: '已裁剪', summarized: '已折叠', empty: '无内容', not_available: '未连接', not_implemented: 'R5 尚未实现', pending: '发送时锁定',
+  included: '已纳入', excluded: '已排除', trimmed: '已裁剪', summarized: '已折叠', empty: '无内容', unavailable: '当前不可用', not_available: '未连接', not_implemented: '尚未实现', pending: '发送时锁定',
   not_required: '无需折叠', planned: '已计划折叠', ready: '摘要就绪', failed: '摘要失败', failed_fallback_original: '摘要失败，保留原文',
 }
 
@@ -53,15 +53,17 @@ export type ContextPanelProps = {
 
 function modeLabel(mode: ContextMode) { return modes.find((item) => item.value === mode)?.label ?? mode }
 function sourceTitle(source: ContextSource) {
+  if (source.sourceType === 'memory_slot') return '本地长期记忆'
   if (source.sourceType === 'message_version') return source.evidence.senderType === 'user' ? '用户消息版本' : '助手消息版本'
   if (source.sourceType === 'summary') return '结构化摘要'
   if (source.sourceType === 'event') return 'Vio 事件'
   return slotLabels[source.slot] ?? source.sourceType
 }
 function canExclude(source: ContextSource) { return !['system_rules', 'assistant_settings', 'current_user_message'].includes(source.slot) }
-function hasExactEvidence(source: ContextSource) { return ['message_version', 'event', 'summary'].includes(source.sourceType) }
+function hasExactEvidence(source: ContextSource) { return ['message_version', 'event', 'summary', 'memory_slot'].includes(source.sourceType) }
 
 function EvidenceView({ value }: { value: ContextEvidence }) {
+  if (value.sourceType === 'memory_slot') return <><p>{value.body}</p><dl><div><dt>记忆 / 版本</dt><dd>{value.memoryId} / {value.memoryVersionId}</dd></div><div><dt>类型</dt><dd>{value.kind}</dd></div><div><dt>记录时间</dt><dd>{new Date(value.recordedAt).toLocaleString('zh-CN')}</dd></div><div><dt>记忆内容校验</dt><dd>{value.memoryContentHash}</dd></div><div><dt>上下文内容校验</dt><dd>{value.contentHash}</dd></div></dl></>
   if (value.sourceType === 'message_version') return <><p>{value.content}</p><dl><div><dt>消息版本</dt><dd>{value.messageVersionId}</dd></div><div><dt>会话 / 分支</dt><dd>{value.conversationId} / {value.branchId}</dd></div><div><dt>内容校验</dt><dd>{value.contentHash}</dd></div></dl></>
   if (value.sourceType === 'event') return <><p>{value.summary}</p><pre>{JSON.stringify(value.data, null, 2)}</pre><dl><div><dt>事件</dt><dd>{value.eventType} · {value.eventId}</dd></div><div><dt>发生时间</dt><dd>{new Date(value.occurredAt).toLocaleString('zh-CN')}</dd></div></dl></>
   return <><pre>{JSON.stringify(value.structuredSummary, null, 2)}</pre><dl><div><dt>摘要</dt><dd>{value.summaryId}</dd></div><div><dt>会话 / 分支</dt><dd>{value.conversationId} / {value.branchId}</dd></div><div><dt>来源数量</dt><dd>{value.sourceRefs.length}</dd></div><div><dt>内容校验</dt><dd>{value.contentHash}</dd></div></dl></>
@@ -120,7 +122,7 @@ export default function ContextControlPanel(props: ContextPanelProps) {
           </section>
           <section className={styles.boundaries} aria-label="上下文边界">
             <div><strong>运行时投影</strong><span>{assembly.runtimeProjection.status === 'not_available' ? '未连接，槽位为空' : statusLabels[assembly.runtimeProjection.status] ?? assembly.runtimeProjection.status}</span></div>
-            <div><strong>长期记忆</strong><span>R5 尚未实现，不会注入模拟记忆</span></div>
+            <div><strong>长期记忆</strong><span>{statusLabels[assembly.memory.status] ?? assembly.memory.status} · {assembly.memory.selectedCount}/{assembly.memory.eligibleCount} · 确定性本地选择</span></div>
             <div><strong>摘要折叠</strong><span>{foldAssembly ? statusLabels[foldAssembly.folding.status] ?? foldAssembly.folding.status : '尚未读取'}</span></div>
             <div><strong>跨窗口选择</strong><span>{assembly.selection.status === 'provisional' ? '预览暂定；发送后按本轮消息最终排序' : `已按本轮消息锁定 · ${assembly.selection.crossWindowSelectedCount}/${assembly.selection.crossWindowCandidateCount}`}</span></div>
           </section>
@@ -138,7 +140,7 @@ export default function ContextControlPanel(props: ContextPanelProps) {
               return <article key={source.sourceRef} className={excluded || source.status === 'excluded' ? styles.excluded : ''}>
                 <div><strong>{sourceTitle(source)}</strong><small>{originLabels[source.origin] ?? source.origin} · {statusLabels[source.status] ?? source.status} · 约 {source.estimatedTokens} 词元</small></div>
                 <p>{source.evidence.preview || '该来源无可公开预览。'}</p>
-                {source.evidence.selection && <p>相关度排序 #{source.evidence.selection.rank} · 命中 {source.evidence.selection.matchedTermCount} 项 · {source.evidence.selection.representation === 'latest_ready_summary' ? '使用最新有效摘要' : '摘要不可用，使用合格原文'}</p>}
+                {source.evidence.selection && <p>相关度排序 #{source.evidence.selection.rank} · 命中 {source.evidence.selection.matchedTermCount} 项{source.sourceType === 'memory_slot' ? ' · 使用已授权的不可变记忆版本' : ` · ${source.evidence.selection.representation === 'latest_ready_summary' ? '使用最新有效摘要' : '摘要不可用，使用合格原文'}`}</p>}
                 <div className={styles.sourceActions}>
                   {!props.plan && hasExactEvidence(source) ? <button type="button" onClick={() => props.onEvidence(source)}>查看精确证据</button> : <span>发送并锁定后可查证</span>}
                   {props.mode === 'custom' && canExclude(source) && <button type="button" disabled={props.loading || props.saving} onClick={() => props.onToggleSource(source)}>{excluded ? '恢复来源' : '排除来源'}</button>}

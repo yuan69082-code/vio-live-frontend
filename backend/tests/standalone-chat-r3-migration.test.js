@@ -25,6 +25,7 @@ function migrationsThrough025(root){
   cpSync(resolve('migrations'),path,{recursive:true});
   rmSync(join(path,MIGRATION));
   rmSync(join(path,'027_create_context_assembly_ledger.sql'));
+  rmSync(join(path,'028_create_local_long_term_memory.sql'));
   return path;
 }
 

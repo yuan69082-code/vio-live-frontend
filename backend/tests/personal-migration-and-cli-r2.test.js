@@ -10,7 +10,7 @@ import { loadConfig } from '../src/config.js';
 
 test('R2 migration installs fresh and upgrades 001-022 without claiming old data',()=>{
   const root=mkdtempSync(join(tmpdir(),'vio-r2-migration-'));const db=join(root,'db.sqlite');const oldMigrations=join(root,'old');
-  cpSync(resolve('migrations'),oldMigrations,{recursive:true});rmSync(join(oldMigrations,'023_create_personal_identity_and_access.sql'));rmSync(join(oldMigrations,'024_create_governed_personal_deletion.sql'));rmSync(join(oldMigrations,'025_create_standalone_chat_ledger.sql'));rmSync(join(oldMigrations,'026_create_personal_multi_conversation.sql'));rmSync(join(oldMigrations,'027_create_context_assembly_ledger.sql'));
+  cpSync(resolve('migrations'),oldMigrations,{recursive:true});rmSync(join(oldMigrations,'023_create_personal_identity_and_access.sql'));rmSync(join(oldMigrations,'024_create_governed_personal_deletion.sql'));rmSync(join(oldMigrations,'025_create_standalone_chat_ledger.sql'));rmSync(join(oldMigrations,'026_create_personal_multi_conversation.sql'));rmSync(join(oldMigrations,'027_create_context_assembly_ledger.sql'));rmSync(join(oldMigrations,'028_create_local_long_term_memory.sql'));
   try {
     const old=createSqliteDatabase({databasePath:db,migrationsPath:oldMigrations});
     old.connection.prepare("INSERT INTO users VALUES('legacy','legacy@example.test','Legacy','active',?,?)").run('2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');old.close();

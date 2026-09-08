@@ -4,7 +4,7 @@
 
 长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 的 Binding 导出、live-chat plan/apply 和只读 doctor 已用于一次可销毁、短路径、固定测试身份的真实 `openai_compatible` 验收，结论为 PASS；该结论不等于通用身份或生产部署已完成。
 
-R0-A/B/C 及 R0 整阶段已验收并推送。R2 已于 2026-09-05 正式验收通过：受控个人所有者初始化、HttpOnly 会话/CSRF/同源保护、首次设置、个人资料、同一所有者多助手、会话撤销、访问审计/诊断、Provider/Model、加密凭据及受限认证连接检查均已完成；邮箱、Google 与公开注册按最新决定暂缓。账户/空间删除采用 7 天撤销、实际删除、受管副本 14 天期限、最小凭据 30 天期限及重启/失败恢复。R1 独立聊天也已正式验收。R3 的每助手多个会话、消息版本/分支/附件/导出、明确重新生成和操作恢复后端合同、迁移 `026`、前端接线及受控本机 loopback 页面闭环已于 2026-09-06 正式验收通过。R4 新增迁移 `027`、上下文装配账本与个人上下文 API，把固定顺序、精确来源、跨窗口、折叠、预算和锁定快照接入 R1/R3，已于 2026-09-08 由总体协调窗口正式验收通过；R5 未开始。历史 V5/F1 固定 Profile/Engine 链路继续作为独立的既有证据保留，不参与 R1/R3/R4 生产个人聊天路径。
+R0—R4 已完成对应正式验收。R5 当前已冻结 [`vio-local-memory/v1`](docs/R5_LOCAL_MEMORY_CONTRACT.md)，新增迁移 `028` 和个人记忆服务/API，支持不可变版本、确定性本地检索、精确来源与引用、用户控制的 Context 参与、导入导出、归档/恢复、双阶段受控删除和幂等/重启恢复；前后端实现与本地隔离回归正在收尾，尚未经总体协调窗口正式验收。R5 与旧生活模块 `local_memories`、AI 私域、SubjectState/Engine Memory 均保持独立。
 
 2026-09-04 决定：R0 后先 R2、再 R1，然后 R3 至 R13，编号不变。R2、R1 与 R3 均已正式验收。R3 的精确接口、状态、幂等与恢复语义见 [多会话合同](docs/R3_MULTI_CONVERSATION_CONTRACT.md)；R4 的上下文来源、快照、折叠与预算语义见 [上下文装配合同](docs/R4_CONTEXT_ASSEMBLY_CONTRACT.md)。R1 旧默认会话事实仅作为 R3 第一个会话迁移来源保留。顺序见 [ADR-034](../docs/决策记录.md#adr-034)。
 
@@ -40,6 +40,7 @@ Vio 已验证消息事实 → 严格 PlatformObservation/fact → 构造并持�
   通用状态查询：已校验 Adapter 快照 → GET /api/v1/subject-runtime/status 与 /health.subjectRuntime
   R1 个人独立聊天：R2 会话/当前助手 → 每助手唯一默认会话 → Vio 路由/权限/安全/预算 → Provider → 锁定结果/MessageVersion
   R4 上下文装配：当前助手/会话/分支 → 固定来源顺序 → 预算/折叠 → 不可变快照 → R1/R3 同一 Provider execution
+  R5 本地长期记忆：R2 会话/当前助手 → 不可变记忆版本/来源 → 本地确定性检索 → R4 memory_slot 精确锁定
 ```
 
 L1 命令与完整 PowerShell 启动步骤见 [`scripts/README.md`](scripts/README.md)，环境变量治理见 [`config/README.md`](config/README.md)。准备与 doctor 不会调用模型或产生费用；只有用户在 F1 页面发送消息并完成必要确认后，才可能发生真实 Provider 调用。
@@ -487,7 +488,7 @@ backend/
 
 ## 系统边界
 
-通用责任：Vio Core 负责账号、助手、会话/消息、模型与供应商、MCP/Skill/Plugin/Tool、手机/设备、本地记忆与 Context、权限安全、工作流/生活数据、费用及导出/备份恢复。R1 已让独立模式的正常回复由 Vio 自有模型执行链产生并按自身规则发布，不要求外部运行时；后端隔离回归、前端接线和受控页面闭环已于 2026-09-05 正式验收，R3 多会话于 2026-09-06 正式验收。R4 在同一独立执行链上锁定可审计 Context 快照；R5 长期记忆仍明确未实现。外部模式只增加受控主体连续性、表达和投影，外部运行时不获得 Vio 数据库、密钥或执行权。两种模式的边界见 [端口说明](docs/SUBJECT_RUNTIME_PORT_V1.md#mode-semantics)。
+通用责任：Vio Core 负责账号、助手、会话/消息、模型与供应商、MCP/Skill/Plugin/Tool、手机/设备、本地记忆与 Context、权限安全、工作流/生活数据、费用及导出/备份恢复。R1 已让独立模式的正常回复由 Vio 自有模型执行链产生并按自身规则发布，不要求外部运行时；后端隔离回归、前端接线和受控页面闭环已于 2026-09-05 正式验收，R3 多会话于 2026-09-06 正式验收。R4 在同一独立执行链上锁定可审计 Context 快照；R5 已实现 owner/assistant 隔离的本地长期记忆并把精确版本接入原快照。外部模式只增加受控主体连续性、表达和投影，外部运行时不获得 Vio 数据库、密钥或执行权。两种模式的边界见 [端口说明](docs/SUBJECT_RUNTIME_PORT_V1.md#mode-semantics)。
 
 历史及现有 Continuity Engine 专用链路：在选用该适配器的合同范围内，Engine 负责 Wake、Perception、Thinking、Learning、Action、Revision、最终认知 Context、其唯一权威 SubjectState 和最终主体表达。V1–V4、S2/S3/S4、V5/F1 及首次 S4-Live 已验证的事实保留；固定本地 V5 仍只从 Engine 稳定结果发布主体 Message，Vio 不创建其 Event/StateMutation，也不改写 legacy SubjectState。上文适配器专用权威说明保持原意，不扩张为 Vio 通用依赖。
 

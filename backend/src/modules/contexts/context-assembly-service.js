@@ -274,6 +274,7 @@ export function createContextAssemblyService({
   modelRouterService,
   subjectRuntimeStatusService,
   runtimeProjectionPort = null,
+  memoryPort = null,
   modelContextLimitPort = defaultLimitPort(),
   sourceAccessPort = defaultSourceAccessPort(),
   summaryBuilder = createStructuredContextSummary,
@@ -393,6 +394,16 @@ export function createContextAssemblyService({
 
   function isInternallyEligible(s, item) {
     if (item.sourceType === 'runtime_projection') return true;
+    if (item.sourceType === 'memory_slot') {
+      return Boolean(memoryPort?.canReadContextVersion({
+        userId: s.userId,
+        assistantId: s.assistantId,
+        memoryId: item.evidence.memoryId,
+        memoryVersionId: item.evidence.memoryVersionId,
+        memoryContentHash: item.evidence.memoryContentHash,
+        sourceContentHash: item.evidence.sourceContentHash,
+      }));
+    }
     if (item.sourceType === 'event') {
       const event = eventRepository.findById(s.userId, item.eventId);
       return Boolean(event && event.subjectId === s.assistantId && event.status === 'pending');
@@ -519,6 +530,26 @@ export function createContextAssemblyService({
         'Current turn message is not on its branch.', 500);
       queryText = currentItem.content;
     }
+    const memorySelection = memoryPort?.selectForContext({ userId: s.userId,
+      assistantId: s.assistantId, query: queryText, mode: controls.mode })
+      ?? { eligibleCount: 0, unavailableCount: 0, items: [] };
+    for (const item of memorySelection.items) {
+      const candidate = source({
+        sourceRef: `memory-version:${item.memoryVersionId}`,
+        sourceType: 'memory_slot', slot: 'long_term_memory', origin: 'memory',
+        content: item.body, role: 'system', createdAt: item.recordedAt,
+        evidence: {
+          memoryId: item.memoryId, memoryVersionId: item.memoryVersionId,
+          kind: item.kind, sourceType: item.sourceType, sourceRef: item.sourceRef,
+          sourceContentHash: item.sourceContentHash,
+          memoryContentHash: item.memoryContentHash,
+          selection: { strategy: RELEVANCE_STRATEGY,
+            relevanceScore: item.relevanceScore,
+            matchedTermCount: item.matchedTermCount, rank: item.rank },
+        },
+      });
+      if (canReadSource(s, candidate)) sources.push(candidate);
+    }
     const crossCandidates = [];
     if (policy.crossConversations) {
       const others = multiConversationRepository.listConversations(s.userId, s.assistantId)
@@ -594,7 +625,9 @@ export function createContextAssemblyService({
         status: currentMessageVersionId ? 'final' : 'provisional',
         querySource: currentMessageVersionId ? 'current_user_message' : 'conversation_history',
         crossWindowCandidateCount: crossCandidates.length,
-        crossWindowSelectedCount: selected.length }) };
+        crossWindowSelectedCount: selected.length,
+        memoryEligibleCount: memorySelection.eligibleCount,
+        memoryUnavailableCount: memorySelection.unavailableCount }) };
   }
 
   function evaluateExclusions(sources, controls, availableSourceRefs, strict) {
@@ -775,14 +808,37 @@ export function createContextAssemblyService({
       trimmingReason: current.some(item => item.status === 'trimmed') ? 'model_input_budget' : null };
   }
 
-  function slotsFor(sources, currentPending = false) {
+  function memoryFor(sources, selection = {}) {
+    const eligibleCount = selection.memoryEligibleCount ?? 0;
+    const unavailableCount = selection.memoryUnavailableCount ?? 0;
+    const selectedCount = sources.filter(item => item.sourceType === 'memory_slot'
+      && item.status === 'included').length;
+    const status = selectedCount > 0 ? 'included'
+      : eligibleCount > 0 ? 'trimmed'
+        : unavailableCount > 0 ? 'unavailable' : 'empty';
+    return Object.freeze({ status, selectionStrategy: RELEVANCE_STRATEGY,
+      eligibleCount, selectedCount });
+  }
+
+  function publicSelection(selection) {
+    return Object.freeze({
+      strategy: selection.strategy,
+      status: selection.status,
+      querySource: selection.querySource,
+      crossWindowCandidateCount: selection.crossWindowCandidateCount,
+      crossWindowSelectedCount: selection.crossWindowSelectedCount,
+    });
+  }
+
+  function slotsFor(sources, currentPending = false, selection = {}) {
+    const memory = memoryFor(sources, selection);
     return Object.freeze([
       slotStatus(sources, 'system_rules', 'empty'),
       slotStatus(sources, 'assistant_settings', 'empty'),
       slotStatus(sources, 'runtime_projection', 'not_available'),
       slotStatus(sources, 'unresolved_events', 'empty'),
       slotStatus(sources, 'recent_original_text', 'empty'),
-      Object.freeze({ slot: 'long_term_memory', status: 'not_implemented' }),
+      Object.freeze({ slot: 'long_term_memory', status: memory.status }),
       currentPending ? Object.freeze({ slot: 'current_user_message', status: 'pending' })
         : slotStatus(sources, 'current_user_message', 'empty'),
     ]);
@@ -834,7 +890,7 @@ export function createContextAssemblyService({
         || snapshot.folding.status !== record.foldingStatus
         || snapshot.folding.summaryId !== record.summaryId
         || canonicalizeJson(snapshot.selection).toString('utf8')
-          !== canonicalizeJson(record.selection).toString('utf8')
+          !== canonicalizeJson(publicSelection(record.selection)).toString('utf8')
         || snapshot.runtimeProjection.status !== record.runtimeProjectionStatus
         || snapshot.createdAt !== record.createdAt || snapshot.lockedAt !== record.lockedAt
         || snapshot.externalCall !== 'not_performed'
@@ -860,7 +916,8 @@ export function createContextAssemblyService({
         currentConversationExcludedFromCrossWindow: true }),
       controls: Object.freeze({ excludedSourceRefs: Object.freeze([...record.excludedSourceRefs]),
         unavailableExcludedSourceRefs: Object.freeze([...record.unavailableExcludedSourceRefs]) }),
-      slots: slotsFor(sources), sources: Object.freeze(sources.map(publicSource)),
+      slots: slotsFor(sources, false, record.selection),
+      sources: Object.freeze(sources.map(publicSource)),
       budget: Object.freeze({ estimationMethod: record.estimationMethod,
         contextLimitTokens: record.contextLimitTokens,
         reservedOutputTokens: record.reservedOutputTokens,
@@ -873,10 +930,10 @@ export function createContextAssemblyService({
       folding: foldingView({ status: record.foldingStatus, summaryId: record.summaryId,
         failureCode: record.failureCode, sourceSetHash: summary?.sourceSetHash ?? null,
         sourceCount: summarySources.length }),
-      selection: Object.freeze(record.selection),
+      selection: publicSelection(record.selection),
       runtimeProjection: Object.freeze({ status: record.runtimeProjectionStatus,
         sourceRef: sources.find(item => item.sourceType === 'runtime_projection')?.sourceRef ?? null }),
-      memory: Object.freeze({ status: 'not_implemented' }), planHash: record.planHash,
+      memory: memoryFor(sources, record.selection), planHash: record.planHash,
       providerMessagesHash: record.providerMessagesHash, snapshotHash: record.snapshotHash,
       createdAt: record.createdAt,
       lockedAt: record.lockedAt, externalCall: 'not_performed' });
@@ -968,7 +1025,8 @@ export function createContextAssemblyService({
         currentConversationExcludedFromCrossWindow: true },
       controls: { excludedSourceRefs: [...activeControls.excludedSourceRefs],
         unavailableExcludedSourceRefs: [...activeControls.unavailableExcludedSourceRefs] },
-      slots: slotsFor(trimmed.sources), sources: trimmed.sources.map(publicSource),
+      slots: slotsFor(trimmed.sources, false, gathered.selection),
+      sources: trimmed.sources.map(publicSource),
       budget: { estimationMethod: 'utf8-byte-upper-bound/v1',
         contextLimitTokens: budget.contextLimitTokens,
         reservedOutputTokens: budget.reservedOutputTokens,
@@ -980,12 +1038,12 @@ export function createContextAssemblyService({
       folding: foldingView({ status: folded.foldingStatus,
         summaryId: folded.summary?.summaryId ?? null,
         sourceSetHash: folded.sourceSetHash, sourceCount: folded.sourceCount }),
-      selection: gathered.selection,
+      selection: publicSelection(gathered.selection),
       runtimeProjection: { status: trimmed.sources.some(item => item.sourceType === 'runtime_projection'
         && item.status === 'included') ? 'included' : 'not_available',
       sourceRef: trimmed.sources.find(item => item.sourceType === 'runtime_projection'
         && item.status === 'included')?.sourceRef ?? null },
-      memory: { status: 'not_implemented' }, planHash, providerMessagesHash,
+      memory: memoryFor(trimmed.sources, gathered.selection), planHash, providerMessagesHash,
       snapshotHash: null, createdAt, lockedAt: now, externalCall: 'not_performed',
     };
     const snapshotHash = hash({ ...base, snapshotHash: null });
@@ -1092,7 +1150,8 @@ export function createContextAssemblyService({
           currentConversationExcludedFromCrossWindow: true }),
         controls: Object.freeze({ excludedSourceRefs: activeControls.excludedSourceRefs,
           unavailableExcludedSourceRefs: activeControls.unavailableExcludedSourceRefs }),
-        slots: slotsFor(sources, true), sources: Object.freeze(sources.map(publicSource)),
+        slots: slotsFor(sources, true, gathered.selection),
+        sources: Object.freeze(sources.map(publicSource)),
         budget: Object.freeze({ estimationMethod: 'utf8-byte-upper-bound/v1',
           contextLimitTokens: budget.contextLimitTokens,
           reservedOutputTokens: budget.reservedOutputTokens,
@@ -1105,13 +1164,13 @@ export function createContextAssemblyService({
         folding: foldingView({ status: folded.foldingStatus,
           summaryId: folded.summary?.summaryId ?? null,
           sourceSetHash: folded.sourceSetHash, sourceCount: folded.sourceCount }),
-        selection: gathered.selection,
+        selection: publicSelection(gathered.selection),
         runtimeProjection: Object.freeze({ status: sources.some(item =>
           item.sourceType === 'runtime_projection' && item.status === 'included')
           ? 'included' : 'not_available',
         sourceRef: sources.find(item => item.sourceType === 'runtime_projection'
           && item.status === 'included')?.sourceRef ?? null }),
-        memory: Object.freeze({ status: 'not_implemented' }), planHash,
+        memory: memoryFor(sources, gathered.selection), planHash,
         providerMessagesHash: null,
         snapshotHash: null, createdAt: clock().toISOString(), lockedAt: null,
         externalCall: 'not_performed' });
@@ -1162,7 +1221,7 @@ export function createContextAssemblyService({
         throw coded('CONTEXT_SOURCE_NOT_FOUND', 'Context source was not found.', 404);
       }
       const item = repository.findEvidence(s.userId, s.assistantId, sourceRef);
-      if (!item || !['message_version', 'event', 'summary'].includes(item.sourceType)) {
+      if (!item || !['message_version', 'event', 'summary', 'memory_slot'].includes(item.sourceType)) {
         throw coded('CONTEXT_SOURCE_NOT_FOUND', 'Context source was not found.', 404);
       }
       if (item.sourceType !== 'summary') {
@@ -1191,6 +1250,23 @@ export function createContextAssemblyService({
         eventType: item.evidence.eventType, summary: item.evidence.summary,
         data: item.source.data ?? {}, occurredAt: item.createdAt,
         contentHash: item.contentHash, externalCall: 'not_performed' });
+      if (item.sourceType === 'memory_slot') {
+        const version = memoryPort?.canReadContextVersion({ userId: s.userId,
+          assistantId: s.assistantId, memoryId: item.evidence.memoryId,
+          memoryVersionId: item.evidence.memoryVersionId,
+          memoryContentHash: item.evidence.memoryContentHash,
+          sourceContentHash: item.evidence.sourceContentHash });
+        if (!version) throw coded('CONTEXT_SOURCE_NOT_FOUND',
+          'Context source was not found.', 404);
+        return Object.freeze({ sourceRef, sourceType: 'memory_slot',
+          memoryId: version.memoryId, memoryVersionId: version.memoryVersionId,
+          kind: version.kind, body: version.body,
+          source: Object.freeze({ sourceType: version.sourceType,
+            sourceRef: version.sourceRef, sourceContentHash: version.sourceContentHash }),
+          occurredAt: version.occurredAt, recordedAt: version.recordedAt,
+          memoryContentHash: version.contentHash, contentHash: item.contentHash,
+          externalCall: 'not_performed' });
+      }
       const persisted = repository.findSummaryById(item.summaryId);
       if (!persisted || persisted.userId !== s.userId || persisted.assistantId !== s.assistantId) {
         throw coded('CONTEXT_SOURCE_NOT_FOUND', 'Context source was not found.', 404);

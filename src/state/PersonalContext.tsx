@@ -8,6 +8,7 @@ import { parseDeletionAccess } from '../api/personal-deletion'
 import type { DeletionAccess } from '../api/personal-deletion'
 import { clearPersonalChatRecoveryForOwner } from '../api/personal-chat-recovery'
 import { clearMultiChatRecoveryForOwner } from '../api/personal-multi-chat-recovery'
+import { clearMemoryRecovery, clearMemoryRecoveryForOwner } from '../api/personal-memory-recovery'
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'access'; access: PersonalAccess; message?: string } | { kind: 'ready'; session: PersonalSession } | { kind: 'deletion'; access: DeletionAccess } | { kind: 'deletion-receipt-expired' }
 type PersonalContextValue = {
@@ -73,6 +74,7 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
     if (ownerId) {
       try { clearPersonalChatRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
       try { clearMultiChatRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
+      try { clearMemoryRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
     }
     invalidate()
     setState({ kind: 'access', access: { status: 'authentication_required', registration: 'disabled' }, message: '访问已结束或失效，请重新验证。' })
@@ -85,9 +87,16 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
     }
     const previousOwnerId = current.current?.user.userId
     const identityChanged = current.current?.session.sessionId !== value.session.sessionId || previousOwnerId !== value.user.userId
+    if (previousOwnerId && identityChanged) {
+      try { clearMemoryRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
+    }
     if (previousOwnerId && previousOwnerId !== value.user.userId) {
       try { clearPersonalChatRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
       try { clearMultiChatRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
+      try { clearMemoryRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
+    }
+    if (previousOwnerId && current.current?.currentAssistantId && current.current.currentAssistantId !== value.currentAssistantId) {
+      try { clearMemoryRecovery(window.sessionStorage, previousOwnerId, current.current.currentAssistantId) } catch { /* storage unavailable */ }
     }
     if (identityChanged) invalidate()
     else if (current.current && value.selectionVersion < current.current.selectionVersion) {
@@ -183,6 +192,9 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
       if (!Array.isArray(value.items) || !Number.isInteger(value.selectionVersion)) throw new ApiClientError('Invalid list', { code: 'invalid_response', status: null })
       setAssistants((previous) => previous && previous.selectionVersion > value.selectionVersion ? previous : value)
       if (current.current && value.selectionVersion >= current.current.selectionVersion) {
+        if (current.current.currentAssistantId && current.current.currentAssistantId !== value.currentAssistantId) {
+          try { clearMemoryRecovery(window.sessionStorage, current.current.user.userId, current.current.currentAssistantId) } catch { /* storage unavailable */ }
+        }
         const updated = { ...current.current, currentAssistantId: value.currentAssistantId, selectionVersion: value.selectionVersion }
         current.current = updated
         setState({ kind: 'ready', session: updated })
@@ -195,6 +207,7 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
       if (current.current) {
         try { clearPersonalChatRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
         try { clearMultiChatRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
+        try { clearMemoryRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
       }
       if (current.current || currentDeletion.current) void restore()
     })

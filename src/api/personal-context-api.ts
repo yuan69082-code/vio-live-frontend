@@ -16,10 +16,10 @@ export type ContextSlotName =
   | 'recent_original_text'
   | 'long_term_memory'
   | 'current_user_message'
-export type ContextSourceType = 'message_version' | 'event' | 'summary' | 'assistant_settings' | 'system_rule' | 'runtime_projection'
+export type ContextSourceType = 'message_version' | 'event' | 'summary' | 'assistant_settings' | 'system_rule' | 'runtime_projection' | 'memory_slot'
 export type ContextSourceStatus = 'included' | 'excluded' | 'trimmed' | 'summarized'
 export type ContextSourceOrigin = 'system' | 'assistant' | 'runtime' | 'current_conversation' | 'cross_window' | 'event' | 'memory' | 'current_turn'
-export type ContextSlotStatus = 'included' | 'empty' | 'not_available' | 'not_implemented' | 'pending'
+export type ContextSlotStatus = 'included' | 'empty' | 'not_available' | 'not_implemented' | 'pending' | 'unavailable' | 'trimmed'
 export type ContextFoldingStatus = 'not_required' | 'planned' | 'ready' | 'failed' | 'failed_fallback_original'
 export type ContextRuntimeProjectionStatus = 'included' | 'not_available'
 export type ContextSelection = {
@@ -34,7 +34,7 @@ export type ContextSourceSelection = {
   relevanceScore: number
   matchedTermCount: number
   rank: number
-  representation: 'latest_ready_summary' | 'original_fallback'
+  representation?: 'latest_ready_summary' | 'original_fallback'
 }
 export type StructuredContextSummary = {
   schemaVersion: typeof R4_CONTEXT_SUMMARY_VERSION
@@ -70,6 +70,13 @@ export type ContextSource = {
     senderType?: 'user' | 'subject'
     versionKind?: 'original' | 'edited' | 'regenerated'
     selection?: ContextSourceSelection
+    memoryId?: string
+    memoryVersionId?: string
+    kind?: 'preference' | 'profile_fact' | 'relationship' | 'decision' | 'project' | 'routine' | 'other'
+    sourceType?: 'manual' | 'import' | 'message_version' | 'event'
+    sourceRef?: string
+    sourceContentHash?: string
+    memoryContentHash?: string
   }
 }
 
@@ -109,7 +116,12 @@ export type ContextAssembly = {
   }
   selection: ContextSelection
   runtimeProjection: { status: ContextRuntimeProjectionStatus; sourceRef: string | null }
-  memory: { status: 'not_implemented' }
+  memory: {
+    status: 'included' | 'empty' | 'unavailable' | 'trimmed'
+    selectionStrategy: 'lexical-overlap-recency/v1'
+    eligibleCount: number
+    selectedCount: number
+  }
   planHash: string
   providerMessagesHash: string | null
   snapshotHash: string | null
@@ -141,6 +153,12 @@ export type ContextEvidence =
       structuredSummary: StructuredContextSummary; sourceRefs: string[]; sourceHashes: Array<{ sourceRef: string; contentHash: string }>
       createdAt: string; contentHash: string; externalCall: 'not_performed'
     }
+  | {
+      sourceRef: string; sourceType: 'memory_slot'; memoryId: string; memoryVersionId: string
+      kind: 'preference' | 'profile_fact' | 'relationship' | 'decision' | 'project' | 'routine' | 'other'
+      body: string; source: { sourceType: 'manual' | 'import' | 'message_version' | 'event'; sourceRef: string; sourceContentHash: string }
+      occurredAt: string | null; recordedAt: string; memoryContentHash: string; contentHash: string; externalCall: 'not_performed'
+    }
 
 export type TurnContextControls = { mode: ContextMode; excludedSourceRefs: string[]; expectedPlanHash: string | null }
 export type ContextRecoveryResult = {
@@ -164,6 +182,11 @@ function record(value: unknown): Record<string, unknown> { if (!value || typeof 
 function exactRecord(value: unknown, allowed: readonly string[]) {
   const result = record(value)
   if (Object.keys(result).some((key) => !allowed.includes(key))) invalid()
+  return result
+}
+function strictRecord(value: unknown, allowed: readonly string[]) {
+  const result = exactRecord(value, allowed)
+  if (Object.keys(result).length !== allowed.length) invalid()
   return result
 }
 function text(value: unknown, max = 2048, allowEmpty = false) { if (typeof value !== 'string' || (!allowEmpty && !value) || value.length > max) invalid(); return value }
@@ -232,6 +255,19 @@ function parseSelection(value: unknown): ContextSelection {
 
 function parseSourceEvidence(sourceType: ContextSourceType, value: unknown): ContextSource['evidence'] {
   const preview = (entry: Record<string, unknown>) => text(entry.preview, 1000, true)
+  if (sourceType === 'memory_slot') {
+    const item = strictRecord(value, ['memoryId', 'memoryVersionId', 'kind', 'sourceType', 'sourceRef', 'sourceContentHash', 'memoryContentHash', 'selection', 'preview'])
+    const selection = strictRecord(item.selection, ['strategy', 'relevanceScore', 'matchedTermCount', 'rank'])
+    const rank = integer(selection.rank)
+    if (rank < 1) invalid()
+    return {
+      memoryId: text(item.memoryId, 512), memoryVersionId: text(item.memoryVersionId, 512),
+      kind: oneOf(item.kind, ['preference', 'profile_fact', 'relationship', 'decision', 'project', 'routine', 'other'] as const),
+      sourceType: oneOf(item.sourceType, ['manual', 'import', 'message_version', 'event'] as const), sourceRef: text(item.sourceRef, 512),
+      sourceContentHash: hash(item.sourceContentHash), memoryContentHash: hash(item.memoryContentHash), preview: preview(item),
+      selection: { strategy: oneOf(selection.strategy, ['lexical-overlap-recency/v1'] as const), relevanceScore: integer(selection.relevanceScore), matchedTermCount: integer(selection.matchedTermCount), rank },
+    }
+  }
   if (sourceType === 'message_version') {
     const item = exactRecord(value, ['senderType', 'versionKind', 'preview', 'selection'])
     return {
@@ -268,7 +304,7 @@ function parseSourceEvidence(sourceType: ContextSourceType, value: unknown): Con
 
 function parseSource(value: unknown): ContextSource {
   const item = exactRecord(value, ['sourceRef', 'sourceType', 'slot', 'origin', 'status', 'reason', 'conversationId', 'branchId', 'messageId', 'messageVersionId', 'eventId', 'summaryId', 'contentHash', 'estimatedTokens', 'createdAt', 'evidence'])
-  const sourceType = oneOf(item.sourceType, ['message_version', 'event', 'summary', 'assistant_settings', 'system_rule', 'runtime_projection'] as const)
+  const sourceType = oneOf(item.sourceType, ['message_version', 'event', 'summary', 'assistant_settings', 'system_rule', 'runtime_projection', 'memory_slot'] as const)
   const evidence = parseSourceEvidence(sourceType, item.evidence)
   const result: ContextSource = {
     sourceRef: text(item.sourceRef, 512),
@@ -288,7 +324,10 @@ function parseSource(value: unknown): ContextSource {
     createdAt: time(item.createdAt),
     evidence,
   }
-  if (result.origin === 'cross_window') {
+  if (result.sourceType === 'memory_slot') {
+    if (result.origin !== 'memory' || result.slot !== 'long_term_memory' || !result.evidence.selection || result.evidence.selection.representation !== undefined
+      || result.conversationId || result.branchId || result.messageId || result.messageVersionId || result.eventId || result.summaryId) invalid()
+  } else if (result.origin === 'cross_window') {
     if (!result.evidence.selection || !['message_version', 'summary'].includes(result.sourceType)) invalid()
     if (result.sourceType === 'summary' && result.evidence.selection.representation !== 'latest_ready_summary') invalid()
     if (result.sourceType === 'message_version' && result.evidence.selection.representation !== 'original_fallback') invalid()
@@ -303,11 +342,15 @@ export function parseContextAssembly(value: unknown, expected?: { conversationId
   const budget = exactRecord(item.budget, ['estimationMethod', 'contextLimitTokens', 'reservedOutputTokens', 'inputBudgetTokens', 'rawEstimatedInputTokens', 'estimatedInputTokens', 'withinLimit', 'foldPlanned', 'trimmingApplied', 'trimmingReason'])
   const folding = exactRecord(item.folding, ['status', 'summaryId', 'reason', 'sourceSetHash', 'sourceCount', 'recoveryAction'])
   const runtimeProjection = exactRecord(item.runtimeProjection, ['status', 'sourceRef'])
-  const memory = exactRecord(item.memory, ['status'])
+  const memory = strictRecord(item.memory, ['status', 'selectionStrategy', 'eligibleCount', 'selectedCount'])
   if (!Array.isArray(item.slots) || !Array.isArray(item.sources)) invalid()
   const slots = item.slots.map((value) => {
     const entry = exactRecord(value, ['slot', 'status'])
-    return { slot: oneOf(entry.slot, SLOT_ORDER), status: oneOf(entry.status, ['included', 'empty', 'not_available', 'not_implemented', 'pending'] as const) }
+    const slot = oneOf(entry.slot, SLOT_ORDER)
+    const status = slot === 'long_term_memory'
+      ? oneOf(entry.status, ['included', 'empty', 'unavailable', 'trimmed'] as const)
+      : oneOf(entry.status, ['included', 'empty', 'not_available', 'not_implemented', 'pending'] as const)
+    return { slot, status }
   })
   if (slots.length !== SLOT_ORDER.length || slots.some((entry, index) => entry.slot !== SLOT_ORDER[index])) invalid()
   const excludedSourceRefs = refs(controls.excludedSourceRefs)
@@ -358,7 +401,11 @@ export function parseContextAssembly(value: unknown, expected?: { conversationId
     },
     selection,
     runtimeProjection: { status: oneOf(runtimeProjection.status, ['included', 'not_available'] as const), sourceRef: nullableText(runtimeProjection.sourceRef) },
-    memory: { status: oneOf(memory.status, ['not_implemented'] as const) },
+    memory: {
+      status: oneOf(memory.status, ['included', 'empty', 'unavailable', 'trimmed'] as const),
+      selectionStrategy: oneOf(memory.selectionStrategy, ['lexical-overlap-recency/v1'] as const),
+      eligibleCount: integer(memory.eligibleCount), selectedCount: integer(memory.selectedCount),
+    },
     planHash: hash(item.planHash),
     providerMessagesHash: nullableHash(item.providerMessagesHash),
     snapshotHash: nullableHash(item.snapshotHash),
@@ -376,6 +423,12 @@ export function parseContextAssembly(value: unknown, expected?: { conversationId
   if (result.budget.withinLimit !== (result.budget.estimatedInputTokens <= result.budget.inputBudgetTokens)) invalid()
   if (result.budget.trimmingApplied !== Boolean(result.budget.trimmingReason)) invalid()
   if ((result.runtimeProjection.status === 'included') !== Boolean(result.runtimeProjection.sourceRef)) invalid()
+  if (result.memory.selectedCount > result.memory.eligibleCount) invalid()
+  if (result.memory.status === 'empty' && (result.memory.eligibleCount !== 0 || result.memory.selectedCount !== 0)) invalid()
+  if (result.memory.status === 'included' && result.memory.selectedCount < 1) invalid()
+  if (result.memory.status === 'trimmed' && (result.memory.eligibleCount < 1 || result.memory.selectedCount !== 0)) invalid()
+  if (result.memory.status === 'unavailable' && result.memory.selectedCount !== 0) invalid()
+  if (result.slots.find((slot) => slot.slot === 'long_term_memory')?.status !== result.memory.status) invalid()
   if (result.folding.status === 'not_required' && (result.folding.summaryId !== null || result.folding.reason !== null || result.folding.sourceSetHash !== null || result.folding.sourceCount !== 0 || result.folding.recoveryAction !== null)) invalid()
   if (result.folding.status === 'planned' && (result.folding.summaryId !== null || result.folding.reason !== null || !result.folding.sourceSetHash || result.folding.sourceCount < 1 || result.folding.recoveryAction !== null)) invalid()
   if (['ready', 'failed', 'failed_fallback_original'].includes(result.folding.status) && (!result.folding.summaryId || !result.folding.sourceSetHash || result.folding.sourceCount < 1)) invalid()
@@ -429,7 +482,7 @@ export function parseContextEvidence(value: unknown, expectedSourceRef?: string)
   const item = record(value)
   const sourceRef = text(item.sourceRef, 512)
   if (expectedSourceRef && sourceRef !== expectedSourceRef) invalid()
-  const sourceType = oneOf(item.sourceType, ['message_version', 'event', 'summary'] as const)
+  const sourceType = oneOf(item.sourceType, ['message_version', 'event', 'summary', 'memory_slot'] as const)
   const common = { sourceRef, contentHash: hash(item.contentHash), externalCall: oneOf(item.externalCall, ['not_performed'] as const) }
   if (sourceType === 'message_version') {
     exactRecord(item, ['sourceRef', 'sourceType', 'conversationId', 'branchId', 'messageId', 'messageVersionId', 'senderType', 'content', 'createdAt', 'contentHash', 'externalCall'])
@@ -444,6 +497,20 @@ export function parseContextEvidence(value: unknown, expectedSourceRef?: string)
     ...common, sourceType, conversationId: nullableText(item.conversationId), branchId: nullableText(item.branchId), eventId: text(item.eventId), eventType: text(item.eventType, 120),
     summary: text(item.summary, 2000, true), data: serializable(item.data), occurredAt: time(item.occurredAt),
   }
+  }
+  if (sourceType === 'memory_slot') {
+    const entry = strictRecord(item, ['sourceRef', 'sourceType', 'memoryId', 'memoryVersionId', 'kind', 'body', 'source', 'occurredAt', 'recordedAt', 'memoryContentHash', 'contentHash', 'externalCall'])
+    const source = strictRecord(entry.source, ['sourceType', 'sourceRef', 'sourceContentHash'])
+    const memoryBody = text(entry.body, 8192)
+    if (new TextEncoder().encode(memoryBody).length > 32768) invalid()
+    const occurredAt = entry.occurredAt === null ? null : time(entry.occurredAt)
+    if ((occurredAt !== null && !occurredAt.endsWith('Z')) || !time(entry.recordedAt).endsWith('Z')) invalid()
+    return {
+      ...common, sourceType, memoryId: text(entry.memoryId, 512), memoryVersionId: text(entry.memoryVersionId, 512),
+      kind: oneOf(entry.kind, ['preference', 'profile_fact', 'relationship', 'decision', 'project', 'routine', 'other'] as const), body: memoryBody,
+      source: { sourceType: oneOf(source.sourceType, ['manual', 'import', 'message_version', 'event'] as const), sourceRef: text(source.sourceRef, 512), sourceContentHash: hash(source.sourceContentHash) },
+      occurredAt, recordedAt: time(entry.recordedAt), memoryContentHash: hash(entry.memoryContentHash),
+    }
   }
   exactRecord(item, ['sourceRef', 'sourceType', 'conversationId', 'branchId', 'summaryId', 'structuredSummary', 'sourceRefs', 'sourceHashes', 'createdAt', 'contentHash', 'externalCall'])
   const conversationId = text(item.conversationId)

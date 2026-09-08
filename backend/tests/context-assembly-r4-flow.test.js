@@ -25,6 +25,14 @@ const SLOT_ORDER = [
   'current_user_message',
 ];
 
+const PUBLIC_SELECTION_KEYS = [
+  'strategy',
+  'status',
+  'querySource',
+  'crossWindowCandidateCount',
+  'crossWindowSelectedCount',
+];
+
 const canonicalHash = value => sha256Hash(canonicalizeJson(value));
 
 async function createConversation(fixture, title, key) {
@@ -144,7 +152,11 @@ test('R4 locks the fixed context order and binds the immutable snapshot to one R
   const turn = completed.turn;
   assert.equal(turn.status, 'completed', JSON.stringify(completed.response));
   assert.deepEqual(turn.context.slots.map((item) => item.slot), SLOT_ORDER);
-  assert.equal(turn.context.memory.status, 'not_implemented');
+  assert.deepEqual(turn.context.memory, {
+    status: 'empty', selectionStrategy: 'lexical-overlap-recency/v1',
+    eligibleCount: 0, selectedCount: 0,
+  });
+  assert.deepEqual(Object.keys(turn.context.selection), PUBLIC_SELECTION_KEYS);
   assert.equal(turn.context.state, 'locked');
   assert.match(turn.context.snapshotHash, /^sha256:[0-9a-f]{64}$/u);
   assert.equal(turn.context.sources.at(-1).slot, 'current_user_message');
@@ -161,6 +173,7 @@ test('R4 locks the fixed context order and binds the immutable snapshot to one R
   const queried = await fixture.call(`/chat/turns/${turn.turnId}/context`);
   assert.equal(queried.status, 200, JSON.stringify(queried));
   assert.deepEqual(queried.data, turn.context);
+  assert.deepEqual(Object.keys(queried.data.selection), PUBLIC_SELECTION_KEYS);
   const replay = await fixture.call('/chat/turns', 'POST', {
     content: 'Use the deterministic R4 context.',
   }, { 'idempotency-key': 'r4-r1-default-turn-0001' });

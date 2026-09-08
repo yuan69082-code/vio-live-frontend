@@ -2,6 +2,7 @@
 // database, attachment, credential, Provider and proxy fact that it creates,
 // listens on loopback only, and never discovers or contacts a real Engine.
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import { join } from 'node:path';
@@ -11,12 +12,19 @@ import { createIsolatedTestEnvironment } from './isolated-test-environment.js';
 import { sealTestCredential } from './personal-test-application.js';
 
 const CONTROL_HEADER = 'controlled-r3-browser';
-const PUBLIC_PORT = 8787;
+const requestedPublicPort = Number(process.env.VIO_TEST_PUBLIC_PORT ?? 8787);
+if (!Number.isInteger(requestedPublicPort) || requestedPublicPort < 1024
+    || requestedPublicPort > 65_535) {
+  throw new Error('VIO_TEST_PUBLIC_PORT must be an integer between 1024 and 65535.');
+}
+const PUBLIC_PORT = requestedPublicPort;
 const FRONTEND_ORIGIN = 'http://127.0.0.1:5173';
 const PROVIDER_BEHAVIORS = new Set(['success', '429', 'disconnect', 'timeout']);
-const DROP_KINDS = new Set(['turn', 'regeneration', 'conversation', 'attachment']);
+const DROP_KINDS = new Set(['turn', 'regeneration', 'conversation', 'attachment', 'memory']);
 const MAX_PROXY_RESPONSE_BYTES = 2 * 1024 * 1024;
 const ENABLE_R4_CONTEXT = process.argv.includes('--r4-context');
+const ENABLE_R5_MEMORY = process.argv.includes('--r5-memory');
+const disposableSecret = (label) => `${label}-${randomBytes(18).toString('base64url')}`;
 
 const fixture = createIsolatedTestEnvironment({
   PATH: process.env.PATH,
@@ -102,15 +110,23 @@ const R4_PROJECTION_PORT = Object.freeze({
 const spaces = new Map([
   ['owner-a', {
     key: 'owner-a',
-    passphrase: 'controlled-r3-browser-passphrase-a',
-    credential: 'controlled-r3-loopback-credential-a',
+    passphrase: ENABLE_R5_MEMORY
+      ? disposableSecret('controlled-r5-browser-passphrase-a')
+      : 'controlled-r3-browser-passphrase-a',
+    credential: ENABLE_R5_MEMORY
+      ? disposableSecret('controlled-r5-loopback-credential-a')
+      : 'controlled-r3-loopback-credential-a',
     ownerName: 'R3 browser owner A',
     assistantNames: ['R3 A assistant one', 'R3 A assistant two'],
   }],
   ['owner-b', {
     key: 'owner-b',
-    passphrase: 'controlled-r3-browser-passphrase-b',
-    credential: 'controlled-r3-loopback-credential-b',
+    passphrase: ENABLE_R5_MEMORY
+      ? disposableSecret('controlled-r5-browser-passphrase-b')
+      : 'controlled-r3-browser-passphrase-b',
+    credential: ENABLE_R5_MEMORY
+      ? disposableSecret('controlled-r5-loopback-credential-b')
+      : 'controlled-r3-loopback-credential-b',
     ownerName: 'R3 browser owner B',
     assistantNames: ['R3 B assistant one', 'R3 B assistant two'],
   }],
@@ -334,6 +350,14 @@ async function seedSpace(space) {
       { dailyTokenLimit: 100_000, sessionTokenLimit: 50_000, overagePolicy: 'block', status: 'enabled' },
     );
   }
+  if (ENABLE_R5_MEMORY) {
+    space.app.securityPolicyService.createPolicy(initialized.data.user.userId, {
+      resourceType: 'memory',
+      actionType: 'read',
+      riskLevel: 'medium',
+      rule: 'always_allow',
+    });
+  }
   async function selectAssistant(assistantId, expectedSelectionVersion) {
     const selected = await internalCall(space, '/current-assistant', 'PUT', {
       assistantId,
@@ -374,6 +398,8 @@ function matchesDrop(kind, method, pathname) {
   if (kind === 'regeneration') return /\/api\/v1\/personal\/chat\/conversations\/[^/]+\/messages\/[^/]+\/regenerations$/u.test(pathname);
   if (kind === 'conversation') return pathname === '/api/v1/personal/chat/conversations';
   if (kind === 'attachment') return /\/api\/v1\/personal\/chat\/conversations\/[^/]+\/attachments$/u.test(pathname);
+  if (kind === 'memory') return /\/api\/v1\/personal\/memories(?:\/.*)?$/u.test(pathname)
+    && (method === 'POST' || method === 'PATCH');
   return false;
 }
 
@@ -392,6 +418,13 @@ function publicSpace(space) {
     messages: count('messages'),
     attachments: count('personal_chat_attachments'),
     providerCalls: providerCalls.get(space.key),
+    ...(ENABLE_R5_MEMORY ? {
+      memories: count('personal_local_memories'),
+      memoryVersions: count('personal_local_memory_versions'),
+      memoryOperations: count('personal_local_memory_operations'),
+      memoryDeletions: count('personal_local_memory_deletions'),
+      contextMemoryLinks: count('personal_context_memory_source_links'),
+    } : {}),
     r4Context: ENABLE_R4_CONTEXT ? 'enabled' : 'disabled',
     ...(ENABLE_R4_CONTEXT ? {
       subjectRuntime: {
@@ -537,6 +570,16 @@ const proxy = createServer((request, response) => {
 });
 await new Promise((resolve) => proxy.listen(PUBLIC_PORT, '127.0.0.1', resolve));
 
+const browserAccessFile = ENABLE_R5_MEMORY ? join(fixture.root, 'r5-browser-access.json') : null;
+if (browserAccessFile) {
+  writeFileSync(browserAccessFile, JSON.stringify({
+    owners: [...spaces.values()].map((space) => ({
+      key: space.key,
+      loginPassphrase: space.passphrase,
+    })),
+  }), { encoding: 'utf8', flag: 'wx' });
+}
+
 process.stdout.write(`${JSON.stringify({
   status: 'ready',
   backend: `http://127.0.0.1:${PUBLIC_PORT}`,
@@ -545,9 +588,10 @@ process.stdout.write(`${JSON.stringify({
   controlHeader: CONTROL_HEADER,
   owners: [...spaces.values()].map((space) => ({
     key: space.key,
-    loginPassphrase: space.passphrase,
+    ...(ENABLE_R5_MEMORY ? {} : { loginPassphrase: space.passphrase }),
     assistantNames: space.assistantNames,
   })),
+  browserAccessFile,
   provider: 'controlled_loopback',
   r4Context: ENABLE_R4_CONTEXT ? 'enabled' : 'disabled',
   r4RuntimeProjection: ENABLE_R4_CONTEXT ? 'toggle_via_control' : 'unavailable',

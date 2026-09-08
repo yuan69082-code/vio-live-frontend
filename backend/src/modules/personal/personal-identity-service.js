@@ -63,6 +63,10 @@ export function createPersonalIdentityService({repository:r,userRepository, user
   function createAssistant(user,p) {
     const created=subjectService.createSubject(user,{name:p.name,avatarRef:null,basicSettings:p.settings});
     r.addAssistant(user,created.subjectId,p.avatar);
+    for (const action of ['read','write','manage','delete','export']) {
+      permissionService.createPermission(user,{subjectId:created.subjectId,resourceType:'memory',
+        resourceId:'local-memory',action,permissionLevel:'always_allow'});
+    }
     return assistant(user,created.subjectId);
   }
   const api={
