@@ -43,6 +43,26 @@ test('R2 initialization is controlled, stable and does not claim development ide
   assert.throws(()=>f.app.personalIdentityService.issueInvitation());
   assert.equal(f.app.database.connection.prepare('SELECT count(*) AS n FROM subjects').get().n,0);
 });
+test('desktop invitation delivery is transactional, reusable and replaces an undeliverable active token',async t=>{
+  const f=await fixture(t);let delivered;
+  assert.throws(()=>f.app.personalIdentityService.deliverInitializationInvitation({
+    deliver(){throw new Error('isolated delivery failure');},
+  }),/isolated delivery failure/);
+  assert.equal(f.app.database.connection.prepare('SELECT count(*) n FROM personal_initialization_invitations').get().n,0);
+
+  const created=f.app.personalIdentityService.deliverInitializationInvitation({deliver(value){delivered=value;}});
+  assert.equal(created.action,'created');assert.match(delivered,/^[A-Za-z0-9_-]{43}$/);
+  let repeated=false;
+  const reused=f.app.personalIdentityService.deliverInitializationInvitation({existingInvitation:delivered,deliver(){repeated=true;}});
+  assert.equal(reused.action,'reused');assert.equal(repeated,false);
+
+  let replacement;
+  const replaced=f.app.personalIdentityService.deliverInitializationInvitation({deliver(value){replacement=value;}});
+  assert.equal(replaced.action,'created');assert.notEqual(replacement,delivered);
+  assert.equal(f.app.personalIdentityService.describeInitializationInvitation(delivered).status,'expired');
+  assert.equal(f.app.personalIdentityService.describeInitializationInvitation(replacement).status,'active');
+  assert.equal(f.app.database.connection.prepare("SELECT count(*) n FROM personal_initialization_invitations WHERE consumed_at IS NULL AND expires_at>?").get(new Date('2026-09-04T00:00:00Z').toISOString()).n,1);
+});
 test('R2 onboarding and two assistant operations survive replay, selection conflicts and logout',async t=>{
   const f=await fixture(t);await f.initialize();
   const body={displayName:'Owner',avatar:null,assistant:{name:'First',avatar:null,settings:{}},preferences:{storagePreference:'cloud',contextMode:'balanced'}};

@@ -164,9 +164,13 @@ R1 是与上段历史 V5 路径并列的 Vio 自有个人聊天边界。R1 不�
 ## 运行要求
 
 - Node.js `>=22.23.1 <23.0.0`（仅支持 22.x，已验证基线为 22.23.1）
-- pnpm `11.x`
+- pnpm `11.9.0`（与根/后端 `packageManager` 一致）
 
 当前使用 Node.js 内置 `node:sqlite`。在 Node.js 22 中该模块仍会显示实验性警告，因此只作为开发环境方案，正式数据库需要后续 ADR 和适配器。
+
+Windows 个人本机的双击交付入口固定使用已验证的 Node.js `22.23.1`（声明范围 `>=22.23.1 <23.0.0`）和 pnpm `11.9.0`。首次准备、日常打开/停止、精确仓库与现有 `backend/data/vio-live.dev.sqlite` 绑定、loopback 监听及故障处理见 [Windows 本机启停说明](../docs/WINDOWS_LOCAL_START.md)。日常打开不会安装依赖或构建，也不会启动或探测 Continuity Engine。
+
+Windows 当前仓库个人数据库的首次所有者初始化使用仓库根 `初始化个人空间 Vio.cmd` / `Initialize Personal Vio.cmd`。它与通用 `backend/scripts/initialize-personal.js` 分工明确：通用 CLI 继续只接受仓库外数据库；双击入口只接受已经过 `local-runtime.json` 严格绑定的当前仓库及既有 `backend/data/vio-live.dev.sqlite`，运行时未完全停止、配置缺失/不可读/非法、路径不一致或数据库不是既有 Vio 数据库都会 fail closed。邀请只写入当前 Windows 用户私密目录，个人访问口令只在网页中设置。
 
 默认后端测试通过 `pnpm test` 的隔离启动器运行，使用 `node:module.registerHooks` 替换测试路径发现依赖，并传递给正式 CLI 测试子进程。启动器在创建临时目录或启动测试子进程前检查 Node 版本和该能力；不满足要求时明确报错并以退出码 2 停止，绝不回退到非隔离测试。原 `tests/*.test.js` 全量范围及 Node 默认并发保持不变。
 

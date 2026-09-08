@@ -4,6 +4,14 @@
 
 脚本必须有明确输入、失败行为和适用环境；涉及数据迁移、恢复或删除时必须提供额外保护。`pnpm run prepare:local-chat` 调用 `prepare-local-chat-profile.js`，幂等准备历史 V5 固定验收用户、助手、会话和 SubjectBinding；已有数据与固定值冲突时 fail closed。该脚本不启动 HTTP、不连接 Engine 或 Provider，也不保存密钥。它不是 R2 正式个人身份的初始化入口，不会被新个人主应用调用。
 
+## Windows 个人本机启停
+
+仓库根的 `首次准备 Vio.cmd`、`初始化个人空间 Vio.cmd`、`打开 Vio.cmd` 和 `停止 Vio.cmd` 分别调用 `scripts/windows/prepare-local-runtime.js`、`scripts/windows/initialize-local-personal.js` 与 `scripts/windows/vio-local.js`；英文同义入口用于不兼容中文批处理文件名的自动化或终端环境。首次准备通过禁网的 Corepack 精确使用 pnpm 11.9.0，执行 `install --offline --frozen-lockfile --force`、TypeScript 检查和 Vite 生产构建。日常打开路径不调用 pnpm/Corepack、install、tsc 或 Vite，只复用已验证构建。
+
+启动器固定绑定当前仓库与现有 `backend/data/vio-live.dev.sqlite`，在 127.0.0.1 上启动后端和同源静态前端，双健康检查通过后才打开浏览器。运行实例通过仓库外状态文件、随机控制令牌和命名管道证明所有权；重复打开只复用，停止不会按端口/PID 猜测或结束未知进程。自动测试的路径覆盖只在显式 `VIO_LOCAL_RUNTIME_TEST_MODE=true` 时生效。完整用户步骤见 [Windows 本机启停说明](../../docs/WINDOWS_LOCAL_START.md)。
+
+双击个人初始化入口不会放宽下面正式 CLI 的仓库外路径规则。它先校验当前桌面用户的 `local-runtime.json`、精确仓库/数据库绑定、既有 Vio 数据库及停止状态，再通过正式 `personalIdentityService` 创建或精确复用 15 分钟邀请。邀请只以 `wx` 新文件写入 `%LOCALAPPDATA%\VioLive\private`，不会回显；未过期文件重复点击复用，文件丢失或邀请过期时在同一事务中使旧未消费资格失效并安全交付新文件。脚本不接收个人访问口令，用户只在网页中设置自己的 12—256 字符口令。
+
 ## R2 受控个人初始化
 
 在本人已限制访问权限的仓库外私有运行目录中，显式执行：

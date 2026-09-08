@@ -8,6 +8,7 @@ export function createSqlitePersonalRepository(db) {
       JOIN users u ON u.user_id=p.user_id JOIN user_spaces s ON s.user_id=p.user_id WHERE p.user_id=?`, id),
     addInvitation: (hash, expires) => run('INSERT INTO personal_initialization_invitations(invitation_hash,expires_at) VALUES (?,?)',hash,expires),
     activeInvitation: (now) => get('SELECT 1 FROM personal_initialization_invitations WHERE consumed_at IS NULL AND expires_at>? LIMIT 1',now),
+    expireOpenInvitations: (now) => run('UPDATE personal_initialization_invitations SET expires_at=? WHERE consumed_at IS NULL AND expires_at>?',now,now),
     invitation: (hash) => get('SELECT * FROM personal_initialization_invitations WHERE invitation_hash=?',hash),
     consumeInvitation: (hash, time, key, user) => run('UPDATE personal_initialization_invitations SET consumed_at=?,initialization_key=?,owner_user_id=? WHERE invitation_hash=? AND consumed_at IS NULL',time,key,user,hash),
     createIdentity: (p) => {

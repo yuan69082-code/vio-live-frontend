@@ -3,13 +3,22 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.23.1 <23.0.0"
+  },
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "vite",
     "dev:android": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "prepare:windows-local": "node scripts/windows/prepare-local-runtime.js",
+    "initialize:windows-personal": "node scripts/windows/initialize-local-personal.js",
+    "start:windows-local": "node scripts/windows/vio-local.js start",
+    "stop:windows-local": "node scripts/windows/vio-local.js stop",
+    "test:windows-local": "node --test scripts/windows/local-runtime.test.js"
   },
   "dependencies": {
     "react": "latest",

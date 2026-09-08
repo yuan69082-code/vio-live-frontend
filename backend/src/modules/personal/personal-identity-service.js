@@ -86,6 +86,40 @@ export function createPersonalIdentityService({repository:r,userRepository, user
       r.addInvitation(digest(invitation),new Date(clock().getTime()+15*60000).toISOString());
       return invitation;
     },
+    describeInitializationInvitation(invitation) {
+      if(typeof invitation!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(invitation)) {
+        return {status:'unknown'};
+      }
+      const record=r.invitation(digest(invitation));
+      if(!record) return {status:'unknown'};
+      if(record.consumed_at) return {status:'consumed'};
+      if(record.expires_at<=clock().toISOString()) return {status:'expired',expiresAt:record.expires_at};
+      return {status:'active',expiresAt:record.expires_at};
+    },
+    deliverInitializationInvitation({existingInvitation=null,deliver}) {
+      if(existingInvitation!==null&&(typeof existingInvitation!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(existingInvitation))) {
+        throw new ValidationError('Existing initialization invitation is invalid.',{field:'existingInvitation'});
+      }
+      if(typeof deliver!=='function') throw new ValidationError('Invitation delivery callback is required.',{field:'deliver'});
+      return runInTransaction(()=>{
+        if(r.owner()) throw new ConflictError('Personal owner already initialized.');
+        const now=clock();const nowText=now.toISOString();
+        if(existingInvitation!==null) {
+          const existing=r.invitation(digest(existingInvitation));
+          if(existing&&!existing.consumed_at&&existing.expires_at>nowText) {
+            return {action:'reused',expiresAt:existing.expires_at};
+          }
+        }
+        // A previous desktop process may have committed an invitation after its
+        // private file was lost. Expire only unconsumed initialization tokens;
+        // never alter an owner, session, credential or business fact.
+        r.expireOpenInvitations(nowText);
+        const invitation=randomToken();const expiresAt=new Date(now.getTime()+15*60000).toISOString();
+        r.addInvitation(digest(invitation),expiresAt);
+        deliver(invitation);
+        return {action:'created',expiresAt};
+      });
+    },
     access:()=>({status:r.owner()?'authentication_required':'initialization_required',registration:'disabled'}),
     initialize(input,key) {
       fields(input,['invitation','passphrase','agreementVersion'],['invitation','passphrase','agreementVersion']);
