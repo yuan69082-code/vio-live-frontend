@@ -2,6 +2,7 @@ import { ApiClientError } from './client'
 import { parsePersonalChatTurn } from './personal-chat-api'
 import type { PersonalChatTurn } from './personal-chat-api'
 import type { PersonalApi, PersonalRequestOptions } from './personal-api'
+import type { TurnContextControls } from './personal-context-api'
 
 export const MAX_R3_TITLE_LENGTH = 120
 export const MAX_R3_ATTACHMENT_BYTES = 10 * 1024 * 1024
@@ -343,7 +344,7 @@ export function createPersonalMultiChatApi(api: PersonalApi) {
     async createBranch(conversationId: string, input: { sourceBranchId: string; restartAfterMessageId: string; title: string }, key: string, options?: PersonalRequestOptions) { return writeResult(await api.request(`/chat/conversations/${encodeURIComponent(conversationId)}/branches`, 'POST', input, { ...options, idempotencyKey: key })) },
     async selectBranch(conversationId: string, branchId: string, expectedConversationVersion: number, key: string, options?: PersonalRequestOptions) { return writeResult(await api.request(`/chat/conversations/${encodeURIComponent(conversationId)}/branches/${encodeURIComponent(branchId)}/selection`, 'POST', { expectedConversationVersion }, { ...options, idempotencyKey: key })) },
     async clearBranch(conversationId: string, branchId: string, expectedBranchVersion: number, key: string, options?: PersonalRequestOptions) { return writeResult(await api.request(`/chat/conversations/${encodeURIComponent(conversationId)}/clear`, 'POST', { branchId, expectedBranchVersion }, { ...options, idempotencyKey: key })) },
-    async createTurn(conversationId: string, input: { branchId: string; content: string; attachmentIds: string[] }, key: string, options?: PersonalRequestOptions) { return parsePersonalChatTurn(await api.request(`/chat/conversations/${encodeURIComponent(conversationId)}/turns`, 'POST', input, { ...options, idempotencyKey: key })) },
+    async createTurn(conversationId: string, input: { branchId: string; content: string; attachmentIds: string[]; context?: TurnContextControls }, key: string, options?: PersonalRequestOptions) { return parsePersonalChatTurn(await api.request(`/chat/conversations/${encodeURIComponent(conversationId)}/turns`, 'POST', input, { ...options, idempotencyKey: key })) },
     async turn(turnId: string, options?: PersonalRequestOptions) { return parsePersonalChatTurn(await api.request(`/chat/turns/${encodeURIComponent(turnId)}`, 'GET', undefined, options)) },
     async turnByKey(key: string, options?: PersonalRequestOptions) { return parsePersonalChatTurn(await api.request(`/chat/turns/by-idempotency-key/${encodeURIComponent(key)}`, 'GET', undefined, options)) },
     async recover(turnId: string, input: { action: 'resume' | 'retry' | 'cancel'; confirmationId?: string }, key: string, options?: PersonalRequestOptions) { return parsePersonalChatTurn(await api.request(`/chat/turns/${encodeURIComponent(turnId)}/recovery`, 'POST', input, { ...options, idempotencyKey: key })) },

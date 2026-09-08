@@ -38,7 +38,7 @@ function decodeChatPathSegment(value,field) {
     throw new ValidationError('Personal chat path contains malformed percent-encoding.',{field});
   }
 }
-export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,standaloneChatService,multiConversationService,vault,secureCookies=false,allowedOrigin=null}) {
+export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,standaloneChatService,multiConversationService,contextAssemblyService,vault,secureCookies=false,allowedOrigin=null}) {
   function authenticate(request,write=false) {
     const context=identity.authenticate(tokenFrom(request));
     if(write) {
@@ -135,6 +135,12 @@ export function createPersonalHttpAccess({identityService:identity,configuration
       else if(method==='POST'&&path==='/chat/conversations') send(multiConversationService.createConversation(context,rejectChatIdentityFields(await readJsonBody(request)),key),201);
       else if(method==='GET'&&path==='/chat/conversations/current') send(multiConversationService.getCurrent(context));
       else if(method==='GET'&&/^\/chat\/conversations\/[^/]+$/.test(path)) send(multiConversationService.getConversation(context,decodeChatPathSegment(path.split('/')[3],'conversationId')));
+      else if(method==='GET'&&/^\/chat\/conversations\/[^/]+\/context-settings$/.test(path)) send(contextAssemblyService.getSettings(context,decodeChatPathSegment(path.split('/')[3],'conversationId')));
+      else if(method==='PATCH'&&/^\/chat\/conversations\/[^/]+\/context-settings$/.test(path)) send(contextAssemblyService.updateSettings(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='GET'&&/^\/chat\/conversations\/[^/]+\/context-plan$/.test(path)) send(contextAssemblyService.preview(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),{
+        branchId:url.searchParams.get('branchId')??undefined,mode:url.searchParams.get('mode')??undefined,
+        excludedSourceRefs:url.searchParams.getAll('excludeSourceRef'),
+      }));
       else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/selection$/.test(path)) send(multiConversationService.selectConversation(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key));
       else if(method==='PATCH'&&/^\/chat\/conversations\/[^/]+$/.test(path)) send(multiConversationService.renameConversation(context,decodeChatPathSegment(path.split('/')[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key));
       else if(method==='POST'&&/^\/chat\/conversations\/[^/]+\/(archive|restore|deletion)$/.test(path)) {const parts=path.split('/');send(multiConversationService.transitionConversation(context,decodeChatPathSegment(parts[3],'conversationId'),rejectChatIdentityFields(await readJsonBody(request)),key,{archive:'archive',restore:'restore',deletion:'delete'}[parts[4]]));}
@@ -157,6 +163,8 @@ export function createPersonalHttpAccess({identityService:identity,configuration
       else if(method==='GET'&&path==='/chat/default') send(await standaloneChatService.getDefaultChat(context));
       else if(method==='POST'&&path==='/chat/turns') send(await standaloneChatService.createTurn(context,rejectChatIdentityFields(await readJsonBody(request)),key));
       else if(method==='GET'&&/^\/chat\/turns\/by-idempotency-key\/[^/]+$/.test(path)) send(await standaloneChatService.getTurnByIdempotencyKey(context,decodeChatPathSegment(path.split('/')[4],'idempotencyKey')));
+      else if(method==='GET'&&/^\/chat\/turns\/[^/]+\/context$/.test(path)) send(contextAssemblyService.getSnapshot(context,decodeChatPathSegment(path.split('/')[3],'turnId')));
+      else if(method==='POST'&&/^\/chat\/turns\/[^/]+\/context-recovery$/.test(path)) send(await contextAssemblyService.recoverFold(context,decodeChatPathSegment(path.split('/')[3],'turnId'),rejectChatIdentityFields(await readJsonBody(request)),key));
       else if(method==='GET'&&/^\/chat\/turns\/[^/]+$/.test(path)) send(await standaloneChatService.getTurn(context,decodeChatPathSegment(path.split('/')[3],'turnId')));
       else if(method==='POST'&&/^\/chat\/turns\/[^/]+\/recovery$/.test(path)) send(await standaloneChatService.recoverTurn(context,decodeChatPathSegment(path.split('/')[3],'turnId'),rejectChatIdentityFields(await readJsonBody(request)),key));
       else if(method==='GET'&&path==='/providers')send(configurationService.providers(user));
@@ -171,6 +179,7 @@ export function createPersonalHttpAccess({identityService:identity,configuration
       else if(method==='PUT'&&/^\/providers\/[^/]+\/credential$/.test(path))send(configurationService.saveCredential(context,decodeURIComponent(path.split('/')[2]),await readJsonBody(request),key));
       else if(method==='DELETE'&&/^\/providers\/[^/]+\/credential$/.test(path))send(configurationService.revokeCredential(context,decodeURIComponent(path.split('/')[2]),await readJsonBody(request),key));
       else if(method==='POST'&&/^\/providers\/[^/]+\/connection-tests$/.test(path))send(await configurationService.testConnection(context,decodeURIComponent(path.split('/')[2]),await readJsonBody(request),key));
+      else if(method==='GET'&&/^\/chat\/context-sources\/[^/]+$/.test(path))send(contextAssemblyService.getEvidence(context,decodeChatPathSegment(path.split('/')[3],'sourceRef')));
       else if(method==='GET'&&/^\/providers\/[^/]+\/connection-tests\/[^/]+$/.test(path))send(configurationService.getConnection(context,decodeURIComponent(path.split('/')[2]),decodeURIComponent(path.split('/')[4])));
       else throw new NotFoundError('Personal route was not found.');
       return true;

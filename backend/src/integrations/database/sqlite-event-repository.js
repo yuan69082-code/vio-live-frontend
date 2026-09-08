@@ -103,7 +103,7 @@ export function createSqliteEventRepository(connection) {
         messageId,
       ));
     },
-    findMany({ userId, subjectId, eventType, status, from, to, limit }) {
+    findMany({ userId, subjectId, eventType, excludedEventTypes, status, from, to, limit }) {
       const conditions = ['user_id = ?'];
       const parameters = [userId];
 
@@ -115,6 +115,11 @@ export function createSqliteEventRepository(connection) {
       if (eventType) {
         conditions.push('event_type = ?');
         parameters.push(eventType);
+      }
+
+      if (Array.isArray(excludedEventTypes) && excludedEventTypes.length > 0) {
+        conditions.push(`event_type NOT IN (${excludedEventTypes.map(() => '?').join(', ')})`);
+        parameters.push(...excludedEventTypes);
       }
 
       if (status) {

@@ -185,7 +185,7 @@ export function createSqliteMultiConversationRepository(connection) {
   const listConversations = connection.prepare(`${conversationSelect}
     WHERE pc.user_id=? AND pc.assistant_id=?`);
   const insertRegistration = connection.prepare(`INSERT INTO standalone_chat_default_conversations
-    (user_id,assistant_id,conversation_id,is_r1_default,created_at) VALUES(?,?,?,0,?)`);
+    (user_id,assistant_id,conversation_id,is_r1_default,created_at) VALUES(?,?,?,?,?)`);
   const insertCatalog = connection.prepare(`INSERT INTO personal_chat_conversations
     (conversation_id,user_id,assistant_id,status,version,current_branch_id,created_at,updated_at)
     VALUES(?,?,?,'active',1,?,?,?)`);
@@ -311,7 +311,8 @@ export function createSqliteMultiConversationRepository(connection) {
     },
     insertConversation(record) {
       return constrained(() => {
-        insertRegistration.run(record.userId, record.assistantId, record.conversationId, record.createdAt);
+        insertRegistration.run(record.userId, record.assistantId, record.conversationId,
+          record.isR1Default ? 1 : 0, record.createdAt);
         insertCatalog.run(record.conversationId, record.userId, record.assistantId,
           record.rootBranchId, record.createdAt, record.createdAt);
         insertBranch.run(record.rootBranchId, record.userId, record.assistantId,

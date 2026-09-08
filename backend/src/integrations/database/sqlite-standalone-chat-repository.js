@@ -89,6 +89,7 @@ function mapExecution(row) {
     budgetApprovalId: row.budget_approval_id,
     maxOutputTokens: row.max_output_tokens,
     requestHash: row.request_hash,
+    contextSnapshotHash: row.context_snapshot_hash ?? null,
     status: row.status,
     providerCallMayHaveStarted: row.provider_call_may_have_started === 1,
     startedAt: row.started_at,
@@ -373,10 +374,10 @@ export function createSqliteStandaloneChatRepository(connection) {
       permission_decision, security_decision, budget_decision, estimated_tokens,
       security_audit_log_id, permission_id, permission_updated_at,
       security_facts_hash, budget_facts_hash, budget_approval_id,
-      max_output_tokens, request_hash, status,
+      max_output_tokens, request_hash, context_snapshot_hash, status,
       provider_call_may_have_started, started_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?,
       'prepared', 0, ?, ?)
   `);
   const transitionExecution = connection.prepare(`
@@ -630,6 +631,7 @@ export function createSqliteStandaloneChatRepository(connection) {
           record.budgetApprovalId ?? null,
           record.maxOutputTokens,
           record.requestHash,
+          record.contextSnapshotHash ?? null,
           record.startedAt,
           record.startedAt,
         );

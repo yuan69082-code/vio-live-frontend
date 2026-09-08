@@ -23,6 +23,18 @@ import type {
 import { MAX_PERSONAL_CHAT_CONTENT_LENGTH } from '../api/personal-chat-api'
 import type { PersonalChatTurn } from '../api/personal-chat-api'
 import type { PersonalAssistant } from '../api/personal-api'
+import { finishOperation, operationKey } from '../api/personal-api'
+import {
+  createPersonalContextApi,
+} from '../api/personal-context-api'
+import type {
+  ContextAssembly,
+  ContextEvidence,
+  ContextMode,
+  ContextSource,
+  ConversationContextSettings,
+  PersonalContextApi,
+} from '../api/personal-context-api'
 import {
   clearMultiChatRecovery,
   readMultiChatRecovery,
@@ -30,6 +42,7 @@ import {
 } from '../api/personal-multi-chat-recovery'
 import type { MultiChatRecoveryFact } from '../api/personal-multi-chat-recovery'
 import ConversationComposer from '../components/conversation/ConversationComposer'
+import ContextControlPanel from '../components/conversation/ContextControlPanel'
 import ConversationHeader from '../components/conversation/ConversationHeader'
 import ConversationIcon from '../components/conversation/ConversationIcon'
 import MessageList from '../components/conversation/MessageList'
@@ -48,6 +61,7 @@ type Props = {
   assistantsLoaded: boolean
   onNavigate: (target: 'capability' | 'profile') => void
   api?: PersonalMultiChatApi
+  contextApi?: PersonalContextApi
   storage?: Storage | null
 }
 
@@ -95,6 +109,10 @@ function errorText(error: unknown) {
     PROVIDER_RETRYABLE_FAILURE: '供应商请求失败，可以安全重试。', PROVIDER_OUTCOME_UNKNOWN: '供应商结果未知，禁止盲目重试。', PROVIDER_TERMINAL_FAILURE: '供应商请求最终失败。',
     TURN_CANCELLED: '本轮已终止。', TURN_ALREADY_ACTIVE: '当前会话已有进行中的轮次。', TURN_RETRY_NOT_ALLOWED: '当前轮次不允许重试。', STANDALONE_LEDGER_INCONSISTENT: '轮次事实异常，已隔离。',
     ASSISTANT_CONFIGURATION_TOO_LARGE: '当前助手配置超过独立聊天限制。', STANDALONE_MODE_REQUIRED: '当前不是独立聊天模式。', PROVIDER_INTERFACE_UNSUPPORTED: '供应商接口不受支持。',
+    CONTEXT_MODE_INVALID: '上下文模式无效，请重新选择。', CONTEXT_EXCLUSIONS_INVALID: '自定义排除项无效，必需来源不能排除。', CONTEXT_RESPONSE_INVALID: '上下文数据无法安全读取。', CONTEXT_SUMMARY_INVALID: '结构化摘要未通过严格校验，本轮未调用供应商。',
+    CONTEXT_SOURCE_FORBIDDEN: '该上下文来源不在当前权限范围内。', CONTEXT_SOURCE_NOT_FOUND: '该精确来源不存在、已受治理删除或不属于当前助手。', CONTEXT_SNAPSHOT_NOT_FOUND: '当前轮次的锁定上下文尚未生成。',
+    CONTEXT_PLAN_STALE: '上下文来源已经变化，请重新预览后再发送。', CONTEXT_FOLDING_FAILED: '上下文摘要失败且原文无法安全装入；供应商尚未调用。', CONTEXT_BUDGET_EXCEEDED: '必需上下文超过模型上限；本轮未调用供应商。',
+    CONTEXT_RECOVERY_NOT_ALLOWED: '当前上下文折叠不允许重试，请重新读取轮次状态。', CONTEXT_SETTINGS_VERSION_CONFLICT: '会话上下文设置已在其他位置更新，请重新读取。', CONTEXT_LEDGER_INCONSISTENT: '上下文账本异常，已停止本轮。',
   }
   return labels[error.code] ?? (error.status === 401 ? '个人访问已失效，正在返回访问验证。' : error.status === 409 ? '服务端状态冲突，已重新读取。' : error.status === 404 ? '服务端未找到目标事实。' : error.message || '操作未完成。')
 }
@@ -123,9 +141,10 @@ async function attachmentPayload(file: File, kind: 'image' | 'file' | 'audio') {
   }
 }
 
-export default function PersonalMultiConversationPage({ assistant, assistantsLoaded, onNavigate, api: suppliedApi, storage: suppliedStorage }: Props) {
+export default function PersonalMultiConversationPage({ assistant, assistantsLoaded, onNavigate, api: suppliedApi, contextApi: suppliedContextApi, storage: suppliedStorage }: Props) {
   const personal = usePersonal()
   const api = useMemo(() => suppliedApi ?? createPersonalMultiChatApi(personal.api), [personal.api, suppliedApi])
+  const contextApi = useMemo(() => suppliedContextApi ?? createPersonalContextApi(personal.api), [personal.api, suppliedContextApi])
   const storage = suppliedStorage === undefined ? browserStorage() : suppliedStorage
   const personalScope = personal.scope
   const ownerId = personal.state.kind === 'ready' ? personal.state.session.user.userId : ''
@@ -162,6 +181,19 @@ export default function PersonalMultiConversationPage({ assistant, assistantsLoa
   const [pending, setPending] = useState<MultiChatRecoveryFact | null>(() => assistant ? readMultiChatRecovery(storage, ownerId, assistant.assistantId) : null)
   const [safeRetry, setSafeRetry] = useState(false)
   const [pollingStopped, setPollingStopped] = useState(false)
+  const [contextOpen, setContextOpen] = useState(false)
+  const [contextLoading, setContextLoading] = useState(false)
+  const [contextSaving, setContextSaving] = useState(false)
+  const [contextSettings, setContextSettings] = useState<ConversationContextSettings | null>(null)
+  const [contextMode, setContextMode] = useState<ContextMode>('balanced')
+  const [contextExcluded, setContextExcluded] = useState<string[]>([])
+  const [contextPlan, setContextPlan] = useState<ContextAssembly | null>(null)
+  const [contextSnapshot, setContextSnapshot] = useState<ContextAssembly | null>(null)
+  const [contextError, setContextError] = useState('')
+  const [contextNotice, setContextNotice] = useState('')
+  const [contextEvidence, setContextEvidence] = useState<ContextEvidence | null>(null)
+  const [contextEvidenceLoading, setContextEvidenceLoading] = useState(false)
+  const [contextEvidenceError, setContextEvidenceError] = useState('')
   const mounted = useRef(true)
   const generation = useRef(0)
   const listGeneration = useRef(0)
@@ -169,6 +201,12 @@ export default function PersonalMultiConversationPage({ assistant, assistantsLoa
   const lock = useRef<symbol | null>(null)
   const controllers = useRef(new Set<AbortController>())
   const loadedConversationId = useRef<string | null>(null)
+  const contextGeneration = useRef(0)
+  const contextPreviewGeneration = useRef(0)
+  const contextWriteLock = useRef<symbol | null>(null)
+  const contextControllers = useRef(new Set<AbortController>())
+  const contextEvidenceController = useRef<AbortController | null>(null)
+  const contextSnapshotFact = useRef<{ scope: string; turnId: string } | null>(null)
 
   const current = useCallback((version: number) => mounted.current && generation.current === version, [])
   const makeController = useCallback(() => { const controller = new AbortController(); controllers.current.add(controller); return controller }, [])
@@ -344,22 +382,193 @@ export default function PersonalMultiConversationPage({ assistant, assistantsLoa
     } finally { release(request) }
   }, [acceptDetail, api, assistantId, current, downloadExport, makeController, refresh, release, savePending, showError])
 
+  const contextConversationId = detail?.conversation?.conversationId ?? ''
+  const contextBranchId = detail?.branch?.branchId ?? ''
+  const contextScope = `${personalScope}:${assistantId}:${contextConversationId}:${contextBranchId}`
+  const contextCurrent = useCallback((version: number) => current(generation.current) && contextGeneration.current === version, [current])
+  const makeContextController = useCallback(() => { const controller = new AbortController(); contextControllers.current.add(controller); return controller }, [])
+  const releaseContextController = useCallback((controller: AbortController) => { contextControllers.current.delete(controller) }, [])
+
+  const previewContext = useCallback(async (conversationId: string, branchId: string, mode: ContextMode, excludedSourceRefs: string[], version = contextGeneration.current, preserveNotice = false) => {
+    const requestVersion = ++contextPreviewGeneration.current
+    const request = makeContextController()
+    if (contextCurrent(version)) { setContextLoading(true); setContextError(''); if (!preserveNotice) setContextNotice('正在按服务端规则预览装配范围…') }
+    try {
+      const value = await contextApi.plan(conversationId, { branchId, mode, excludedSourceRefs }, { signal: request.signal, timeoutMs: QUERY_TIMEOUT })
+      if (!contextCurrent(version) || contextPreviewGeneration.current !== requestVersion) return
+      setContextPlan(value); setContextError(''); if (!preserveNotice) setContextNotice('预览只读取范围；保存后才会成为本会话设置，发送时由服务端锁定。')
+    } catch (caught) {
+      if (contextCurrent(version) && contextPreviewGeneration.current === requestVersion && !(caught instanceof ApiClientError && caught.code === 'request_aborted')) {
+        if (caught instanceof ApiClientError && caught.code === 'CONTEXT_SOURCE_FORBIDDEN') {
+          try {
+            const settings = await contextApi.settings(conversationId, { signal: request.signal, timeoutMs: QUERY_TIMEOUT })
+            const recovered = await contextApi.plan(conversationId, { branchId, mode: settings.effective.mode, excludedSourceRefs: settings.effective.excludedSourceRefs }, { signal: request.signal, timeoutMs: QUERY_TIMEOUT })
+            if (contextCurrent(version) && contextPreviewGeneration.current === requestVersion) {
+              setContextSettings(settings); setContextMode(settings.effective.mode); setContextExcluded(settings.effective.excludedSourceRefs); setContextPlan(recovered); setContextError(''); setContextNotice('部分排除来源已不可用，已按服务端当前有效范围恢复预览。')
+            }
+            return
+          } catch (recoveryError) {
+            caught = recoveryError
+          }
+        }
+        setContextPlan(null); setContextNotice(''); setContextError(errorText(caught))
+      }
+    } finally {
+      releaseContextController(request)
+      if (contextCurrent(version) && contextPreviewGeneration.current === requestVersion) setContextLoading(false)
+    }
+  }, [contextApi, contextCurrent, makeContextController, releaseContextController])
+
+  const loadContext = useCallback(async (conversationId: string, branchId: string, turnId?: string) => {
+    const requestedScope = `${personalScope}:${assistantId}:${conversationId}:${branchId}`
+    const version = ++contextGeneration.current
+    contextPreviewGeneration.current += 1
+    contextControllers.current.forEach((controller) => controller.abort()); contextControllers.current.clear()
+    contextEvidenceController.current?.abort(); contextEvidenceController.current = null
+    setContextLoading(true); setContextError(''); setContextNotice('正在读取服务端会话设置…'); setContextSettings(null); setContextPlan(null); setContextSnapshot(null); setContextEvidence(null); setContextEvidenceError('')
+    const request = makeContextController()
+    try {
+      const settings = await contextApi.settings(conversationId, { signal: request.signal, timeoutMs: QUERY_TIMEOUT })
+      if (!contextCurrent(version)) return
+      let liveSettings = settings
+      let planValue: ContextAssembly
+      try {
+        planValue = await contextApi.plan(conversationId, { branchId, mode: liveSettings.effective.mode, excludedSourceRefs: liveSettings.effective.excludedSourceRefs }, { signal: request.signal, timeoutMs: QUERY_TIMEOUT })
+      } catch (caught) {
+        if (!(caught instanceof ApiClientError) || caught.code !== 'CONTEXT_SOURCE_FORBIDDEN') throw caught
+        liveSettings = await contextApi.settings(conversationId, { signal: request.signal, timeoutMs: QUERY_TIMEOUT })
+        planValue = await contextApi.plan(conversationId, { branchId, mode: liveSettings.effective.mode, excludedSourceRefs: liveSettings.effective.excludedSourceRefs }, { signal: request.signal, timeoutMs: QUERY_TIMEOUT })
+      }
+      const snapshotValue = turnId ? await contextApi.snapshot(turnId, { signal: request.signal, timeoutMs: QUERY_TIMEOUT }).catch((caught) => {
+        if (caught instanceof ApiClientError && caught.code === 'CONTEXT_SNAPSHOT_NOT_FOUND') return null
+        throw caught
+      }) : null
+      if (!contextCurrent(version)) return
+      setContextSettings(liveSettings); setContextMode(liveSettings.effective.mode); setContextExcluded(liveSettings.effective.excludedSourceRefs)
+      if (snapshotValue?.turnId) contextSnapshotFact.current = { scope: requestedScope, turnId: snapshotValue.turnId }
+      setContextPlan(planValue); setContextSnapshot(snapshotValue); setContextError(''); setContextNotice('上下文设置和预览已由服务端恢复。')
+    } catch (caught) {
+      if (contextCurrent(version) && !(caught instanceof ApiClientError && caught.code === 'request_aborted')) { setContextNotice(''); setContextError(errorText(caught)) }
+    } finally {
+      releaseContextController(request)
+      if (contextCurrent(version)) setContextLoading(false)
+    }
+  }, [assistantId, contextApi, contextCurrent, makeContextController, personalScope, releaseContextController])
+
+  const selectContextMode = useCallback((mode: ContextMode) => {
+    if (!contextConversationId || !contextBranchId || contextLoading || contextSaving) return
+    const excluded = mode === 'custom' ? contextExcluded : []
+    setContextMode(mode); setContextExcluded(excluded); setContextSnapshot((value) => value)
+    void previewContext(contextConversationId, contextBranchId, mode, excluded)
+  }, [contextBranchId, contextConversationId, contextExcluded, contextLoading, contextSaving, previewContext])
+
+  const toggleContextSource = useCallback((source: ContextSource) => {
+    if (contextMode !== 'custom' || contextLoading || contextSaving) return
+    const excluded = contextExcluded.includes(source.sourceRef) ? contextExcluded.filter((value) => value !== source.sourceRef) : [...contextExcluded, source.sourceRef]
+    setContextExcluded(excluded)
+    void previewContext(contextConversationId, contextBranchId, contextMode, excluded)
+  }, [contextBranchId, contextConversationId, contextExcluded, contextLoading, contextMode, contextSaving, previewContext])
+
+  const saveContextSettings = useCallback(async () => {
+    if (!contextSettings || !contextConversationId || !contextBranchId || contextLoading || contextSaving || contextWriteLock.current || lock.current) return
+    const lockToken = Symbol('context.settings')
+    const key = operationKey(contextScope, `context-settings/${contextConversationId}`)
+    const version = contextGeneration.current
+    const expectedVersion = contextSettings.conversation?.version ?? 0
+    contextWriteLock.current = lockToken; setContextSaving(true); setContextError(''); setContextNotice('正在保存真实会话设置…')
+    const request = makeContextController()
+    try {
+      const value = await contextApi.updateSettings(contextConversationId, { mode: contextMode, excludedSourceRefs: contextExcluded, expectedVersion }, key, { signal: request.signal, timeoutMs: WRITE_TIMEOUT })
+      if (!contextCurrent(version)) return
+      finishOperation(contextScope, `context-settings/${contextConversationId}`, key)
+      setContextSettings(value); setContextMode(value.effective.mode); setContextExcluded(value.effective.excludedSourceRefs); setContextNotice('本会话上下文设置已由服务端保存。')
+      await previewContext(contextConversationId, contextBranchId, value.effective.mode, value.effective.excludedSourceRefs, version, true)
+      if (contextCurrent(version)) setContextNotice('本会话上下文设置已由服务端保存。')
+    } catch (caught) {
+      if (!contextCurrent(version)) return
+      setContextNotice(''); setContextError(errorText(caught))
+      if (!isUncertain(caught)) finishOperation(contextScope, `context-settings/${contextConversationId}`, key)
+      if (caught instanceof ApiClientError && ['CONTEXT_SETTINGS_VERSION_CONFLICT', 'CONTEXT_SOURCE_FORBIDDEN'].includes(caught.code)) await loadContext(contextConversationId, contextBranchId, detail?.activeTurn?.turnId)
+    } finally {
+      releaseContextController(request)
+      if (contextWriteLock.current === lockToken) contextWriteLock.current = null
+      if (contextCurrent(version)) setContextSaving(false)
+    }
+  }, [contextApi, contextBranchId, contextConversationId, contextCurrent, contextExcluded, contextLoading, contextMode, contextSaving, contextScope, contextSettings, detail?.activeTurn?.turnId, loadContext, makeContextController, previewContext, releaseContextController])
+
+  const openContextEvidence = useCallback(async (source: ContextSource) => {
+    contextEvidenceController.current?.abort()
+    const request = new AbortController(); contextEvidenceController.current = request
+    const version = contextGeneration.current
+    setContextEvidence(null); setContextEvidenceError(''); setContextEvidenceLoading(true)
+    try {
+      const value = await contextApi.evidence(source.sourceRef, { signal: request.signal, timeoutMs: QUERY_TIMEOUT })
+      if (value.contentHash !== source.contentHash) throw new ApiClientError('Context evidence hash does not match the locked source', { code: 'invalid_response', status: null })
+      if (!request.signal.aborted && contextCurrent(version)) setContextEvidence(value)
+    } catch (caught) {
+      if (!request.signal.aborted && contextCurrent(version) && !(caught instanceof ApiClientError && caught.code === 'request_aborted')) setContextEvidenceError(errorText(caught))
+    } finally {
+      if (contextEvidenceController.current === request) contextEvidenceController.current = null
+      if (!request.signal.aborted && contextCurrent(version)) setContextEvidenceLoading(false)
+    }
+  }, [contextApi, contextCurrent])
+
+  const closeContextEvidence = useCallback(() => {
+    contextEvidenceController.current?.abort(); contextEvidenceController.current = null
+    setContextEvidence(null); setContextEvidenceLoading(false); setContextEvidenceError('')
+  }, [])
+
+  const retryContextFold = useCallback(async () => {
+    const turnId = contextSnapshot?.turnId
+    if (!turnId || contextSaving || contextWriteLock.current || lock.current) return
+    const lockToken = Symbol('context.retry_fold')
+    const operation = `context-fold/${turnId}`
+    const key = operationKey(contextScope, operation)
+    const version = contextGeneration.current
+    contextWriteLock.current = lockToken; setContextSaving(true); setContextError(''); setContextNotice('正在沿用恢复键重试折叠，不会创建第二次模型调用…')
+    const request = makeContextController()
+    try {
+      const result = await contextApi.retryFold(turnId, key, { signal: request.signal, timeoutMs: WRITE_TIMEOUT })
+      if (!contextCurrent(version)) return
+      finishOperation(contextScope, operation, key)
+      contextSnapshotFact.current = { scope: contextScope, turnId: result.context.turnId! }
+      setContextSnapshot(result.context)
+      setDetail((value) => value?.conversation?.conversationId === result.turn.conversationId ? { ...value, activeTurn: result.turn } : value)
+      await refresh(result.turn.conversationId)
+      if (contextCurrent(version)) setContextNotice('折叠恢复结果已由服务端确认。')
+    } catch (caught) {
+      if (!contextCurrent(version)) return
+      setContextNotice(''); setContextError(errorText(caught))
+      if (!isUncertain(caught)) finishOperation(contextScope, operation, key)
+    } finally {
+      releaseContextController(request)
+      if (contextWriteLock.current === lockToken) contextWriteLock.current = null
+      if (contextCurrent(version)) setContextSaving(false)
+    }
+  }, [contextApi, contextCurrent, contextSaving, contextScope, contextSnapshot?.turnId, makeContextController, releaseContextController])
+
   useEffect(() => {
     mounted.current = true
     const version = ++generation.current
     listGeneration.current += 1
     detailGeneration.current += 1
+    contextGeneration.current += 1
+    contextPreviewGeneration.current += 1
     lock.current = null
+    contextWriteLock.current = null
     controllers.current.forEach((controller) => controller.abort()); controllers.current.clear()
+    contextControllers.current.forEach((controller) => controller.abort()); contextControllers.current.clear()
+    contextEvidenceController.current?.abort(); contextEvidenceController.current = null
+    contextSnapshotFact.current = null
     loadedConversationId.current = null
     const recoveryFact = assistant ? readMultiChatRecovery(storage, ownerId, assistant.assistantId) : null
-    setAssistantName(assistant?.name ?? ''); setConversations([]); setNextCursor(null); setDetail(null); setBranches([]); setAttachments([]); setAttachmentNames({}); setInput(''); setError(''); setListError(''); setErrorCode(undefined); setNotice(''); setPending(recoveryFact); setSafeRetry(false); setPollingStopped(false); setBusy(false); setUploading(false); setLoading(Boolean(assistant)); setListLoading(Boolean(assistant)); setBranchesLoading(false); setVersionsLoading(false); setDrawerOpen(false); setBranchOpen(false); setConversationDialog(null); setMessageDialog(null); setRegenerationConfirmation(null)
+    setAssistantName(assistant?.name ?? ''); setConversations([]); setNextCursor(null); setDetail(null); setBranches([]); setAttachments([]); setAttachmentNames({}); setInput(''); setError(''); setListError(''); setErrorCode(undefined); setNotice(''); setPending(recoveryFact); setSafeRetry(false); setPollingStopped(false); setBusy(false); setUploading(false); setLoading(Boolean(assistant)); setListLoading(Boolean(assistant)); setBranchesLoading(false); setVersionsLoading(false); setDrawerOpen(false); setBranchOpen(false); setConversationDialog(null); setMessageDialog(null); setRegenerationConfirmation(null); setContextOpen(false); setContextLoading(false); setContextSaving(false); setContextSettings(null); setContextMode('balanced'); setContextExcluded([]); setContextPlan(null); setContextSnapshot(null); setContextError(''); setContextNotice(''); setContextEvidence(null); setContextEvidenceLoading(false); setContextEvidenceError('')
     if (assistant) queueMicrotask(async () => {
       if (!current(version)) return
       await loadCurrent(version)
       if (current(version) && recoveryFact) await recoverPending(recoveryFact, version)
     })
-    return () => { mounted.current = false; generation.current += 1; lock.current = null; controllers.current.forEach((controller) => controller.abort()); controllers.current.clear() }
+    return () => { mounted.current = false; generation.current += 1; contextGeneration.current += 1; lock.current = null; contextWriteLock.current = null; controllers.current.forEach((controller) => controller.abort()); controllers.current.clear(); contextControllers.current.forEach((controller) => controller.abort()); contextControllers.current.clear(); contextEvidenceController.current?.abort(); contextEvidenceController.current = null }
   // Scope changes invalidate every in-flight observation. The next effect owns
   // catalog loading, so mount and assistant changes issue exactly one list read.
   // List filters are intentionally excluded: changing search/sort must not
@@ -372,6 +581,25 @@ export default function PersonalMultiConversationPage({ assistant, assistantsLoa
     const version = generation.current
     queueMicrotask(() => { if (current(version)) void loadList(version) })
   }, [appliedQuery, assistantId, current, loadList, sort, statusFilter])
+
+  useEffect(() => {
+    if (!contextConversationId || !contextBranchId) return
+    const turnId = detail?.activeTurn?.turnId
+      ?? (contextSnapshotFact.current?.scope === contextScope ? contextSnapshotFact.current.turnId : undefined)
+    queueMicrotask(() => { if (mounted.current) void loadContext(contextConversationId, contextBranchId, turnId) })
+    return () => {
+      contextGeneration.current += 1
+      contextPreviewGeneration.current += 1
+      contextWriteLock.current = null
+      contextControllers.current.forEach((controller) => controller.abort()); contextControllers.current.clear()
+      contextEvidenceController.current?.abort(); contextEvidenceController.current = null
+    }
+  // A conversation or branch switch is a hard R4 context boundary. Persisted
+  // message-count and terminal turn changes also invalidate planHash, so the
+  // next send must read a fresh plan instead of reusing the previous turn's
+  // source inventory.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assistantId, contextApi, contextBranchId, contextConversationId, contextScope, detail?.activeTurn?.status, detail?.messages.length, ownerId])
 
   const runWrite = useCallback(async <T,>(operationType: string, scope: { conversationId?: string; branchId?: string; turnId?: string; messageId?: string; messageVersionId?: string; attachmentId?: string; confirmationId?: string; statusBefore?: string }, work: (key: string, signal: AbortSignal) => Promise<T>, done: (value: T) => Promise<WriteDisposition> | WriteDisposition, reuseKey?: string) => {
     if (lock.current) return
@@ -603,9 +831,28 @@ export default function PersonalMultiConversationPage({ assistant, assistantsLoa
     const conversation = detail?.conversation; const branch = detail?.branch; const content = input.trim()
     if (!conversation || !branch || !content || lock.current || detail.activeTurn && !terminalTurn.has(detail.activeTurn.status)) return
     if (content.length > MAX_PERSONAL_CHAT_CONTENT_LENGTH) { setError(`消息最多 ${MAX_PERSONAL_CHAT_CONTENT_LENGTH} 个字符。`); return }
+    if (!contextSettings || !contextPlan || contextLoading || contextSaving || contextPlan.conversationId !== conversation.conversationId || contextPlan.branchId !== branch.branchId || contextPlan.mode !== contextMode) {
+      setContextOpen(true); setContextError('上下文预览尚未就绪，请重新读取后再发送。'); return
+    }
+    if (!contextPlan.budget.withinLimit) { setContextOpen(true); setContextError('必需上下文超过模型输入预算；本轮不会调用供应商。'); return }
     const reuse = safeRetry && pending?.operationType === 'conversation.turn' ? pending.idempotencyKey : undefined
-    await runWrite('conversation.turn', { conversationId: conversation.conversationId, branchId: branch.branchId }, (key, signal) => api.createTurn(conversation.conversationId, { branchId: branch.branchId, content, attachmentIds: attachments.map((item) => item.attachmentId) }, key, { signal, timeoutMs: WRITE_TIMEOUT }), async (turn) => {
+    await runWrite('conversation.turn', { conversationId: conversation.conversationId, branchId: branch.branchId }, (key, signal) => api.createTurn(conversation.conversationId, {
+      branchId: branch.branchId,
+      content,
+      attachmentIds: attachments.map((item) => item.attachmentId),
+      context: { mode: contextMode, excludedSourceRefs: contextExcluded, expectedPlanHash: contextPlan.planHash },
+    }, key, { signal, timeoutMs: WRITE_TIMEOUT }), async (turn) => {
       setInput(''); setAttachments([]); setSafeRetry(false)
+      const snapshotRequest = makeContextController()
+      try {
+        const snapshot = await contextApi.snapshot(turn.turnId, { signal: snapshotRequest.signal, timeoutMs: QUERY_TIMEOUT })
+        if (snapshot.conversationId === conversation.conversationId && snapshot.branchId === branch.branchId) {
+          contextSnapshotFact.current = { scope: contextScope, turnId: snapshot.turnId! }
+          setContextSnapshot(snapshot)
+        }
+      } catch (caught) {
+        if (!(caught instanceof ApiClientError && caught.code === 'request_aborted')) setContextError(errorText(caught))
+      } finally { releaseContextController(snapshotRequest) }
       await refresh(turn.conversationId)
       if (turn.status !== 'completed') setDetail((value) => value?.conversation?.conversationId === turn.conversationId ? { ...value, activeTurn: turn } : value)
       return turn.status === 'completed'
@@ -667,7 +914,8 @@ export default function PersonalMultiConversationPage({ assistant, assistantsLoa
   const turnCode = turn?.error?.code
   const configTarget = configurationTarget(turnCode ?? errorCode)
   const pendingTurnAction = pending?.operationType === 'turn.resume' ? 'resume' : pending?.operationType === 'turn.retry' ? 'retry' : pending?.operationType === 'turn.cancel' ? 'cancel' : null
-  const composerDisabled = busy || loading || uploading || !conversation || conversation.status === 'archived' || Boolean(turn && !terminalTurn.has(turn.status)) || Boolean(pending && !safeRetry)
+  const contextDirty = Boolean(contextSettings && (contextSettings.effective.unavailableExcludedSourceRefs.length > 0 || contextMode !== contextSettings.effective.mode || contextExcluded.length !== contextSettings.effective.excludedSourceRefs.length || contextExcluded.some((value, index) => value !== contextSettings.effective.excludedSourceRefs[index])))
+  const composerDisabled = busy || loading || uploading || contextLoading || contextSaving || !contextSettings || !contextPlan || !contextPlan.budget.withinLimit || !conversation || conversation.status === 'archived' || Boolean(turn && !terminalTurn.has(turn.status)) || Boolean(pending && !safeRetry)
   const avatar = assistant.avatar ? '' : initials(assistantName || assistant.name)
   const messageViews = detail?.messages.map((message) => ({
     ...message,
@@ -711,6 +959,31 @@ export default function PersonalMultiConversationPage({ assistant, assistantsLoa
       <button type="button" onClick={() => void exportConversation('json')} disabled={busy}>导出 JSON</button>
       <button type="button" onClick={() => void exportConversation('markdown')} disabled={busy}>导出 Markdown</button>
     </div>}
+
+    {conversation && branch && <ContextControlPanel
+      open={contextOpen}
+      loading={contextLoading}
+      saving={contextSaving || busy}
+      settings={contextSettings}
+      mode={contextMode}
+      excludedSourceRefs={contextExcluded}
+      plan={contextPlan}
+      snapshot={contextSnapshot}
+      error={contextError}
+      notice={contextNotice}
+      dirty={contextDirty}
+      evidence={contextEvidence}
+      evidenceLoading={contextEvidenceLoading}
+      evidenceError={contextEvidenceError}
+      onToggleOpen={() => setContextOpen((value) => !value)}
+      onMode={selectContextMode}
+      onToggleSource={toggleContextSource}
+      onSave={() => void saveContextSettings()}
+      onRefresh={() => void loadContext(conversation.conversationId, branch.branchId, turn?.turnId)}
+      onEvidence={(source) => void openContextEvidence(source)}
+      onCloseEvidence={closeContextEvidence}
+      onRetryFold={() => void retryContextFold()}
+    />}
 
     {(error || notice || pending || turn && turn.status !== 'completed' || pollingStopped) && <section className={`conversation-status ${turn?.status === 'failed' || turn?.status === 'quarantined' ? 'is-danger' : 'is-warning'}`} aria-live="polite" aria-busy={busy}>
       <div>{notice && <span>{notice}</span>}{error && <span role="alert">{error}</span>}{pending?.operationType === 'turn.cancel' && error && <strong>终止失败，恢复结果尚未确认。</strong>}{turn && turn.status !== 'completed' && <><strong>{turn.status === 'retryable' ? '可以安全重试' : turn.status === 'outcome_unknown' ? '结果未知，禁止重试' : turn.status === 'waiting_confirmation' ? '等待安全确认' : turn.status === 'waiting_budget' ? '等待预算确认' : turn.status === 'cancelled' ? '本轮已终止' : turn.status === 'failed' ? '本轮失败' : turn.status === 'quarantined' ? '本轮已隔离' : '轮次处理中'}</strong><span>{turnCode ? errorText(new ApiClientError(turnCode, { code: turnCode, status: null })) : `真实状态：${turn.status}`}</span></>}{pending && <span>已保留原随机操作键；先查询服务端事实，不会换键盲目重发。</span>}{pollingStopped && <span>自动查询已停止，可手动核对。</span>}</div>

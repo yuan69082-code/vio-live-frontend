@@ -132,10 +132,12 @@ test('R3 multi-turn Provider context is bounded to the selected conversation and
   await createR3Turn(f,c,'Second bounded question.','r3-context-turn-two');
   assert.equal(f.loopback.requests.length,2);
   const messages=f.loopback.requests[1].body.messages;
-  assert.deepEqual(messages.slice(1).map(item=>[item.role,item.content]),[
+  assert.deepEqual(messages.filter(item=>item.role!=='system').map(item=>[item.role,item.content]),[
     ['user','First bounded question.'],['assistant','First bounded answer.'],['user','Second bounded question.'],
   ]);
-  assert.equal(messages[0].role,'system');assert.match(messages[0].content,/First controlled assistant/);
+  assert.equal(messages[0].role,'system');
+  assert.match(messages.find(item=>item.role==='system'&&/First controlled assistant/.test(item.content)).content,
+    /First controlled assistant/);
   assert.equal(JSON.stringify(messages).includes('Second controlled assistant'),false);
 });
 

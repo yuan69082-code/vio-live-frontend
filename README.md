@@ -1,6 +1,6 @@
 # Vio Live
 
-Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。**R2 与 R1 均已于 2026-09-05 正式验收通过，R3 已于 2026-09-06 正式验收通过**：R2 完成受控个人所有者初始化、真实会话访问、首次设置、同一所有者多助手、个人资料、会话撤销、访问审计/诊断、Provider/Model、加密凭据、认证连接检查及受控账户删除；R1 完成真实个人会话和当前助手范围内的 Vio 独立聊天；R3 完成每助手多会话、会话选择/搜索/排序/归档、消息版本/分支/隐藏、受控重新生成、附件、导出及可恢复操作的前后端实现与本机 loopback 联调。邮箱、Google 与公开注册继续暂缓。账户/空间删除继续按已确认的 7 天可撤销、实际删除后 14 天受管副本处理及 30 天最小凭据政策执行。历史 F1 固定 Profile 的 V5 对话代码和证据继续保留，R3 不连接真实 Engine。
+Vio Live 当前包含 React + Vite + TypeScript 前端，以及位于 `backend/` 的独立 Node.js 平台后端。**R2 与 R1 均已于 2026-09-05 正式验收通过，R3 已于 2026-09-06 正式验收通过，R4 已于 2026-09-08 正式验收通过**：R2 完成受控个人所有者初始化、真实会话访问、首次设置、同一所有者多助手、个人资料、会话撤销、访问审计/诊断、Provider/Model、加密凭据、认证连接检查及受控账户删除；R1 完成真实个人会话和当前助手范围内的 Vio 独立聊天；R3 完成每助手多会话、会话选择/搜索/排序/归档、消息版本/分支/隐藏、受控重新生成、附件、导出及可恢复操作的前后端实现与本机 loopback 联调；R4 完成 Vio 自有上下文计划、不可变锁定快照、来源证据、跨窗口筛选、折叠、预算裁剪和失败恢复，并接入 R1/R3 独立聊天。邮箱、Google 与公开注册继续暂缓。账户/空间删除继续按已确认的 7 天可撤销、实际删除后 14 天受管副本处理及 30 天最小凭据政策执行。历史 F1 固定 Profile 的 V5 对话代码和证据继续保留；R4 不连接真实 Engine。R5 未开始。
 
 R0-A 已冻结 Vio 自己的 [`Subject Runtime Port v1`](backend/docs/SUBJECT_RUNTIME_PORT_V1.md)：Vio Core 永久负责账号、助手、会话/消息、模型/Provider、扩展能力、设备、本地记忆、Context、权限安全、工作流/生活数据及费用/导出/备份恢复；外部主体运行时只是可选增强。R0-B/C 已完成通用只读状态装配与“我的”页展示。R0 已于 2026-09-04 验收；它没有切换聊天编排。当前 R1 后端独立路径直接使用 Vio Core 的模型、凭据、权限、安全和预算边界，不探测或依赖外部运行时；Continuity Engine 在通用端口中仍只是 `registered_not_wired` 的可选适配器。
 
@@ -22,7 +22,7 @@ R8 完成公共机制及截至 R7 已完成模块的前端接线；R9—R11 各�
 
 R0 冻结规则本身不代表独立聊天已实现；R1 随后已按该边界建立 Vio 自有执行链路、完成隔离回归并接入个人“对话”页，并于 2026-09-05 正式验收通过。未经用户另行要求重连，Vio 施工、测试和发布不探测、读取、启动或修改真实 Engine；通用端口必须验证，真实外部运行时接入另行处理，不作为 Vio 完成和发布前置条件。新增对接优先通过独立适配器或接口扩展，不擅改 Vio 核心。
 
-R0-A/B/C 及整阶段已验收并推送。R2 正式验收范围与保留边界见 [R2 个人访问合同](backend/docs/R2_PERSONAL_CONTRACT.md) 和 [前端交接](docs/R2_FRONTEND_HANDOFF.md)；R1 合同见 [独立聊天合同](backend/docs/R1_STANDALONE_CHAT_CONTRACT.md)，R3 当前冻结合同见 [多会话合同](backend/docs/R3_MULTI_CONVERSATION_CONTRACT.md)。完整顺序见 [ADR-034](docs/决策记录.md#adr-034) 和 [现行路线图](docs/后端/13-部署运维测试与路线图.md#r0-r13-order)。
+R0-A/B/C 及整阶段已验收并推送。R2 正式验收范围与保留边界见 [R2 个人访问合同](backend/docs/R2_PERSONAL_CONTRACT.md) 和 [前端交接](docs/R2_FRONTEND_HANDOFF.md)；R1 合同见 [独立聊天合同](backend/docs/R1_STANDALONE_CHAT_CONTRACT.md)，R3 合同见 [多会话合同](backend/docs/R3_MULTI_CONVERSATION_CONTRACT.md)，R4 当前冻结合同见 [上下文装配合同](backend/docs/R4_CONTEXT_ASSEMBLY_CONTRACT.md)。完整顺序见 [ADR-034](docs/决策记录.md#adr-034) 和 [现行路线图](docs/后端/13-部署运维测试与路线图.md#r0-r13-order)。
 
 ## 前后端本地运行
 

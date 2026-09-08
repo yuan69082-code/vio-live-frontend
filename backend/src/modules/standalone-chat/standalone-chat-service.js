@@ -219,6 +219,7 @@ export function createStandaloneChatService({
   idFactory = createId,
   faultInjector = null,
   multiConversationPort = null,
+  contextAssemblyService = null,
 }) {
   function assertStandaloneMode() {
     const runtime = subjectRuntimeStatusService.getStatus();
@@ -322,6 +323,7 @@ export function createStandaloneChatService({
         attemptCount: attempts.length,
         lastAttemptStatus: lastAttempt?.status ?? null,
       }) : null,
+      context: contextAssemblyService?.snapshotForTurn?.(turn) ?? null,
       externalCall: externalCallFor(execution),
     });
   }
@@ -353,13 +355,20 @@ export function createStandaloneChatService({
     return Object.freeze({ role: 'system', content });
   }
 
-  function providerMessages(scope, turn) {
+  function providerMessages(scope, turn, model = null) {
+    if (contextAssemblyService && model) {
+      const locked = contextAssemblyService.lockForTurn(scope, turn, model);
+      return Object.freeze({ messages: locked.providerMessages,
+        estimatedInputTokens: locked.snapshot.budget.estimatedInputTokens,
+        snapshotHash: locked.snapshot.snapshotHash });
+    }
     const scopedMessages = multiConversationPort?.providerMessagesForTurn?.(turn);
     if (scopedMessages) {
-      return Object.freeze([
+      const messages = Object.freeze([
         systemMessage(scope.assistant),
         ...scopedMessages.slice(-(MAX_HISTORY_TURNS * 2 + 1)),
       ].map((message) => Object.freeze(message)));
+      return Object.freeze({ messages, estimatedInputTokens: null, snapshotHash: null });
     }
     const completed = repository.listTurns(
       turn.userId,
@@ -379,7 +388,8 @@ export function createStandaloneChatService({
       messages.push({ role: 'assistant', content: historical.assistant.content });
     }
     messages.push({ role: 'user', content: lockedMessage(turn, 'user').content });
-    return Object.freeze(messages.map((message) => Object.freeze(message)));
+    return Object.freeze({ messages: Object.freeze(messages.map((message) => Object.freeze(message))),
+      estimatedInputTokens: null, snapshotHash: null });
   }
 
   function retryablePreflightFailure(turn, expectedStatus, code, reason) {
@@ -683,8 +693,24 @@ export function createStandaloneChatService({
       return { turn: retryablePreflightFailure(turn, turn.status, code, 'credential_preflight_failed') };
     }
 
-    const messages = providerMessages(scope, turn);
-    const estimatedTokens = conservativeTokenEstimate(messages);
+    let assembled;
+    try {
+      assembled = providerMessages(scope, turn, model);
+    } catch (error) {
+      if (['CONTEXT_FOLDING_FAILED', 'CONTEXT_PLAN_STALE'].includes(error?.code)) {
+        return { turn: retryablePreflightFailure(turn, turn.status, error.code,
+          'context_preflight_retryable') };
+      }
+      if (error?.code === 'CONTEXT_BUDGET_EXCEEDED') {
+        return { turn: terminalPreflightFailure(turn, turn.status, error.code,
+          'context_budget_exceeded') };
+      }
+      throw error;
+    }
+    const { messages } = assembled;
+    const estimatedTokens = assembled.estimatedInputTokens == null
+      ? conservativeTokenEstimate(messages)
+      : assembled.estimatedInputTokens + MAX_OUTPUT_TOKENS;
     const requestHash = inputHash({
       providerId: model.providerId,
       modelId: model.modelId,
@@ -692,6 +718,7 @@ export function createStandaloneChatService({
       messages,
       maxOutputCharacters: MAX_OUTPUT_CHARACTERS,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
+      contextSnapshotHash: assembled.snapshotHash,
     });
     const targetAttempt = targetAttemptNumber(turn);
     let budget;
@@ -871,6 +898,7 @@ export function createStandaloneChatService({
       budgetApproval,
       budgetFactsHash: approvedBudgetFactsHash,
       securityFactsHash: approvedSecurityFactsHash,
+      contextSnapshotHash: assembled.snapshotHash,
     };
   }
 
@@ -888,6 +916,7 @@ export function createStandaloneChatService({
       modelName: approved.selection.model.modelName,
       requestHash: approved.requestHash,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
+      contextSnapshotHash: approved.contextSnapshotHash,
     };
     if (execution) {
       const changed = Object.entries(snapshot).some(([key, value]) => execution[key] !== value);
@@ -1274,17 +1303,22 @@ export function createStandaloneChatService({
     const turn = runInTransaction(() => {
       let mapping = repository.findDefaultConversation(scope.userId, scope.assistantId);
       if (!mapping) {
-        const conversation = conversationService.createConversation(
-          scope.userId,
-          scope.assistantId,
-          { title: `Chat with ${scope.assistant.name}` },
-        );
-        mapping = repository.insertDefaultConversation({
-          userId: scope.userId,
-          assistantId: scope.assistantId,
-          conversationId: conversation.conversationId,
-          createdAt: clock().toISOString(),
-        });
+        const created = multiConversationPort?.createDefaultConversation?.(context);
+        if (created) {
+          mapping = repository.findDefaultConversation(scope.userId, scope.assistantId);
+        } else {
+          const conversation = conversationService.createConversation(
+            scope.userId,
+            scope.assistantId,
+            { title: `Chat with ${scope.assistant.name}` },
+          );
+          mapping = repository.insertDefaultConversation({
+            userId: scope.userId,
+            assistantId: scope.assistantId,
+            conversationId: conversation.conversationId,
+            createdAt: clock().toISOString(),
+          });
+        }
       }
       const active = repository.findActiveTurn(
         scope.userId,
@@ -1311,7 +1345,7 @@ export function createStandaloneChatService({
       if (!sourceEvent) {
         throw codedError('STANDALONE_LEDGER_INCONSISTENT', 'User message event is missing.', 500);
       }
-      return repository.insertTurn({
+      const persisted = repository.insertTurn({
         turnId: idFactory(),
         userId: scope.userId,
         assistantId: scope.assistantId,
@@ -1324,6 +1358,22 @@ export function createStandaloneChatService({
         sourceEventId: sourceEvent.eventId,
         createdAt: clock().toISOString(),
       });
+      const binding = multiConversationPort?.findConversationBinding?.(
+        scope.userId, scope.assistantId, mapping.conversationId,
+      );
+      if (binding && contextAssemblyService) {
+        multiConversationPort.linkTurnAndUserMessage({ turnId: persisted.turnId,
+          userId: persisted.userId, assistantId: persisted.assistantId,
+          conversationId: persisted.conversationId, branchId: binding.branchId,
+          userMessageId: userMessage.messageId,
+          userMessageVersionId: userMessage.currentVersionId,
+          sequenceNumber: userMessage.sequenceNumber, attachments: [],
+          createdAt: persisted.createdAt });
+        const controls = contextAssemblyService.resolveTurnControls(scope,
+          persisted.conversationId, null);
+        contextAssemblyService.recordTurnControls(scope, persisted, binding.branchId, controls);
+      }
+      return persisted;
     });
     return publicTurn(await advance(context, scope, turn, {}, 'initial'));
   }
@@ -1335,7 +1385,13 @@ export function createStandaloneChatService({
     const branchId = requireOpaqueResourceId(target?.branchId, 'branchId');
     const conversationId = requireOpaqueResourceId(target?.conversationId, 'conversationId');
     const attachmentIds = Array.isArray(value?.attachmentIds) ? value.attachmentIds : [];
-    const input = Object.freeze({content, branchId, attachmentIds});
+    const contextControls = contextAssemblyService
+      ? contextAssemblyService.resolveTurnControls(scope, conversationId, value?.context)
+      : null;
+    const input = Object.freeze({content, branchId, attachmentIds,
+      ...(contextControls ? { context: Object.freeze({ mode: contextControls.mode,
+        excludedSourceRefs: contextControls.excludedSourceRefs,
+        expectedPlanHash: contextControls.expectedPlanHash }) } : {})});
     const key = requireIdempotencyKey(idempotencyKey);
     const hash = inputHash(input);
     const existing = repository.findTurnByOwnerIdempotencyKey(scope.userId, key);
@@ -1394,6 +1450,7 @@ export function createStandaloneChatService({
         attachments: target.attachments ?? [],
         createdAt: persisted.createdAt,
       });
+      contextAssemblyService?.recordTurnControls?.(scope, persisted, branchId, contextControls);
       return persisted;
     });
     return publicTurn(await advance(context, scope, turn, {}, 'initial'));

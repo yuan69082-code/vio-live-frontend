@@ -16,6 +16,7 @@ const FRONTEND_ORIGIN = 'http://127.0.0.1:5173';
 const PROVIDER_BEHAVIORS = new Set(['success', '429', 'disconnect', 'timeout']);
 const DROP_KINDS = new Set(['turn', 'regeneration', 'conversation', 'attachment']);
 const MAX_PROXY_RESPONSE_BYTES = 2 * 1024 * 1024;
+const ENABLE_R4_CONTEXT = process.argv.includes('--r4-context');
 
 const fixture = createIsolatedTestEnvironment({
   PATH: process.env.PATH,
@@ -36,6 +37,67 @@ const { createOpenAiCompatibleModelExecutor } = await import(
 const { createProviderConnectionChecker } = await import(
   '../src/integrations/model-providers/provider-connection-check.js'
 );
+const {
+  SUBJECT_RUNTIME_PORT_VERSION,
+  createSubjectRuntimeConnectionSnapshot,
+  negotiateSubjectRuntimeVersion,
+} = await import('../src/modules/subject-runtime/subject-runtime-port-v1.js');
+const { createNoneSubjectRuntimeAdapter } = await import(
+  '../src/modules/subject-runtime/none-subject-runtime-adapter.js'
+);
+
+let r4RuntimeEnabled = false;
+
+const R4_RUNTIME_MANIFEST = Object.freeze({
+  portVersion: SUBJECT_RUNTIME_PORT_VERSION,
+  adapterId: 'r4-browser-isolated-runtime',
+  adapterKind: 'third_party',
+  adapterVersion: 'r4-browser-adapter/v1',
+  runtimeMode: 'external',
+  runtimeName: 'R4 isolated browser projection',
+  runtimeVersion: 'r4-browser-runtime/v1',
+  supportedPortVersions: Object.freeze([SUBJECT_RUNTIME_PORT_VERSION]),
+  capabilities: Object.freeze(['observation_input', 'expression_result', 'state_projection']),
+  specializedContracts: Object.freeze([]),
+});
+
+function createR4RuntimeAdapter() {
+  const none = createNoneSubjectRuntimeAdapter();
+  const current = () => {
+    if (!r4RuntimeEnabled) return none;
+    return {
+      getManifest: () => structuredClone(R4_RUNTIME_MANIFEST),
+      getConnectionStatus: () => createSubjectRuntimeConnectionSnapshot({
+        manifest: R4_RUNTIME_MANIFEST,
+        state: 'ready',
+        reason: 'isolated_browser_projection_ready',
+      }),
+      negotiateVersion: (vioSupportedVersions) => negotiateSubjectRuntimeVersion({
+        vioSupportedVersions,
+        adapterManifest: R4_RUNTIME_MANIFEST,
+      }),
+    };
+  };
+  return Object.freeze({
+    getManifest: () => current().getManifest(),
+    getConnectionStatus: () => current().getConnectionStatus(),
+    negotiateVersion: (vioSupportedVersions) => current().negotiateVersion(vioSupportedVersions),
+    submitObservation() { throw new Error('R4 browser fixture must not execute a runtime.'); },
+    cancel() { throw new Error('R4 browser fixture must not execute a runtime.'); },
+    recover() { throw new Error('R4 browser fixture must not execute a runtime.'); },
+  });
+}
+
+const R4_PROJECTION_PORT = Object.freeze({
+  readVerifiedProjection({ assistantId }) {
+    return Object.freeze({
+      verified: true,
+      projectionId: `r4-browser-${assistantId}`,
+      content: 'Controlled, verified R4 browser projection. No external runtime was contacted.',
+      verifiedAt: '2026-09-07T00:00:00.000Z',
+    });
+  },
+});
 
 const spaces = new Map([
   ['owner-a', {
@@ -190,6 +252,10 @@ function createSpaceApplication(space) {
       allowedLoopbackOrigins: [providerOrigin],
     }),
     standaloneChatAttachmentRoot: join(fixture.root, `${space.key}-attachments`),
+    ...(ENABLE_R4_CONTEXT ? {
+      subjectRuntimeAdapter: createR4RuntimeAdapter(),
+      runtimeProjectionPort: R4_PROJECTION_PORT,
+    } : {}),
   });
 }
 
@@ -314,6 +380,9 @@ function matchesDrop(kind, method, pathname) {
 function publicSpace(space) {
   if (!space.app) return { key: space.key, status: 'stopped', providerCalls: providerCalls.get(space.key) };
   const count = (table) => space.app.database.connection.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
+  const subjectRuntime = ENABLE_R4_CONTEXT
+    ? space.app.subjectRuntimeStatusService.getStatus()
+    : null;
   return {
     key: space.key,
     status: 'running',
@@ -323,6 +392,14 @@ function publicSpace(space) {
     messages: count('messages'),
     attachments: count('personal_chat_attachments'),
     providerCalls: providerCalls.get(space.key),
+    r4Context: ENABLE_R4_CONTEXT ? 'enabled' : 'disabled',
+    ...(ENABLE_R4_CONTEXT ? {
+      subjectRuntime: {
+        mode: subjectRuntime.mode,
+        state: subjectRuntime.state,
+        runtimeStatus: subjectRuntime.runtimeStatus,
+      },
+    } : {}),
   };
 }
 
@@ -335,6 +412,9 @@ function controlResponse() {
     droppedResponses,
     nextProviderBehavior,
     engine: 'not_accessed',
+    r4RuntimeProjection: ENABLE_R4_CONTEXT
+      ? (r4RuntimeEnabled ? 'enabled' : 'disabled')
+      : 'unavailable',
     externalProvider: 'not_used',
     providerCharge: 'not_incurred',
   };
@@ -358,6 +438,13 @@ async function restartSpace(space) {
   await startSpace(space);
 }
 
+async function setR4RuntimeProjection(enabled) {
+  if (!ENABLE_R4_CONTEXT) throw new Error('r4_context_not_enabled');
+  if (r4RuntimeEnabled === enabled) return;
+  r4RuntimeEnabled = enabled;
+  for (const space of spaces.values()) await restartSpace(space);
+}
+
 async function handleControl(request, response) {
   if (request.headers['x-r3-test-control'] !== CONTROL_HEADER) {
     response.writeHead(403, { 'content-type': 'application/json' });
@@ -379,6 +466,8 @@ async function handleControl(request, response) {
     if (value.action === 'switch-owner' && spaces.has(value.owner)) activeSpaceKey = value.owner;
     else if (value.action === 'drop-next' && DROP_KINDS.has(value.kind)) dropNext = value.kind;
     else if (value.action === 'provider-next' && PROVIDER_BEHAVIORS.has(value.behavior)) nextProviderBehavior = value.behavior;
+    else if (value.action === 'r4-runtime' && ENABLE_R4_CONTEXT
+        && typeof value.enabled === 'boolean') await setR4RuntimeProjection(value.enabled);
     else if (value.action === 'restart-active') await restartSpace(spaces.get(activeSpaceKey));
     else if (value.action === 'clear-faults') {
       dropNext = null;
@@ -460,6 +549,8 @@ process.stdout.write(`${JSON.stringify({
     assistantNames: space.assistantNames,
   })),
   provider: 'controlled_loopback',
+  r4Context: ENABLE_R4_CONTEXT ? 'enabled' : 'disabled',
+  r4RuntimeProjection: ENABLE_R4_CONTEXT ? 'toggle_via_control' : 'unavailable',
   faultInjection: [...DROP_KINDS],
   providerBehaviors: [...PROVIDER_BEHAVIORS],
   attachmentFixtures,
@@ -496,6 +587,9 @@ for await (const command of commands) {
     process.stdout.write(`${JSON.stringify(controlResponse())}\n`);
   } else if (verb === 'provider-next' && PROVIDER_BEHAVIORS.has(value)) {
     nextProviderBehavior = value;
+    process.stdout.write(`${JSON.stringify(controlResponse())}\n`);
+  } else if (verb === 'r4-runtime' && ENABLE_R4_CONTEXT && ['on', 'off'].includes(value)) {
+    await setR4RuntimeProjection(value === 'on');
     process.stdout.write(`${JSON.stringify(controlResponse())}\n`);
   } else if (verb === 'restart') {
     await restartSpace(spaces.get(activeSpaceKey));

@@ -35,6 +35,7 @@ import { createSqliteProactiveInteractionRepository } from './integrations/datab
 import { createSqliteSecurityPolicyRepository } from './integrations/database/sqlite-security-policy-repository.js';
 import { createSqliteStandaloneChatRepository } from './integrations/database/sqlite-standalone-chat-repository.js';
 import { createSqliteMultiConversationRepository } from './integrations/database/sqlite-multi-conversation-repository.js';
+import { createSqliteContextAssemblyRepository } from './integrations/database/sqlite-context-assembly-repository.js';
 import { createManagedChatAttachmentStore } from './integrations/storage/managed-chat-attachment-store.js';
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
@@ -67,6 +68,7 @@ import { createContinuityConversationTurnService } from './modules/continuity-in
 import { createFixedLocalChatProfileService } from './modules/continuity-integration/fixed-local-chat-profile-service.js';
 import { createLiveChatPreparationService } from './modules/continuity-integration/live-chat-preparation-service.js';
 import { createContextService } from './modules/contexts/context-service.js';
+import { createContextAssemblyService } from './modules/contexts/context-assembly-service.js';
 import { createConversationService } from './modules/conversations/conversation-service.js';
 import { createConversationSummaryService } from './modules/conversation-summaries/conversation-summary-service.js';
 import { createDataExportService } from './modules/data-exports/data-export-service.js';
@@ -112,6 +114,10 @@ export function createApplication({
   personalDeletionBeforeOnlineDelete = () => {},
   providerConnectionChecker: providedConnectionChecker = null,
   standaloneChatAttachmentRoot = null,
+  runtimeProjectionPort = null,
+  modelContextLimitPort = null,
+  contextSourceAccessPort = null,
+  contextSummaryBuilder = null,
 }) {
   const subjectRuntimeAdapter = providedSubjectRuntimeAdapter
     ?? createNoneSubjectRuntimeAdapter();
@@ -174,6 +180,7 @@ export function createApplication({
     createSqliteContinuityConversationTurnRepository(database.connection);
   const standaloneChatRepository = createSqliteStandaloneChatRepository(database.connection);
   const multiConversationRepository = createSqliteMultiConversationRepository(database.connection);
+  const contextAssemblyRepository = createSqliteContextAssemblyRepository(database.connection);
   const legacyCredentialStore = providedCredentialStore ?? createEnvironmentApiCredentialStore(environment);
   const credentialStore = {
     describeApiKey(args) {
@@ -505,12 +512,40 @@ export function createApplication({
     subjectService,userSpaceService,permissionService,runInTransaction:database.runInTransaction,vault:personalVault,clock:personalClock});
   let multiConversationService = null;
   const multiConversationPort = Object.freeze({
+    createDefaultConversation(context) {
+      return multiConversationService?.createDefaultConversation(context) ?? null;
+    },
     providerMessagesForTurn(turn) { return multiConversationService?.providerMessagesForTurn(turn) ?? null; },
     findTurnBinding(turnId) { return multiConversationService?.findTurnBinding(turnId) ?? null; },
     linkTurnAndUserMessage(record) { return multiConversationService?.linkTurnAndUserMessage(record); },
     linkAssistantMessage(turn, message) { return multiConversationService?.linkAssistantMessage(turn, message); },
+    findConversationBinding(userId, assistantId, conversationId) {
+      return multiConversationService?.findConversationBinding(userId, assistantId, conversationId) ?? null;
+    },
   });
-  const standaloneChatService = createStandaloneChatService({
+  let standaloneChatService = null;
+  const standaloneRecoveryPort = Object.freeze({
+    retryAfterContextFold(context, turnId, idempotencyKey) {
+      return standaloneChatService?.recoverTurn(context, turnId, { action: 'retry' }, idempotencyKey);
+    },
+  });
+  const contextAssemblyService = createContextAssemblyService({
+    repository: contextAssemblyRepository,
+    personalIdentityService,
+    multiConversationRepository,
+    standaloneChatRepository,
+    eventRepository,
+    modelRouterService,
+    subjectRuntimeStatusService,
+    runtimeProjectionPort,
+    ...(modelContextLimitPort ? { modelContextLimitPort } : {}),
+    ...(contextSourceAccessPort ? { sourceAccessPort: contextSourceAccessPort } : {}),
+    ...(contextSummaryBuilder ? { summaryBuilder: contextSummaryBuilder } : {}),
+    runInTransaction: database.runInTransaction,
+    clock: personalClock,
+    standaloneRecoveryPort,
+  });
+  standaloneChatService = createStandaloneChatService({
     repository: standaloneChatRepository,
     subjectRuntimeStatusService,
     personalIdentityService,
@@ -530,6 +565,7 @@ export function createApplication({
     clock: personalClock,
     faultInjector: standaloneChatFaultInjector,
     multiConversationPort,
+    contextAssemblyService,
   });
   const attachmentRoot = standaloneChatAttachmentRoot ?? join(
     dirname(config.databasePath === ':memory:' ? resolve('data/vio.db') : config.databasePath),
@@ -564,7 +600,7 @@ export function createApplication({
   const personalDeletionService=createPersonalDeletionService({database,identityService:personalIdentityService,configurationService:personalConfigurationService,
     repository:personalRepository,vault:personalVault,managedCopies:personalManagedCopies,clock:personalClock,beforeOnlineDelete:personalDeletionBeforeOnlineDelete});
   const personalHttpAccess = createPersonalHttpAccess({identityService:personalIdentityService,configurationService:personalConfigurationService,deletionService:personalDeletionService,vault:personalVault,
-    standaloneChatService,multiConversationService,secureCookies:config.personalAccess.secureCookies,allowedOrigin:config.personalAccess.allowedOrigin});
+    standaloneChatService,multiConversationService,contextAssemblyService,secureCookies:config.personalAccess.secureCookies,allowedOrigin:config.personalAccess.allowedOrigin});
   const router = createRouter({
     personalHttpAccess,
     requestAccess,
@@ -623,6 +659,7 @@ export function createApplication({
     personalDeletionService,
     standaloneChatService,
     multiConversationService,
+    contextAssemblyService,
     personalManagedCopies,
     continuityRequestService,
     continuityResultService,

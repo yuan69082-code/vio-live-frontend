@@ -183,17 +183,22 @@ test('R1 loopback OpenAI-compatible execution publishes pinned messages and boun
   assert.equal(f.loopback.requests[0].path, '/chat/completions');
   assert.equal(f.loopback.requests[0].authorization, `Bearer ${f.testCredential}`);
   assert.equal(f.loopback.requests[0].body.max_tokens, 4_096);
-  assert.deepEqual(f.loopback.requests[0].body.messages.map(({ role }) => role), ['system', 'user']);
-  assert.match(f.loopback.requests[0].body.messages[0].content, /First controlled assistant/);
+  assert.deepEqual(f.loopback.requests[0].body.messages
+    .filter(({ role }) => role !== 'system').map(({ role }) => role), ['user']);
+  assert.match(f.loopback.requests[0].body.messages
+    .find(({ role, content }) => role === 'system' && /First controlled assistant/.test(content)).content,
+  /First controlled assistant/);
   assert.doesNotMatch(JSON.stringify(f.loopback.requests[0].body), /Second controlled assistant/);
 
   const second = await createCompletedTurn(f, 'Second user question.', 'chat-turn-second-0001');
   assert.equal(second.turn.assistantMessage.content, 'Second controlled answer.');
   assert.equal(f.loopback.requests.length, 2);
-  assert.deepEqual(f.loopback.requests[1].body.messages.map(({ role }) => role), [
-    'system', 'user', 'assistant', 'user',
+  assert.deepEqual(f.loopback.requests[1].body.messages
+    .filter(({ role }) => role !== 'system').map(({ role }) => role), [
+    'user', 'assistant', 'user',
   ]);
-  assert.deepEqual(f.loopback.requests[1].body.messages.slice(1).map(({ content }) => content), [
+  assert.deepEqual(f.loopback.requests[1].body.messages
+    .filter(({ role }) => role !== 'system').map(({ content }) => content), [
     'First user question.', 'First controlled answer.', 'Second user question.',
   ]);
 

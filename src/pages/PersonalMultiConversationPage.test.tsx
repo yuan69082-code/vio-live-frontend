@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiClientError } from '../api/client'
 import type { ConversationDetail, ConversationList, ConversationSummary, PersonalMultiChatApi, R3Message } from '../api/personal-multi-chat-api'
 import type { PersonalChatTurn } from '../api/personal-chat-api'
+import type { ContextAssembly, ContextRecoveryResult, ConversationContextSettings, PersonalContextApi } from '../api/personal-context-api'
 import { createPersonalApi } from '../api/personal-api'
 import type { PersonalAssistant, PersonalSession } from '../api/personal-api'
 import { PersonalProvider, usePersonal } from '../state/PersonalContext'
@@ -11,6 +12,7 @@ import { assistantFixture, sessionFixture } from '../test/personal-fixtures'
 import PersonalMultiConversationPage from './PersonalMultiConversationPage'
 
 const at = '2026-09-06T01:00:00.000Z'
+const contextHash = `sha256:${'c'.repeat(64)}`
 
 function conversation(id: string, title: string, current = false, status: 'active' | 'archived' = 'active'): ConversationSummary {
   return { conversationId: id, title, status, isCurrent: current, currentBranchId: `branch-${id}`, messageCount: 2, createdAt: at, updatedAt: at, archivedAt: status === 'archived' ? at : null, version: 3 }
@@ -23,6 +25,23 @@ function detail(assistant: PersonalAssistant, current: ConversationSummary | nul
 }
 function list(assistant: PersonalAssistant, items: ConversationSummary[]): ConversationList {
   return { assistant: { assistantId: assistant.assistantId, name: assistant.name }, conversations: items, nextCursor: null, externalCall: 'not_performed', selectionVersion: 2 }
+}
+function r4Settings(conversationId = 'alpha-main'): ConversationContextSettings {
+  return { contractVersion: 'vio-context-assembly/v1', conversationId, personalDefault: { mode: 'balanced', source: 'assistant_settings' }, conversation: null, effective: { mode: 'balanced', excludedSourceRefs: [], unavailableExcludedSourceRefs: [], source: 'personal_default' }, externalCall: 'not_performed' }
+}
+function r4Plan(conversationId = 'alpha-main', branchId = `branch-${conversationId}`): ContextAssembly {
+  return {
+    contractVersion: 'vio-context-assembly/v1', schemaVersion: 'vio-context-assembly-snapshot/v1', assemblyId: null, turnId: null, conversationId, branchId, mode: 'balanced', controlsSource: 'turn', state: 'planned',
+    scope: { currentOwner: true, currentAssistant: true, currentConversationExcludedFromCrossWindow: true }, controls: { excludedSourceRefs: [], unavailableExcludedSourceRefs: [] },
+    slots: ['system_rules', 'assistant_settings', 'runtime_projection', 'unresolved_events', 'recent_original_text', 'long_term_memory', 'current_user_message'].map((slot) => ({ slot: slot as ContextAssembly['slots'][number]['slot'], status: slot === 'long_term_memory' ? 'not_implemented' : slot === 'runtime_projection' ? 'not_available' : 'included' })),
+    sources: [], budget: { estimationMethod: 'utf8-byte-upper-bound/v1', contextLimitTokens: 16384, reservedOutputTokens: 4096, inputBudgetTokens: 12288, rawEstimatedInputTokens: 120, estimatedInputTokens: 120, withinLimit: true, foldPlanned: false, trimmingApplied: false, trimmingReason: null },
+    folding: { status: 'not_required', summaryId: null, reason: null, sourceSetHash: null, sourceCount: 0, recoveryAction: null },
+    selection: { strategy: 'lexical-overlap-recency/v1', status: 'provisional', querySource: 'conversation_history', crossWindowCandidateCount: 0, crossWindowSelectedCount: 0 },
+    runtimeProjection: { status: 'not_available', sourceRef: null }, memory: { status: 'not_implemented' }, planHash: contextHash, providerMessagesHash: null, snapshotHash: null, createdAt: at, lockedAt: null, externalCall: 'not_performed',
+  }
+}
+function r4Api(overrides: Partial<PersonalContextApi> = {}): PersonalContextApi {
+  return { settings: vi.fn().mockImplementation((id) => Promise.resolve(r4Settings(id))), updateSettings: vi.fn(), plan: vi.fn().mockImplementation((id, input) => Promise.resolve({ ...r4Plan(id, input.branchId), mode: input.mode, controls: { excludedSourceRefs: input.excludedSourceRefs, unavailableExcludedSourceRefs: [] } })), snapshot: vi.fn().mockImplementation((turnId) => Promise.resolve({ ...r4Plan(), assemblyId: 'assembly-r4', turnId, state: 'locked', selection: { ...r4Plan().selection, status: 'final', querySource: 'current_user_message' }, providerMessagesHash: contextHash, snapshotHash: contextHash, lockedAt: at })), evidence: vi.fn(), retryFold: vi.fn(), ...overrides } as PersonalContextApi
 }
 function turn(conversationId = 'alpha-main'): PersonalChatTurn {
   return { turnId: 'turn-r3', conversationId, status: 'completed', createdAt: at, updatedAt: at, completedAt: at, userMessage: { messageId: 'sent-user', messageVersionId: 'sent-user-version', senderType: 'user', content: '本次问题', sequenceNumber: 3, createdAt: at }, assistantMessage: { messageId: 'sent-subject', messageVersionId: 'sent-subject-version', senderType: 'subject', content: '后端真实回复', sequenceNumber: 4, createdAt: at }, confirmation: null, error: null, execution: null, externalCall: 'performed' }
@@ -45,13 +64,13 @@ function chatApi(overrides: Partial<PersonalMultiChatApi> = {}): PersonalMultiCh
     ...overrides,
   } as PersonalMultiChatApi
 }
-function ReadyPage({ assistant, api, onNavigate = vi.fn() }: { assistant: PersonalAssistant; api: PersonalMultiChatApi; onNavigate?: (target: 'capability' | 'profile') => void }) {
+function ReadyPage({ assistant, api, contextApi = r4Api(), onNavigate = vi.fn() }: { assistant: PersonalAssistant; api: PersonalMultiChatApi; contextApi?: PersonalContextApi; onNavigate?: (target: 'capability' | 'profile') => void }) {
   const personal = usePersonal()
   if (personal.state.kind !== 'ready') return <span>访问恢复中</span>
-  return <PersonalMultiConversationPage assistant={assistant} assistantsLoaded api={api} onNavigate={onNavigate} />
+  return <PersonalMultiConversationPage assistant={assistant} assistantsLoaded api={api} contextApi={contextApi} onNavigate={onNavigate} />
 }
-function renderPage(api: PersonalMultiChatApi, assistant = assistantFixture(), strict = false) {
-  const content = <PersonalProvider api={personalApi()}><ReadyPage assistant={assistant} api={api} /></PersonalProvider>
+function renderPage(api: PersonalMultiChatApi, assistant = assistantFixture(), strict = false, contextApi = r4Api()) {
+  const content = <PersonalProvider api={personalApi()}><ReadyPage assistant={assistant} api={api} contextApi={contextApi} /></PersonalProvider>
   return render(strict ? <StrictMode>{content}</StrictMode> : content)
 }
 
@@ -181,6 +200,7 @@ describe('R3 personal multi-conversation page', () => {
     const api = chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)), conversation: vi.fn().mockResolvedValue(detail(assistant, current)), createTurn: vi.fn().mockImplementation(() => pending.promise) })
     const view = renderPage(api, assistant, true)
     await screen.findByText('开始一段新对话')
+    await waitFor(() => expect(screen.getByLabelText('输入消息')).toBeEnabled())
     fireEvent.change(screen.getByLabelText('输入消息'), { target: { value: '本次问题' } })
     act(() => { fireEvent.click(screen.getByRole('button', { name: '发送消息' })); fireEvent.click(screen.getByRole('button', { name: '发送消息' })) })
     expect(api.createTurn).toHaveBeenCalledTimes(1)
@@ -198,6 +218,7 @@ describe('R3 personal multi-conversation page', () => {
     })
     renderPage(recoveryApi, assistant)
     await screen.findByText('开始一段新对话')
+    await waitFor(() => expect(screen.getByLabelText('输入消息')).toBeEnabled())
     fireEvent.change(screen.getByLabelText('输入消息'), { target: { value: '本次问题' } })
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
     await screen.findByText('请求超时，当前结果未知。')
@@ -283,12 +304,14 @@ describe('R3 personal multi-conversation page', () => {
     }
     render(<PersonalProvider api={personalApi()}><Switcher /></PersonalProvider>)
     await screen.findByRole('heading', { name: '甲会话' })
+    await waitFor(() => expect(screen.getByLabelText('输入消息')).toBeEnabled())
     fireEvent.change(screen.getByLabelText('输入消息'), { target: { value: '甲请求' } })
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
     await waitFor(() => expect(api.createTurn).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: '测试切换助手' }))
     await screen.findByRole('heading', { name: '乙会话' })
     expect(alphaSignal?.aborted).toBe(true)
+    await waitFor(() => expect(screen.getByLabelText('输入消息')).toBeEnabled())
     fireEvent.change(screen.getByLabelText('输入消息'), { target: { value: '乙请求' } })
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
     await waitFor(() => expect(api.createTurn).toHaveBeenCalledTimes(2))
@@ -328,7 +351,7 @@ describe('R3 personal multi-conversation page', () => {
     expect(await screen.findByText('note.txt')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('输入消息'), { target: { value: '带附件问题' } })
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
-    await waitFor(() => expect(api.createTurn).toHaveBeenCalledWith('alpha-main', { branchId: 'branch-alpha-main', content: '带附件问题', attachmentIds: ['attachment-r3'] }, expect.stringMatching(/^vio-r3-/), expect.anything()))
+    await waitFor(() => expect(api.createTurn).toHaveBeenCalledWith('alpha-main', { branchId: 'branch-alpha-main', content: '带附件问题', attachmentIds: ['attachment-r3'], context: { mode: 'balanced', excludedSourceRefs: [], expectedPlanHash: contextHash } }, expect.stringMatching(/^vio-r3-/), expect.anything()))
     expect(await screen.findByText('凭据库尚未解锁。')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '进入“能力”配置' }))
     expect(navigate).toHaveBeenCalledWith('capability')
@@ -601,5 +624,332 @@ describe('R3 personal multi-conversation page', () => {
     expect(await screen.findByText('本轮已终止')).toBeInTheDocument()
     expect(recoveryKeys).toHaveLength(2)
     expect(recoveryKeys[1]).toBe(recoveryKeys[0])
+  })
+
+  it('previews all four R4 modes, persists custom exclusions and restores the server setting', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const crossSource: ContextAssembly['sources'][number] = {
+      sourceRef: 'message-version:cross-r4', sourceType: 'message_version', slot: 'recent_original_text', origin: 'cross_window', status: 'included', reason: null,
+      conversationId: 'other-window', branchId: 'other-branch', messageId: 'cross-message', messageVersionId: 'cross-r4', eventId: null, summaryId: null,
+      contentHash: contextHash, estimatedTokens: 18, createdAt: at, evidence: { senderType: 'user', versionKind: 'original', preview: '另一个窗口的可追溯内容', selection: { strategy: 'lexical-overlap-recency/v1', relevanceScore: 5, matchedTermCount: 2, rank: 1, representation: 'original_fallback' } },
+    }
+    let saved = r4Settings(current.conversationId)
+    const context = r4Api({
+      settings: vi.fn().mockImplementation(() => Promise.resolve(saved)),
+      plan: vi.fn().mockImplementation((_id, input) => Promise.resolve({ ...r4Plan(current.conversationId, current.currentBranchId), mode: input.mode, controls: { excludedSourceRefs: input.excludedSourceRefs, unavailableExcludedSourceRefs: [] }, selection: { ...r4Plan().selection, crossWindowCandidateCount: 1, crossWindowSelectedCount: 1 }, sources: [{ ...crossSource, status: input.excludedSourceRefs.includes(crossSource.sourceRef) ? 'excluded' : 'included' }] })),
+      updateSettings: vi.fn().mockImplementation((_id, input) => {
+        saved = { ...r4Settings(current.conversationId), conversation: { mode: input.mode, excludedSourceRefs: input.excludedSourceRefs, unavailableExcludedSourceRefs: [], version: 1, updatedAt: at }, effective: { mode: input.mode, excludedSourceRefs: input.excludedSourceRefs, unavailableExcludedSourceRefs: [], source: 'conversation' } }
+        return Promise.resolve(saved)
+      }),
+    })
+    const api = chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)) })
+    const view = renderPage(api, assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    for (const name of ['精简', '完整', '标准', '自定义']) {
+      fireEvent.click(screen.getByRole('radio', { name: new RegExp(name) }))
+      await waitFor(() => expect(context.plan).toHaveBeenLastCalledWith('alpha-main', expect.objectContaining({ mode: name === '精简' ? 'concise' : name === '完整' ? 'complete' : name === '标准' ? 'balanced' : 'custom' }), expect.anything()))
+    }
+    fireEvent.click(await screen.findByRole('button', { name: '排除来源' }))
+    await waitFor(() => expect(context.plan).toHaveBeenLastCalledWith('alpha-main', expect.objectContaining({ mode: 'custom', excludedSourceRefs: [crossSource.sourceRef] }), expect.anything()))
+    fireEvent.click(screen.getByRole('button', { name: '保存本会话设置' }))
+    await waitFor(() => expect(context.updateSettings).toHaveBeenCalledWith('alpha-main', { mode: 'custom', excludedSourceRefs: [crossSource.sourceRef], expectedVersion: 0 }, expect.stringMatching(/^vio-personal-/), expect.anything()))
+    expect(await screen.findByText('本会话上下文设置已由服务端保存。')).toBeInTheDocument()
+    view.unmount()
+
+    renderPage(api, assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    expect(await screen.findByText('会话保存：自定义')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /自定义/ })).toBeChecked()
+  })
+
+  it('opens exact locked evidence without placing its body in browser storage', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const source: ContextAssembly['sources'][number] = {
+      sourceRef: 'message-version:evidence-r4', sourceType: 'message_version', slot: 'recent_original_text', origin: 'current_conversation', status: 'included', reason: null,
+      conversationId: current.conversationId, branchId: current.currentBranchId, messageId: 'message-r4', messageVersionId: 'evidence-r4', eventId: null, summaryId: null,
+      contentHash: contextHash, estimatedTokens: 12, createdAt: at, evidence: { senderType: 'user', versionKind: 'original', preview: '受限预览' },
+    }
+    const exactBody = '只有受保护证据接口返回的精确版本正文'
+    const completed = turn(current.conversationId)
+    const locked = { ...r4Plan(), assemblyId: 'assembly-r4', turnId: completed.turnId, state: 'locked' as const, controlsSource: 'conversation' as const, selection: { ...r4Plan().selection, status: 'final' as const, querySource: 'current_user_message' as const }, providerMessagesHash: contextHash, snapshotHash: contextHash, lockedAt: at, sources: [source] }
+    const context = r4Api({
+      snapshot: vi.fn().mockResolvedValue(locked),
+      evidence: vi.fn().mockResolvedValue({ sourceRef: source.sourceRef, sourceType: 'message_version', conversationId: current.conversationId, branchId: current.currentBranchId, messageId: 'message-r4', messageVersionId: 'evidence-r4', senderType: 'user', content: exactBody, createdAt: at, contentHash: contextHash, externalCall: 'not_performed' }),
+    })
+    renderPage(chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current, [], completed)) }), assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '查看精确证据' }))
+    expect(await screen.findByText(exactBody)).toBeInTheDocument()
+    expect(context.evidence).toHaveBeenCalledWith(source.sourceRef, expect.anything())
+    expect(JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } })).not.toContain(exactBody)
+  })
+
+  it('rejects exact evidence whose content hash does not match the locked source', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const source: ContextAssembly['sources'][number] = {
+      sourceRef: 'summary:evidence-r4', sourceType: 'summary', slot: 'recent_original_text', origin: 'current_conversation', status: 'summarized', reason: 'folded',
+      conversationId: current.conversationId, branchId: current.currentBranchId, messageId: null, messageVersionId: null, eventId: null, summaryId: 'evidence-r4',
+      contentHash: contextHash, estimatedTokens: 12, createdAt: at, evidence: { preview: '结构化摘要预览' },
+    }
+    const completed = turn(current.conversationId)
+    const locked: ContextAssembly = { ...r4Plan(), assemblyId: 'assembly-r4', turnId: completed.turnId, state: 'locked', controlsSource: 'conversation', selection: { ...r4Plan().selection, status: 'final', querySource: 'current_user_message' }, providerMessagesHash: contextHash, snapshotHash: contextHash, lockedAt: at, sources: [source], budget: { ...r4Plan().budget, foldPlanned: true }, folding: { status: 'ready', summaryId: 'evidence-r4', reason: null, sourceSetHash: contextHash, sourceCount: 1, recoveryAction: null } }
+    const context = r4Api({
+      snapshot: vi.fn().mockResolvedValue(locked),
+      evidence: vi.fn().mockResolvedValue({ sourceRef: source.sourceRef, sourceType: 'summary', conversationId: current.conversationId, branchId: current.currentBranchId, summaryId: 'evidence-r4', structuredSummary: { schemaVersion: 'vio-context-summary/v1', summaryId: 'evidence-r4', scope: { conversationId: current.conversationId, branchId: current.currentBranchId }, decisions: [], tasks: ['保留哈希边界'], unresolvedItems: [], importantRelationships: [], supportingExcerpts: [], sourceRefs: ['message-version:one'], createdAt: at }, sourceRefs: ['message-version:one'], sourceHashes: [{ sourceRef: 'message-version:one', contentHash: contextHash }], createdAt: at, contentHash: `sha256:${'d'.repeat(64)}`, externalCall: 'not_performed' }),
+    })
+    renderPage(chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current, [], completed)) }), assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '查看精确证据' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('后端响应无法验证，当前结果未知。')
+    expect(screen.queryByText('保留哈希边界')).not.toBeInTheDocument()
+  })
+
+  it('locks the current R4 plan into the real turn request and reads its immutable snapshot', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const completed = turn(current.conversationId)
+    const context = r4Api()
+    const api = chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)), conversation: vi.fn().mockResolvedValue(detail(assistant, current, [message('sent-user', 'user', 'R4 本轮', 1), message('sent-subject', 'subject', 'R4 后端回复', 2)])), createTurn: vi.fn().mockResolvedValue(completed) })
+    renderPage(api, assistant, false, context)
+    await waitFor(() => expect(screen.getByLabelText('输入消息')).toBeEnabled())
+    fireEvent.change(screen.getByLabelText('输入消息'), { target: { value: 'R4 本轮' } })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: '发送消息' })); fireEvent.click(screen.getByRole('button', { name: '发送消息' })) })
+    await waitFor(() => expect(api.createTurn).toHaveBeenCalledTimes(1))
+    expect(api.createTurn).toHaveBeenCalledWith('alpha-main', { branchId: 'branch-alpha-main', content: 'R4 本轮', attachmentIds: [], context: { mode: 'balanced', excludedSourceRefs: [], expectedPlanHash: contextHash } }, expect.stringMatching(/^vio-r3-/), expect.anything())
+    await waitFor(() => expect(context.snapshot).toHaveBeenCalledWith(completed.turnId, expect.anything()))
+    fireEvent.click(screen.getByRole('button', { name: /上下文模式/ }))
+    expect(await screen.findByRole('region', { name: '已锁定轮次范围' })).toHaveTextContent('不可变快照')
+  })
+
+  it('refreshes planHash after a completed turn before allowing the next send', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const nextHash = `sha256:${'d'.repeat(64)}`
+    let completedTurns = 0
+    const sentPlans: Array<string | null> = []
+    const context = r4Api({
+      plan: vi.fn().mockImplementation(() => Promise.resolve({ ...r4Plan(), planHash: completedTurns === 0 ? contextHash : nextHash })),
+    })
+    const history = () => Array.from({ length: completedTurns * 2 }, (_, index) => message(`history-${index}`, index % 2 ? 'subject' : 'user', `历史 ${index}`, index + 1))
+    const api = chatApi({
+      conversations: vi.fn().mockResolvedValue(list(assistant, [current])),
+      current: vi.fn().mockResolvedValue(detail(assistant, current)),
+      conversation: vi.fn().mockImplementation(() => Promise.resolve(detail(assistant, current, history()))),
+      createTurn: vi.fn().mockImplementation((_id, body) => { sentPlans.push(body.context?.expectedPlanHash ?? null); completedTurns += 1; return Promise.resolve({ ...turn(), turnId: `turn-${completedTurns}` }) }),
+    })
+    renderPage(api, assistant, false, context)
+    const input = await screen.findByLabelText('输入消息')
+    await waitFor(() => expect(input).toBeEnabled())
+    fireEvent.change(input, { target: { value: '第一轮' } }); fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    await waitFor(() => expect(context.plan).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(input).toBeEnabled())
+    fireEvent.change(input, { target: { value: '第二轮' } }); fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    await waitFor(() => expect(api.createTurn).toHaveBeenCalledTimes(2))
+    expect(sentPlans).toEqual([contextHash, nextHash])
+  })
+
+  it('blocks an over-budget plan before Provider execution and explains that the current instruction is retained', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const over = { ...r4Plan(), assemblyId: 'assembly-over', turnId: 'turn-over', state: 'budget_blocked' as const, selection: { ...r4Plan().selection, status: 'final' as const, querySource: 'current_user_message' as const }, budget: { ...r4Plan().budget, rawEstimatedInputTokens: 13000, estimatedInputTokens: 13000, withinLimit: false } }
+    const context = r4Api({ plan: vi.fn().mockResolvedValue(over) })
+    const api = chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)), createTurn: vi.fn() })
+    renderPage(api, assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    expect(await screen.findByText(/必需内容超过模型上限/)).toBeInTheDocument()
+    expect(screen.getByText(/本轮用户消息属于必需槽位/)).toHaveTextContent('不会被折叠、裁剪或静默丢弃')
+    expect(screen.getByLabelText('输入消息')).toBeDisabled()
+    expect(api.createTurn).not.toHaveBeenCalled()
+  })
+
+  it('keeps a long raw history sendable when the server plan folds it within budget', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '长会话', true)
+    const completed = turn(current.conversationId)
+    const longPlan: ContextAssembly = {
+      ...r4Plan(),
+      budget: { ...r4Plan().budget, rawEstimatedInputTokens: 18000, estimatedInputTokens: 7600, withinLimit: true, foldPlanned: true },
+      folding: { status: 'planned', summaryId: null, reason: null, sourceSetHash: contextHash, sourceCount: 16, recoveryAction: null },
+    }
+    const context = r4Api({ plan: vi.fn().mockResolvedValue(longPlan) })
+    const api = chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)), conversation: vi.fn().mockResolvedValue(detail(assistant, current, [message('sent-user', 'user', '继续长会话', 1), message('sent-subject', 'subject', '已使用折叠上下文', 2)])), createTurn: vi.fn().mockResolvedValue(completed) })
+    renderPage(api, assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    expect(await screen.findByText(/原始历史超过输入预算/)).toBeInTheDocument()
+    expect(screen.getByText(/预览不会创建摘要或调用 Provider/)).toBeInTheDocument()
+    const input = screen.getByLabelText('输入消息')
+    expect(input).toBeEnabled()
+    fireEvent.change(input, { target: { value: '继续长会话' } })
+    act(() => { fireEvent.click(screen.getByRole('button', { name: '发送消息' })); fireEvent.click(screen.getByRole('button', { name: '发送消息' })) })
+    await waitFor(() => expect(api.createTurn).toHaveBeenCalledTimes(1))
+  })
+
+  it('reports and safely cleans a saved exclusion after its source becomes unavailable', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const staleRef = 'message-version:removed-r4'
+    const stale: ConversationContextSettings = {
+      ...r4Settings(),
+      conversation: { mode: 'custom', excludedSourceRefs: [staleRef], unavailableExcludedSourceRefs: [staleRef], version: 3, updatedAt: at },
+      effective: { mode: 'custom', excludedSourceRefs: [], unavailableExcludedSourceRefs: [staleRef], source: 'conversation' },
+    }
+    const cleaned: ConversationContextSettings = {
+      ...stale,
+      conversation: { mode: 'custom', excludedSourceRefs: [], unavailableExcludedSourceRefs: [], version: 4, updatedAt: at },
+      effective: { mode: 'custom', excludedSourceRefs: [], unavailableExcludedSourceRefs: [], source: 'conversation' },
+    }
+    const context = r4Api({
+      settings: vi.fn().mockResolvedValue(stale),
+      plan: vi.fn().mockImplementation((_id, input) => Promise.resolve({ ...r4Plan(), mode: input.mode, controls: { excludedSourceRefs: input.excludedSourceRefs, unavailableExcludedSourceRefs: [] } })),
+      updateSettings: vi.fn().mockResolvedValue(cleaned),
+    })
+    const api = chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)) })
+    renderPage(api, assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    expect(await screen.findByText(/1 项已保存排除来源现已不可用或被移除/)).toBeInTheDocument()
+    expect(context.plan).toHaveBeenCalledWith('alpha-main', expect.objectContaining({ mode: 'custom', excludedSourceRefs: [] }), expect.anything())
+    const save = screen.getByRole('button', { name: '保存本会话设置' })
+    expect(save).toBeEnabled()
+    fireEvent.click(save)
+    await waitFor(() => expect(context.updateSettings).toHaveBeenCalledWith('alpha-main', { mode: 'custom', excludedSourceRefs: [], expectedVersion: 3 }, expect.any(String), expect.anything()))
+    expect(await screen.findByText('本会话上下文设置已由服务端保存。')).toBeInTheDocument()
+    expect(screen.queryByText(/已保存排除来源现已不可用/)).not.toBeInTheDocument()
+  })
+
+  it('re-reads settings instead of leaving a permanent 403 when an exclusion becomes stale during preview', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const staleRef = 'message-version:late-removed-r4'
+    const before: ConversationContextSettings = {
+      ...r4Settings(),
+      conversation: { mode: 'custom', excludedSourceRefs: [staleRef], unavailableExcludedSourceRefs: [], version: 7, updatedAt: at },
+      effective: { mode: 'custom', excludedSourceRefs: [staleRef], unavailableExcludedSourceRefs: [], source: 'conversation' },
+    }
+    const after: ConversationContextSettings = {
+      ...before,
+      conversation: { ...before.conversation!, unavailableExcludedSourceRefs: [staleRef] },
+      effective: { mode: 'custom', excludedSourceRefs: [], unavailableExcludedSourceRefs: [staleRef], source: 'conversation' },
+    }
+    const context = r4Api({
+      settings: vi.fn().mockResolvedValueOnce(before).mockResolvedValue(after),
+      plan: vi.fn().mockRejectedValueOnce(new ApiClientError('gone', { code: 'CONTEXT_SOURCE_FORBIDDEN', status: 403 })).mockImplementation((_id, input) => Promise.resolve({ ...r4Plan(), mode: input.mode, controls: { excludedSourceRefs: input.excludedSourceRefs, unavailableExcludedSourceRefs: [] } })),
+    })
+    renderPage(chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)) }), assistant, false, context)
+    await waitFor(() => expect(screen.getByLabelText('输入消息')).toBeEnabled())
+    expect(context.settings).toHaveBeenCalledTimes(2)
+    expect(context.plan).toHaveBeenNthCalledWith(1, 'alpha-main', expect.objectContaining({ excludedSourceRefs: [staleRef] }), expect.anything())
+    expect(context.plan).toHaveBeenNthCalledWith(2, 'alpha-main', expect.objectContaining({ excludedSourceRefs: [] }), expect.anything())
+    fireEvent.click(screen.getByRole('button', { name: /上下文模式/ }))
+    expect(screen.getByText(/1 项已保存排除来源现已不可用或被移除/)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows provisional relevance, the locked final selection and exact ready-summary evidence', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const completed = turn(current.conversationId)
+    const summarySource: ContextAssembly['sources'][number] = {
+      sourceRef: 'summary:cross-ready-r4', sourceType: 'summary', slot: 'recent_original_text', origin: 'cross_window', status: 'included', reason: null,
+      conversationId: 'older-relevant', branchId: 'older-branch', messageId: null, messageVersionId: null, eventId: null, summaryId: 'cross-ready-r4',
+      contentHash: contextHash, estimatedTokens: 24, createdAt: at, evidence: { preview: '旧窗口中的紫罗兰预算决定', selection: { strategy: 'lexical-overlap-recency/v1', relevanceScore: 12, matchedTermCount: 4, rank: 1, representation: 'latest_ready_summary' } },
+    }
+    const preview: ContextAssembly = { ...r4Plan(), sources: [summarySource], selection: { ...r4Plan().selection, crossWindowCandidateCount: 2, crossWindowSelectedCount: 1 } }
+    const locked: ContextAssembly = { ...preview, assemblyId: 'assembly-r4', turnId: completed.turnId, state: 'locked', selection: { ...preview.selection, status: 'final', querySource: 'current_user_message' }, providerMessagesHash: contextHash, snapshotHash: contextHash, lockedAt: at, folding: { status: 'ready', summaryId: 'cross-ready-r4', reason: null, sourceSetHash: contextHash, sourceCount: 1, recoveryAction: null }, budget: { ...preview.budget, foldPlanned: true } }
+    const context = r4Api({
+      plan: vi.fn().mockResolvedValue(preview),
+      snapshot: vi.fn().mockResolvedValue(locked),
+      evidence: vi.fn().mockResolvedValue({ sourceRef: summarySource.sourceRef, sourceType: 'summary', conversationId: 'older-relevant', branchId: 'older-branch', summaryId: 'cross-ready-r4', structuredSummary: { schemaVersion: 'vio-context-summary/v1', summaryId: 'cross-ready-r4', scope: { conversationId: 'older-relevant', branchId: 'older-branch' }, decisions: ['紫罗兰预算优先'], tasks: [], unresolvedItems: [], importantRelationships: [], supportingExcerpts: ['旧窗口中的紫罗兰预算决定'], sourceRefs: ['message-version:relevant-old'], createdAt: at }, sourceRefs: ['message-version:relevant-old'], sourceHashes: [{ sourceRef: 'message-version:relevant-old', contentHash: contextHash }], createdAt: at, contentHash: contextHash, externalCall: 'not_performed' }),
+    })
+    renderPage(chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current, [], completed)) }), assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    expect(await screen.findByText(/预览暂定；发送后按本轮消息最终排序/)).toBeInTheDocument()
+    expect(screen.getByText(/相关度排序 #1/)).toHaveTextContent('使用最新有效摘要')
+    expect(within(screen.getByRole('region', { name: '已锁定轮次范围' })).getByText('最终相关度选择 1/2')).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('region', { name: '已锁定轮次范围' })).getByRole('button', { name: '查看精确证据' }))
+    expect(await screen.findByText(/紫罗兰预算优先/)).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog', { name: '上下文来源证据' })).getByText(contextHash)).toBeInTheDocument()
+  })
+
+  it.each(['success', 'failure'] as const)('ignores a late R4 settings %s after the assistant and conversation scope changes', async (outcome) => {
+    const alpha = assistantFixture('test-alpha', '助手甲')
+    const beta = assistantFixture('test-beta', '助手乙')
+    const waiting = deferred<ConversationContextSettings>()
+    const complete = { ...r4Settings('test-beta-main'), personalDefault: { mode: 'complete' as const, source: 'assistant_settings' as const }, effective: { mode: 'complete' as const, excludedSourceRefs: [], unavailableExcludedSourceRefs: [], source: 'personal_default' as const } }
+    const context = r4Api({
+      settings: vi.fn().mockImplementation((conversationId) => conversationId === 'test-alpha-main' ? waiting.promise : Promise.resolve(complete)),
+      plan: vi.fn().mockImplementation((conversationId, input) => Promise.resolve({ ...r4Plan(conversationId, `branch-${conversationId}`), mode: input.mode, controls: { excludedSourceRefs: input.excludedSourceRefs, unavailableExcludedSourceRefs: [] } })),
+    })
+    const api = chatApi({
+      conversations: vi.fn().mockImplementation((id) => Promise.resolve(list(id === alpha.assistantId ? alpha : beta, [conversation(`${id}-main`, `${id}会话`, true)]))),
+      current: vi.fn().mockImplementation((id) => Promise.resolve(detail(id === alpha.assistantId ? alpha : beta, conversation(`${id}-main`, `${id}会话`, true)))),
+    })
+    function Switcher() {
+      const [active, setActive] = useState(alpha)
+      return <><button type="button" onClick={() => setActive(beta)}>切到助手乙</button><ReadyPage assistant={active} api={api} contextApi={context} /></>
+    }
+    render(<PersonalProvider api={personalApi()}><Switcher /></PersonalProvider>)
+    await waitFor(() => expect(context.settings).toHaveBeenCalledWith('test-alpha-main', expect.anything()))
+    fireEvent.click(screen.getByRole('button', { name: '切到助手乙' }))
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式.*完整/s }))
+    expect(await screen.findByText('当前生效：完整')).toBeInTheDocument()
+    await act(async () => outcome === 'success' ? waiting.resolve(r4Settings('test-alpha-main')) : waiting.reject(new ApiClientError('late', { code: 'network_error', status: null })))
+    expect(screen.getByText('当前生效：完整')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('retains the R4 settings key after an unknown result and reuses it for the exact retry', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const keys: string[] = []
+    const saved = { ...r4Settings(), conversation: { mode: 'concise' as const, excludedSourceRefs: [], unavailableExcludedSourceRefs: [], version: 1, updatedAt: at }, effective: { mode: 'concise' as const, excludedSourceRefs: [], unavailableExcludedSourceRefs: [], source: 'conversation' as const } }
+    const context = r4Api({
+      updateSettings: vi.fn().mockImplementation((_id, _input, key) => { keys.push(key); return keys.length === 1 ? Promise.reject(new ApiClientError('lost', { code: 'request_timeout', status: null })) : Promise.resolve(saved) }),
+    })
+    renderPage(chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current)) }), assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    fireEvent.click(screen.getByRole('radio', { name: /精简/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '保存本会话设置' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '保存本会话设置' }))
+    expect(await screen.findByText('请求超时，当前结果未知。')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '保存本会话设置' }))
+    expect(await screen.findByText('本会话上下文设置已由服务端保存。')).toBeInTheDocument()
+    expect(keys).toHaveLength(2)
+    expect(keys[1]).toBe(keys[0])
+  })
+
+  it('shows a fold failure, prevents duplicate recovery and reloads the immutable snapshot after recovery', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const processing = { ...turn(), status: 'processing' as const, completedAt: null, assistantMessage: null, externalCall: 'not_performed' as const }
+    const locked: ContextAssembly = { ...r4Plan(), assemblyId: 'assembly-r4', turnId: processing.turnId, state: 'locked', controlsSource: 'conversation', selection: { ...r4Plan().selection, status: 'final', querySource: 'current_user_message' }, providerMessagesHash: contextHash, snapshotHash: contextHash, lockedAt: at, budget: { ...r4Plan().budget, foldPlanned: true }, folding: { status: 'ready', summaryId: 'summary-r4', reason: null, sourceSetHash: contextHash, sourceCount: 2, recoveryAction: null } }
+    const failed: ContextAssembly = { ...locked, state: 'fold_failed', providerMessagesHash: null, snapshotHash: null, lockedAt: null, budget: { ...locked.budget, rawEstimatedInputTokens: 13000, estimatedInputTokens: 13000, withinLimit: false }, folding: { status: 'failed', summaryId: 'summary-r4', reason: 'CONTEXT_FOLDING_FAILED', sourceSetHash: contextHash, sourceCount: 2, recoveryAction: 'retry_fold' } }
+    const retry = deferred<ContextRecoveryResult>()
+    const context = r4Api({ snapshot: vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(locked), retryFold: vi.fn().mockImplementation(() => retry.promise) })
+    renderPage(chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current, [], processing)) }), assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    const button = await screen.findByRole('button', { name: '使用新恢复键重试折叠' })
+    act(() => { fireEvent.click(button); fireEvent.click(button) })
+    expect(context.retryFold).toHaveBeenCalledTimes(1)
+    expect(screen.getByText(/失败原因：CONTEXT_FOLDING_FAILED/)).toBeInTheDocument()
+    expect(screen.getByText(/原始来源集：2 项/)).toBeInTheDocument()
+    await act(async () => retry.resolve({ context: locked, turn: processing, externalCall: 'not_performed' }))
+    expect(await screen.findByText('折叠恢复结果已由服务端确认。')).toBeInTheDocument()
+    expect(context.snapshot).toHaveBeenCalledTimes(1)
+    expect(within(screen.getByRole('region', { name: '已锁定轮次范围' })).getByText('摘要就绪')).toBeInTheDocument()
+  })
+
+  it('keeps fallback originals visible without offering an unsafe fold recovery', async () => {
+    const assistant = assistantFixture()
+    const current = conversation('alpha-main', '主会话', true)
+    const completed = turn(current.conversationId)
+    const fallback = { ...r4Plan(), assemblyId: 'assembly-r4', turnId: completed.turnId, state: 'locked' as const, controlsSource: 'conversation' as const, selection: { ...r4Plan().selection, status: 'final' as const, querySource: 'current_user_message' as const }, providerMessagesHash: contextHash, snapshotHash: contextHash, lockedAt: at, folding: { status: 'failed_fallback_original' as const, summaryId: 'summary-failed', reason: null, sourceSetHash: contextHash, sourceCount: 2, recoveryAction: null } }
+    const context = r4Api({ snapshot: vi.fn().mockResolvedValue(fallback) })
+    renderPage(chatApi({ conversations: vi.fn().mockResolvedValue(list(assistant, [current])), current: vi.fn().mockResolvedValue(detail(assistant, current, [], completed)) }), assistant, false, context)
+    fireEvent.click(await screen.findByRole('button', { name: /上下文模式/ }))
+    expect(await screen.findByText(/原文仍在预算内/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '使用新恢复键重试折叠' })).not.toBeInTheDocument()
   })
 })

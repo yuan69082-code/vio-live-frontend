@@ -24,6 +24,7 @@ function migrationsThrough025(root){
   const path=join(root,'migrations-025');
   cpSync(resolve('migrations'),path,{recursive:true});
   rmSync(join(path,MIGRATION));
+  rmSync(join(path,'027_create_context_assembly_ledger.sql'));
   return path;
 }
 

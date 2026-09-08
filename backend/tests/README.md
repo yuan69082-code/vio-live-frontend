@@ -1,5 +1,19 @@
 # 后端测试策略
 
+## R4 上下文装配当前专项
+
+R4 后端三个专项在验收返修后合计 **27/27**，0 失败、0 跳过；实现完成并等待总体协调窗口阶段验收：
+
+- `context-assembly-r4-flow.test.js`：12/12，验证固定装配顺序、R1/R3 同一 execution 的快照绑定、设置/预览/精确证据、跨窗口与作用域隔离、当前消息相关性排序、仍有效的最新 ready summary、失效排除项对 clear/delete/branch/access-revoke 的调和、长 preview 折叠/裁剪、可选已验证投影、非法控制/stale plan、20 条未解决事件边界下 preview/turn hash 稳定、预算阻断和零多余调用。
+- `context-assembly-r4-recovery.test.js`：12/12（7 个顶层场景及 5 个恶意 summary builder 子场景），验证结构化折叠、原文安全 fallback、fold_failed 显式恢复、缺字段/未知字段/错 scope/错来源/源对象变异拒绝、failed candidate 跨重启保留、summary/assembly/locked source 原子回滚、发布崩溃同库恢复，以及 `outcome_unknown` 重放/重启不重组快照、不重复 Provider。
+- `context-assembly-r4-migration.test.js`：3/3，验证 `027` fresh、`001–026` upgrade、失败完整回滚、execution snapshot hash 绑定、source phase/关系字段、复合外键、唯一性与不可变保护。
+
+R1/R3 flow 受影响四文件组合最终 **61/61**；R1/R3/027 migration 组合 **19/19**。首次实现阶段的 15/15、历史全量首次 **434 项：428 通过、5 失败、1 条既有 RFC 隔离跳过**，以及修复 migration fixture 后的 435 项结果继续保留为过程证据。验收返修后的最终默认 `corepack pnpm test` 为 **447 项：446 通过、0 失败、1 跳过，退出 0**。唯一跳过仍是隔离启动器指向不存在路径的 RFC 跨仓实现对照；未执行、不计通过，也未读取真实 Engine。
+
+受控页面联调首次在运行时投影开启时正确拒绝 standalone turn，关闭投影后却暴露 `CONTEXT_PLAN_STALE`：事件仓储原先先取最近 20 条、再由 R4 在内存中过滤 `message_created/message_updated`，当前用户消息事件因此挤出一条原预览事件并改变 hash。修复后排除条件在 SQL `LIMIT` 前执行；新增第 7 条 flow 回归锁定“20 条未解决事件 + 新建当前消息”仍保持同一 plan hash、只调用一次 loopback Provider，同时保留伪造 stale hash 的拒绝断言。
+
+R4 自动化只使用临时 SQLite、受控依赖注入与随机 loopback Provider。没有真实运行时/Engine、真实供应商、真实凭据、业务公网或费用；测试中的投影 double 只证明通用槽边界，不冒充真实外部连接。R5 memory 明确未实现。
+
 ## R3 多会话当前专项
 
 总体协调窗口已于 **2026-09-06 正式验收 R3 通过**。下述首次失败、修复、隔离边界和最终测试数量继续作为原始证据保留；`PLANNING_CONFLICT = NONE`，`EVIDENCE_CONFLICT = RESOLVED`，R4 未开始。

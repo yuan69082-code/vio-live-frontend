@@ -2,7 +2,7 @@
 
 ## 状态与边界
 
-R0 已验收并推送；通用状态 GET、健康摘要和设置页读取均已存在，历史 V5/F1 聊天没有被改写为通用端口实现。R2 与 R1 均已于 **2026-09-05 正式验收通过**。R3 已冻结并实现真实个人会话下的每助手多会话合同，沿用 Vio 自有 Provider 执行边界，不连接外部主体运行时；前后端实现、受控页面闭环和阶段证据已于 **2026-09-06 正式验收通过**。精确合同见 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md)、[`R1_STANDALONE_CHAT_CONTRACT.md`](R1_STANDALONE_CHAT_CONTRACT.md) 与 [`R3_MULTI_CONVERSATION_CONTRACT.md`](R3_MULTI_CONVERSATION_CONTRACT.md)。
+R0 已验收并推送；通用状态 GET、健康摘要和设置页读取均已存在，历史 V5/F1 聊天没有被改写为通用端口实现。R2 与 R1 均已于 **2026-09-05 正式验收通过**。R3 已冻结并实现真实个人会话下的每助手多会话合同，沿用 Vio 自有 Provider 执行边界，不连接外部主体运行时；前后端实现、受控页面闭环和阶段证据已于 **2026-09-06 正式验收通过**。R4 已冻结并实现 Vio 自有上下文装配合同，接入同一 R1/R3 turn 与 Provider execution，并于 **2026-09-08 正式验收通过**。精确合同见 [`R2_PERSONAL_CONTRACT.md`](R2_PERSONAL_CONTRACT.md)、[`R1_STANDALONE_CHAT_CONTRACT.md`](R1_STANDALONE_CHAT_CONTRACT.md)、[`R3_MULTI_CONVERSATION_CONTRACT.md`](R3_MULTI_CONVERSATION_CONTRACT.md) 与 [`R4_CONTEXT_ASSEMBLY_CONTRACT.md`](R4_CONTEXT_ASSEMBLY_CONTRACT.md)。
 
 S4-Live 可销毁沙箱由后端 CLI 管理，不新增公共 HTTP API。固定 v1.1 身份仅用于 `disposable_test` 验收且禁止晋升；Windows 创建和 doctor 以同一 240 字符门禁验证 Engine WakeSession 最终/原子临时文件的最坏路径，超限返回 `unsafe / engine_persistence_path_budget_exceeded`；推荐新建 `C:\VioS4\first-001` 这类仓库外短路径。cleanup 只允许整根删除：正常沙箱及唯一问题为历史路径超预算的旧沙箱均需通过其余全部严格校验，plan 返回 `cleanupEligible`、`legacyUnsafeReason` 和唯一 `deleteTargets=[canonicalSandboxRoot]`，apply 继续要求服务停止与整箱销毁双确认。
 
@@ -61,6 +61,20 @@ R1 只选择当前所有者已启用的 `defaultForChat` 模型，不静默 fall
 所有入口继续位于 `/api/v1/personal/chat`，身份只来自 R2 服务端会话与当前助手。`GET/POST /conversations` 提供过滤、搜索、稳定排序、opaque cursor 与幂等创建；`GET /conversations/current`、`GET/PATCH /conversations/:id`、`POST .../selection|archive|restore|deletion` 提供只读当前选择和显式生命周期操作。消息版本、重新生成、分支、清空窗口、附件、JSON/Markdown 导出及操作查询的精确路径、DTO 和错误码只在 [`R3_MULTI_CONVERSATION_CONTRACT.md`](R3_MULTI_CONVERSATION_CONTRACT.md) 维护，避免在本索引复制第二套合同。
 
 迁移 `026` 将每个 R1 默认会话精确登记为该助手的第一个 R3 会话，并保留原 Conversation/Message/MessageVersion、R1 turn/execution/attempt/usage/cost/result 与 Event。一个会话同一时间只允许一个活动 turn；普通查询、切换、版本读取和导出均不调用 Provider。明确重新生成必须使用新操作键并重新经过当前模型/凭据/Permission/Security/Token Budget；请求可能已发送的 UNKNOWN 保持 fail closed。附件正文只从受管根按精确登记读取，不在 API 暴露路径；账户删除继续通过 owner-scoped 受管副本登记清理。
+
+## R4｜独立聊天上下文装配（2026-09-08 正式验收通过）
+
+R4 不新增第二条模型执行路径。创建 R1/R3 turn 时，后端按固定顺序装配系统规则、当前助手明确设定、可选已验证运行时投影、未解决 Event、近期原始 MessageVersion、明确未实现的 R5 memory 槽和当前用户消息；预算、裁剪、折叠、来源引用与最终 Provider messages 被锁定为该 turn 唯一不可变快照，快照 hash 写入原 standalone execution。精确 DTO、状态、幂等和错误码只在 [`R4_CONTEXT_ASSEMBLY_CONTRACT.md`](R4_CONTEXT_ASSEMBLY_CONTRACT.md) 维护。
+
+| 方法 | 路径 | 语义 |
+| --- | --- | --- |
+| `GET/PATCH` | `/api/v1/personal/chat/conversations/:conversationId/context-settings` | 读取或以版本 CAS、Idempotency-Key 保存对话级模式/排除项；不影响已锁定 turn |
+| `GET` | `/api/v1/personal/chat/conversations/:conversationId/context-plan` | 只读预览当前可用来源、预算和 plan hash；不落盘、不调用 Provider/runtime |
+| `GET` | `/api/v1/personal/chat/turns/:turnId/context` | 读取该 turn 已锁定的精确快照；缺失时不在查询中创建 |
+| `GET` | `/api/v1/personal/chat/context-sources/:sourceRef` | 只读返回该所有者/助手已引用的精确 MessageVersion、Event 或结构化 summary 证据 |
+| `POST` | `/api/v1/personal/chat/turns/:turnId/context-recovery` | 在 Provider 尚未开始且 fold_failed 时，用新幂等键显式重试同一来源集合的折叠 |
+
+模式为 `concise`、`balanced`、`complete` 或 `custom`；仅 custom 可排除非强制来源。估算使用保守、确定性的 `utf8-byte-upper-bound/v1`，先保留输出预算再裁剪输入；强制来源仍超限时持久化 `budget_blocked` 并在调用 Provider 前返回 `CONTEXT_BUDGET_EXCEEDED`。折叠失败时，原文仍能安全装入则记录 `failed_fallback_original`；否则保持 `fold_failed`，不调用 Provider。R5 memory 继续显式为 `not_implemented`，受控测试注入的 runtime projection 不代表真实 Engine 或其他运行时已连接。
 
 ## R0-A｜Subject Runtime Port v1（内部合同）
 
