@@ -26,6 +26,7 @@ function migrationsThrough025(root){
   rmSync(join(path,MIGRATION));
   rmSync(join(path,'027_create_context_assembly_ledger.sql'));
   rmSync(join(path,'028_create_local_long_term_memory.sql'));
+  rmSync(join(path,'029_create_unified_capability_execution.sql'));
   return path;
 }
 
@@ -106,12 +107,19 @@ test('a failing 026 rolls back completely and leaves the 001-025 schema and fact
   try{
     const old=createSqliteDatabase({databasePath:file,migrationsPath:migrationsThrough025(root)});seedR1Default(old.connection);old.close();
     const broken=join(root,'migrations-broken');cpSync(resolve('migrations'),broken,{recursive:true});
-    const migration=join(broken,MIGRATION);writeFileSync(migration,`${readFileSync(migration,'utf8')}\nINVALID R3 SQL;\n`,'utf8');
+    rmSync(join(broken,'027_create_context_assembly_ledger.sql'));
+    rmSync(join(broken,'028_create_local_long_term_memory.sql'));
+    rmSync(join(broken,'029_create_unified_capability_execution.sql'));
+    const migration=join(broken,MIGRATION);writeFileSync(migration,readFileSync(migration,'utf8').replace(
+      'CREATE TABLE personal_chat_conversations',
+      'CREATE TABLE r3_partial_failure_probe(value TEXT);\nTHIS IS NOT SQL;\nCREATE TABLE personal_chat_conversations',
+    ),'utf8');
     assert.throws(()=>createSqliteDatabase({databasePath:file,migrationsPath:broken}),/026_create_personal_multi_conversation/);
     const inspected=new DatabaseSync(file);
     try{
       assert.equal(inspected.prepare('SELECT count(*) AS n FROM schema_migrations').get().n,25);
       assert.equal(inspected.prepare('SELECT count(*) AS n FROM schema_migrations WHERE version=?').get(MIGRATION).n,0);
+      assert.equal(inspected.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='r3_partial_failure_probe'").get().n,0);
       for(const table of R3_TABLES)assert.equal(inspected.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name=?").get(table).n,0,table);
       assert.equal(inspected.prepare('SELECT conversation_id FROM standalone_chat_default_conversations').get().conversation_id,'r1-preserved-conversation');
       assert.equal(inspected.prepare("SELECT count(*) AS n FROM pragma_table_info('standalone_chat_default_conversations') WHERE name='is_r1_default'").get().n,0);

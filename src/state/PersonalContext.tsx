@@ -9,6 +9,7 @@ import type { DeletionAccess } from '../api/personal-deletion'
 import { clearPersonalChatRecoveryForOwner } from '../api/personal-chat-recovery'
 import { clearMultiChatRecoveryForOwner } from '../api/personal-multi-chat-recovery'
 import { clearMemoryRecovery, clearMemoryRecoveryForOwner } from '../api/personal-memory-recovery'
+import { clearCapabilityRecoveryForOwner } from '../api/personal-capability-recovery'
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'access'; access: PersonalAccess; message?: string } | { kind: 'ready'; session: PersonalSession } | { kind: 'deletion'; access: DeletionAccess } | { kind: 'deletion-receipt-expired' }
 type PersonalContextValue = {
@@ -75,6 +76,7 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
       try { clearPersonalChatRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
       try { clearMultiChatRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
       try { clearMemoryRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
+      try { clearCapabilityRecoveryForOwner(window.sessionStorage, ownerId) } catch { /* storage unavailable */ }
     }
     invalidate()
     setState({ kind: 'access', access: { status: 'authentication_required', registration: 'disabled' }, message: '访问已结束或失效，请重新验证。' })
@@ -89,11 +91,13 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
     const identityChanged = current.current?.session.sessionId !== value.session.sessionId || previousOwnerId !== value.user.userId
     if (previousOwnerId && identityChanged) {
       try { clearMemoryRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
+      try { clearCapabilityRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
     }
     if (previousOwnerId && previousOwnerId !== value.user.userId) {
       try { clearPersonalChatRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
       try { clearMultiChatRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
       try { clearMemoryRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
+      try { clearCapabilityRecoveryForOwner(window.sessionStorage, previousOwnerId) } catch { /* storage unavailable */ }
     }
     if (previousOwnerId && current.current?.currentAssistantId && current.current.currentAssistantId !== value.currentAssistantId) {
       try { clearMemoryRecovery(window.sessionStorage, previousOwnerId, current.current.currentAssistantId) } catch { /* storage unavailable */ }
@@ -208,6 +212,7 @@ export function PersonalProvider({ children, api: suppliedApi }: { children: Rea
         try { clearPersonalChatRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
         try { clearMultiChatRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
         try { clearMemoryRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
+        try { clearCapabilityRecoveryForOwner(window.sessionStorage, current.current.user.userId) } catch { /* storage unavailable */ }
       }
       if (current.current || currentDeletion.current) void restore()
     })

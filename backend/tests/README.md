@@ -1,5 +1,38 @@
 # 后端测试策略
 
+## R6 统一能力执行当前专项
+
+R6 四个专项 `unified-capability-r6-flow.test.js`、
+`mcp-execution-r6.test.js`、`unified-capability-r6-recovery.test.js` 与
+`unified-capability-r6-migration.test.js` 当前合计 **17/17**，0 失败、
+0 跳过。覆盖迁移 `029` fresh / `001-028` upgrade / 故障回滚、当前
+owner/assistant 隔离、内置确定性 Tool、不可变 Skill/Plugin、Plugin
+启停卸载、R1 model execution 精确投影，以及 MCP `2026-07-28` 的真实
+loopback JSON/SSE、逐请求 meta/header、严格 Schema、发现快照、明确
+429/5xx 重试与断线/超时未知结果。新增真实 HTTP 隔离回归证明同一 owner
+的两个 assistant 可独立安装同名 Tool/MCP/Skill/Plugin、使用相同操作键，
+且目录、发现、依赖、生命周期、执行/历史、by-key、删除和同库重启互不
+串写；另一个 owner 也不能读取或操作这些事实。
+
+首次 R6 专项为 **8/13**：本地执行测试尚未完成既有确认，MCP dependency
+permission 也未形成可执行授权。修正测试的真实确认流并在 MCP 安装时
+分别形成 `connect` / `execute` Permission 后为 14/14；补齐 Plugin
+生命周期、明确 retryable 与 UNKNOWN 传输映射后为 15/15。受控页面
+随后发现能力定义仍按 owner 共享，导致切换同一 owner 的 assistant 后
+可见并操作前一助手的安装事实；数据库、仓储、服务与 HTTP 回归收紧到
+owner/current-assistant 复合范围后为 **17/17**。所有外部
+边界均为测试显式允许的随机 loopback，真实 MCP、Engine、凭据、业务
+公网与费用均为 0。
+
+受影响 migration 组合首次 **25/30**：五项失败来自历史 024/025/026/028
+夹具未排除新迁移或未计入 `029` 的九张 owner-deletion 保护表；修正
+“截至目标迁移”的夹具边界后为 **30/30**。助手作用域修复后，八个
+V4/V5/R1/R2/R3/R4/R5/R6 迁移文件组合为 **50/50**。正式 Node 22.23.1 / Corepack
+pnpm 11.9.0 默认全量最终为 **477 项：476 通过、0 失败、1 条既有 RFC
+隔离跳过**；跳过项未执行、不计通过。此前一次人工误列不存在测试文件
+导致 0 项执行，以及 Node 24.19.0 的 469/475 非接受性中间运行，均不
+作为最终证据。
+
 ## R5 本地长期记忆当前专项
 
 R5 后端三个专项当前合计 **13/13**，0 失败、0 跳过：

@@ -22,6 +22,8 @@ function apiFixture(authenticated = true) {
     if (path.startsWith('/chat/conversations?')) return { assistant: { assistantId: 'test-alpha', name: '测试助手一' }, conversations: [], selectionVersion: 0, nextCursor: null, externalCall: 'not_performed' }
     if (path === '/chat/conversations/current') return { assistant: { assistantId: 'test-alpha', name: '测试助手一' }, conversation: null, selectionVersion: 0, messages: [], activeTurn: null, externalCall: 'not_performed' }
     if (path === '/chat/default') return { assistant: { assistantId: 'test-alpha', name: '测试助手一' }, conversation: null, messages: [], activeTurn: null, externalCall: 'not_performed' }
+    if (path === '/capabilities') return { schemaVersion: 'vio-capability-catalog/v1', items: [] }
+    if (path.startsWith('/capability-executions?')) return { schemaVersion: 'vio-capability-execution-list/v1', items: [], nextCursor: null }
     return { items: [] }
   })
   return api
@@ -137,14 +139,17 @@ describe('R2 personal application entry', () => {
     expect(create.mock.calls[0][1].idempotencyKey).toMatch(/^vio-personal-/)
   })
 
-  it('labels the capability page as a mixed real/prototype surface without calling the real model API a mock', async () => {
+  it('labels the capability page as the real R6 server-backed surface while keeping devices in R9', async () => {
     const api = apiFixture()
     render(<App personalApi={api} />)
     await screen.findByRole('navigation')
     fireEvent.click(screen.getByRole('button', { name: /^能力$/ }))
-    expect(screen.getByText('CAPABILITY CENTER · 服务端配置')).toBeInTheDocument()
-    expect(screen.getByText('模型 / API 已接线；其他能力分组仍为原型')).toBeInTheDocument()
-    expect(screen.getByText('混合状态')).toBeInTheDocument()
+    expect(screen.getByText('CAPABILITY CENTER · R6 UNIFIED EXECUTION')).toBeInTheDocument()
+    expect(screen.getByText('真实配置、显式执行、恢复与统一历史')).toBeInTheDocument()
+    expect(screen.getByText('服务端事实')).toBeInTheDocument()
+    expect(screen.getByText('0 个已验证连接 · R9 未施工')).toBeInTheDocument()
+    expect(screen.getByText(/当前页面不展示模拟连接、模拟授权或可执行控制/)).toBeInTheDocument()
+    expect(screen.queryByText('2 台已连接设备')).not.toBeInTheDocument()
     expect(screen.queryByText('CAPABILITY CENTER · 本地模拟')).not.toBeInTheDocument()
   })
 

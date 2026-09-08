@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { createApiClient } from '../../api/client'
+import { CAPABILITY_CATALOG_VERSION, CAPABILITY_EXECUTION_LIST_VERSION } from '../../api/personal-capability-api'
 import { createPersonalApi } from '../../api/personal-api'
 import type { PersonalSession } from '../../api/personal-api'
 import { PersonalProvider, usePersonal } from '../../state/PersonalContext'
@@ -43,6 +44,8 @@ function serverFixture() {
     if (path === '/api/v1/personal/access' && method === 'GET') return envelope({ status: 'authentication_required', registration: 'disabled' })
     if (path === '/api/v1/personal/assistants' && method === 'GET') return envelope(listFixture())
     if (['/api/v1/personal/providers', '/api/v1/personal/models'].includes(path) && method === 'GET') return envelope({ items: [] })
+    if (path === '/api/v1/personal/capabilities' && method === 'GET') return envelope({ schemaVersion: CAPABILITY_CATALOG_VERSION, items: [] })
+    if (path === '/api/v1/personal/capability-executions' && method === 'GET') return envelope({ schemaVersion: CAPABILITY_EXECUTION_LIST_VERSION, items: [], nextCursor: null })
     if (path === '/api/v1/personal/vault' && method === 'GET') return envelope({ status: 'ready' })
     if (path === '/api/v1/personal/vault/unlock' && method === 'POST') return unlock(options)
     unexpected.push(`${method} ${path}`)

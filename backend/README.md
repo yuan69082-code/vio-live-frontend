@@ -4,7 +4,7 @@
 
 长期架构和第一轮最小连接机器契约已经闭合并获 Continuity Engine 正式接受，S2/S3 正式本机 HTTP/JSON、S4 Capability 双仓共享验收和 S4-Live 首次真实供应商试聊均已通过。后端运行版本现为 `0.19.0`：Vio V5 已在固定本地试聊 Profile 下完成公共 Conversation Turn API，以独立迁移 `022` 把用户 Message、V1 请求、V3/V4/V2 处理和 Engine 最终主体回复关联为可恢复轮次。只有 Engine E5-A `FirstRoundSuccessResult.response.content` 可以形成最终主体 Message；F1 已把现有对话页接到该公共 API。L1 的 Binding 导出、live-chat plan/apply 和只读 doctor 已用于一次可销毁、短路径、固定测试身份的真实 `openai_compatible` 验收，结论为 PASS；该结论不等于通用身份或生产部署已完成。
 
-R0—R4 已完成对应正式验收。R5 当前已冻结 [`vio-local-memory/v1`](docs/R5_LOCAL_MEMORY_CONTRACT.md)，新增迁移 `028` 和个人记忆服务/API，支持不可变版本、确定性本地检索、精确来源与引用、用户控制的 Context 参与、导入导出、归档/恢复、双阶段受控删除和幂等/重启恢复；前后端实现与本地隔离回归正在收尾，尚未经总体协调窗口正式验收。R5 与旧生活模块 `local_memories`、AI 私域、SubjectState/Engine Memory 均保持独立。
+R0—R6 已完成对应正式验收。R5 已完成 [`vio-local-memory/v1`](docs/R5_LOCAL_MEMORY_CONTRACT.md)、迁移 `028` 和个人记忆闭环。R6 已于 2026-09-08 正式验收[统一能力执行合同](docs/R6_UNIFIED_CAPABILITY_EXECUTION_CONTRACT.md)、迁移 `029`、owner/current-assistant 隔离的个人能力目录/执行/恢复 API、确定性本地 Tool、不可变 Skill/Plugin、MCP `2026-07-28` Streamable HTTP 与 R1 模型执行事实投影。R6 不连接真实 Engine，也不把随机 loopback MCP 测试写成真实第三方验收。
 
 2026-09-04 决定：R0 后先 R2、再 R1，然后 R3 至 R13，编号不变。R2、R1 与 R3 均已正式验收。R3 的精确接口、状态、幂等与恢复语义见 [多会话合同](docs/R3_MULTI_CONVERSATION_CONTRACT.md)；R4 的上下文来源、快照、折叠与预算语义见 [上下文装配合同](docs/R4_CONTEXT_ASSEMBLY_CONTRACT.md)。R1 旧默认会话事实仅作为 R3 第一个会话迁移来源保留。顺序见 [ADR-034](../docs/决策记录.md#adr-034)。
 
@@ -19,6 +19,7 @@ API 请求 → 版本化路由 → 领域服务 → 开发数据库 → 统一�
 主体身份 → 长期全局设定 → 跨窗口读取/更新 → Context 只读投影
 Provider 配置 → Model 能力目录 → 默认/备用规则 → 本地选择结果
 Tool/MCP/Skill/Plugin 元数据 → 主体能力视图 → Permission 预览
+R6 统一能力 → R2 会话/当前助手 → Permission/Security/Confirmation → 本地 Tool 或 MCP → 不可变 execution/result/usage
 Tool 执行准备 → Permission 检查 → Security 检查/确认 → 未执行使用记录
 Device Registry → Capability 描述 → 未配置 Adapter 投影
 设备操作准备 → Permission → Security/Confirmation → device_changed Event → 未执行操作日志
@@ -120,6 +121,7 @@ Vio 的通用运行时边界入口是 [`Subject Runtime Port v1`](docs/SUBJECT_R
 - MCP Registry 保存服务地址与能力说明，但连接状态固定为 `not_connected`，不创建 MCP 客户端
 - Skill Registry 保存说明、适用场景与版本；Plugin Registry 保存版本和依赖，但不安装、更新或加载插件代码
 - Capability Service 按主体统一查询 Tool、MCP、Skill 与 Plugin，返回分类、权限预览、可选状态和 Tool 最近使用记录
+- R6 个人能力目录把上述旧 Registry/准备事实与新的正式执行事实严格区分；新接口支持内置本地 Tool、MCP 发现/调用、不可变 Skill/Plugin 和统一恢复。生产 MCP 仅允许显式信任的公共 HTTPS 并执行 DNS 固定、重定向拒绝和正文上限；测试 loopback 必须显式注入。
 - Tool 执行准备串联 Permission 与 Security；只记录 `ready`、`confirmation_required` 或 `denied`，执行状态固定为 `not_executed`
 - Tool 使用记录保存主体、权限/安全决策、结果摘要和零外部调用消耗信息，不接收工具输入或输出正文
 - Device Registry 保存手机、手表、空调、扫地机器人、洗衣机、摄像头和通用家电七类设备的用户归属、品牌、名称、启停状态与能力列表

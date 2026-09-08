@@ -17,6 +17,8 @@
 
 `standalone-chat/` 承载 R1/R3 个人独立聊天编排。R1 服务保留原默认会话与执行/恢复事实；R3 在同一 R2 owner/当前助手范围增加多会话目录、选择、分支、消息版本、重新生成、附件、导出和操作查询，并复用 R1 正式模型路由/凭据/Permission/Security/Token Budget/Provider 执行边界。Provider 上下文只读取当前选定会话与分支的有界、已锁定版本；查询、切换、导出与启动不调用模型，明确重新生成才创建新 execution/result，`outcome_unknown` 保持 fail closed。精确合同见 [R1](../../docs/R1_STANDALONE_CHAT_CONTRACT.md) 与 [R3](../../docs/R3_MULTI_CONVERSATION_CONTRACT.md)。本模块不连接或探测 Engine，也不改变历史 V1–V5/S4 合同。
 
+`capability-execution/` 承载 R6 统一能力目录、严格输入/输出验证、权限与安全确认门控、执行编排和恢复。个人能力分类固定为 `model_api`、`mcp_tool`、`local_tool`、`skill` 与 `plugin_action`；R1 模型事实只投影到统一账本，不产生第二次 Provider 调用。R2 Provider/Model 仍是 owner 级账户配置，而 R6 安装定义、发现快照、生命周期、依赖解析与执行历史全部按 `owner + current assistant` 隔离；切换助手不会共享或重归属任何 R6 安装/执行事实。确定性本地 Tool 不含 shell、任意文件、网络或代码执行；Skill 只解释不可变步骤并调用已登记能力；Plugin 只执行不可变 manifest 中声明的已登记能力，不加载插件代码。精确合同见 [R6 统一能力执行合同](../../docs/R6_UNIFIED_CAPABILITY_EXECUTION_CONTRACT.md)。
+
 `continuity-integration/` 承载 Continuity Engine Adapter 专用的 V1–V5 连接编排，而不是 Vio Core 合同。V1 提供严格请求；V2 提供结果/投影账本；V3 提供本机 HTTP delivery；V4 提供受控 Capability 模型执行与回传；V5 在固定本地 Profile 下把公共 Conversation Turn API 与用户 Message、V1 请求、V3/V4/V2 结果和最终主体 Message 关联。只有 Engine 最终 `FirstRoundSuccessResult.response.content` 能形成 V5 主体 Message，Provider 原始候选不能直接落入对话。模块不创建 Engine Event/StateMutation、不写 legacy SubjectState；S2/S3、S4 和 V5 shared test 分别验证正式本机链路、Capability 与公共轮次恢复边界。R0-A 没有移动、删除或切换这些既有实现。
 
 User Space 是账号的一对一数据根，只保存开发期身份状态、空间状态和当前助手指针。当前助手是用户导航选择，不是 Subject 状态；切换不会修改 Global Settings、Private Space、SubjectState、对话、事件或生活数据。数据隔离模块只接收预定义资源类型和不透明 ID，先通过仓储复合过滤验证归属，再对私域、设备和生活资源调用既有 Permission/Security 链。它不读取资源正文、不接受任意 SQL/表名，也不执行资源操作。
@@ -29,7 +31,7 @@ AI 私域模块只保存调用方显式提交的五类 JSON 记录，Space 与�
 
 模型配置模块保持以下边界：APIProvider 保存服务来源、Base URL、接口格式与启停元数据；Model 保存名称、类型、能力、费用说明与测试状态；Model Routing Rule 按用户和任务保存默认/备用模型。R2 个人配置可安全写入、轮换和撤销加密凭据，并以受限 `/models` 请求做网络/认证检查；该检查不调用生成、不证明模型生成能力、不产生受控测试之外的供应商调用。V4 的正式生成执行仍是独立既有链路。
 
-扩展能力模块保持以下边界：Registry 只保存用户范围元数据；Capability 按主体预览 Permission，不消费 `allow_once`；Tool Usage 只执行 Security/Confirmation 前置判断并记录 `not_executed`。MCP 未连接，Plugin 未安装，Skill/Tool 没有执行器，任何模块都不接收真实执行输入或调用第三方服务。
+历史扩展 Registry/准备模块保持以下边界：Registry 只保存用户范围元数据；Capability 按主体预览 Permission，不消费 `allow_once`；Tool Usage 只执行 Security/Confirmation 前置判断并记录 `not_executed`。这些旧 API 仍不代表 MCP 已连接、Plugin 已安装或 Skill/Tool 已执行。R6 另以个人会话、当前助手、迁移 `029` 和统一能力账本提供真实但受限的执行入口；两类事实不混写，随机 loopback MCP 测试不冒充真实第三方服务验收。
 
 设备模块保持以下边界：Device Registry 只保存用户范围的设备类型、品牌、名称、启停和能力声明；主体授权复用 `resource_type=device` 的 Permission。操作准备固定经过 Permission、Security 和 Confirmation，并记录 `device_changed`、AuditLog 和 `not_executed` 操作日志。注册或启用不表示设备已连接，设备状态固定未观测；统一 Adapter 端口和小米、美的、Apple、Android 描述均为 `not_implemented`，不接收控制参数、不加载 SDK、不调用厂商 API。
 

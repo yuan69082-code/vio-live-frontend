@@ -220,6 +220,7 @@ export function createStandaloneChatService({
   faultInjector = null,
   multiConversationPort = null,
   contextAssemblyService = null,
+  unifiedExecutionPort = null,
 }) {
   function assertStandaloneMode() {
     const runtime = subjectRuntimeStatusService.getStatus();
@@ -976,6 +977,7 @@ export function createStandaloneChatService({
     repository.transitionAttempt(attempt.attemptId, 'prepared', 'in_flight', {
       providerCallMayHaveStarted: false,
     });
+    unifiedExecutionPort?.syncStandaloneExecution?.(execution.executionId);
     return {
       execution: repository.findExecution(execution.executionId),
       attempt: repository.findLatestAttemptByExecution(execution.executionId),
@@ -1158,6 +1160,9 @@ export function createStandaloneChatService({
             'in_flight',
             { providerCallMayHaveStarted: true },
           );
+          unifiedExecutionPort?.syncStandaloneExecution?.(
+            prepared.execution.executionId,
+          );
         }),
       });
     } catch {
@@ -1203,6 +1208,9 @@ export function createStandaloneChatService({
       prepared.execution,
       prepared.attempt,
       result,
+    );
+    unifiedExecutionPort?.syncStandaloneExecution?.(
+      prepared.execution.executionId,
     );
     if (persisted.status === 'result_ready') {
       await faultInjector?.afterResultPersisted?.({
@@ -1622,6 +1630,9 @@ export function createStandaloneChatService({
             );
           }
         });
+      }
+      for (const execution of repository.listExecutionsForProjection?.() ?? []) {
+        unifiedExecutionPort?.syncStandaloneExecution?.(execution.executionId);
       }
     },
 

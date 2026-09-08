@@ -24,6 +24,7 @@ function through027(root) {
   const target = join(root, 'migrations-027');
   cpSync(resolve('migrations'), target, { recursive: true });
   rmSync(join(target, MIGRATION));
+  rmSync(join(target, '029_create_unified_capability_execution.sql'));
   return target;
 }
 
@@ -161,8 +162,12 @@ test('a failing 028 rolls back its complete schema and preserves the exact 001-0
     old.close();
     const broken = join(root, 'migrations-broken');
     cpSync(resolve('migrations'), broken, { recursive: true });
+    rmSync(join(broken, '029_create_unified_capability_execution.sql'));
     const migration = join(broken, MIGRATION);
-    writeFileSync(migration, `${readFileSync(migration, 'utf8')}\nINVALID R5 SQL;\n`, 'utf8');
+    writeFileSync(migration, readFileSync(migration, 'utf8').replace(
+      'CREATE TABLE personal_local_memories',
+      'CREATE TABLE r5_partial_failure_probe(value TEXT);\nTHIS IS NOT SQL;\nCREATE TABLE personal_local_memories',
+    ), 'utf8');
     assert.throws(() => createSqliteDatabase({ databasePath: file, migrationsPath: broken }),
       /028_create_local_long_term_memory/u);
     const inspected = new DatabaseSync(file);
@@ -171,6 +176,9 @@ test('a failing 028 rolls back its complete schema and preserves the exact 001-0
       assert.equal(inspected.prepare(
         'SELECT count(*) AS n FROM schema_migrations WHERE version=?',
       ).get(MIGRATION).n, 0);
+      assert.equal(inspected.prepare(
+        "SELECT count(*) AS n FROM sqlite_master WHERE name='r5_partial_failure_probe'",
+      ).get().n, 0);
       for (const table of TABLES) {
         assert.equal(inspected.prepare(
           "SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name=?",

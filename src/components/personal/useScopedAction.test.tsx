@@ -28,6 +28,13 @@ describe('scoped async view state', () => {
     expect(personalError(new ApiClientError('raw ledger detail', { code: 'MEMORY_LEDGER_INCONSISTENT', status: 500 }))).not.toMatch(/raw|ledger detail/)
   })
 
+  it('maps R6 capability and MCP errors without exposing raw endpoint or response details', () => {
+    expect(personalError(new ApiClientError('raw unsafe endpoint 127.0.0.1', { code: 'MCP_TARGET_UNSAFE', status: 400 }))).toContain('安全检查')
+    expect(personalError(new ApiClientError('raw external response', { code: 'MCP_RESPONSE_INVALID', status: 502 }))).not.toMatch(/raw|external response/)
+    expect(personalError(new ApiClientError('raw unknown attempt', { code: 'CAPABILITY_OUTCOME_UNKNOWN', status: 409 }))).toContain('只能查询')
+    expect(personalError(new ApiClientError('raw permission', { code: 'CAPABILITY_PERMISSION_DENIED', status: 403 }))).toContain('未调用能力')
+  })
+
   it('holds a synchronous mutex, even before controls can rerender', async () => {
     const job = pending(); const work = vi.fn(() => job.promise); const accept = vi.fn()
     render(<Harness scope="a" work={work} accept={accept} />)

@@ -17,4 +17,6 @@ R2 新增个人 SQLite 仓储、跨平台进程内凭据库和 Provider 认证�
 
 R3 新增 SQLite 多会话仓储与仓库外受管附件存储适配器。对象键由服务端生成，读取和删除必须同时匹配 owner、assistant、conversation、attachment 及 `personal_managed_copies` 登记；公共响应不暴露绝对路径。R3 模型执行继续复用 R1 的 OpenAI-compatible 适配器，loopback 仅限测试注入，不增加新的供应商接口或外部运行时依赖。
 
+R6 新增统一能力 SQLite 仓储与 MCP `2026-07-28` Streamable HTTP 客户端。仓储把能力定义/版本、发现、生命周期和完整执行链绑定到 R2 已验证的 `owner + current assistant`，同一 owner 的助手之间也不能互读或互改；owner 级 Provider/Model 配置不因此被复制。生产 MCP 只接受经 DNS 全量校验并固定连接地址的公开 HTTPS 目标，不跟随重定向，不把凭据带往其他 origin，并限制连接/响应时间和正文大小；随机 loopback HTTP 只可由测试显式注入。客户端按请求发送规范规定的 `_meta.io.modelcontextprotocol/*` 元数据，接受单个 JSON 或该请求范围内的 SSE 响应，不创建隐式会话。MCP 之外的本地 Tool/Skill/Plugin 均在业务模块内使用不可变清单和确定性执行器，不通过本目录获得 shell、文件、网络或插件代码执行能力。
+
 现行顺序与权限见 [ADR-034](../../../docs/决策记录.md#adr-034)。R1 整理 Vio 自身适配边界并完成聊天解耦，不要求真实 Engine 陪测。首次彻底解耦后，未经用户另行要求重连，不探测、读取、启动或修改真实引擎；通用端口须完整验证，具体外部运行时接入另行处理，不作为 Vio 完成或发布条件。当前文档收尾不运行任何集成，不改变既有 transport 或数据库语义。

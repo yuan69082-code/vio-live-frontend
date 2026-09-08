@@ -1,6 +1,6 @@
-import { ReactNode } from 'react'
-import { CapabilityIconName } from '../../data/capabilityMock'
+import type { ReactNode } from 'react'
 import CapabilityIcon from './CapabilityIcon'
+import type { CapabilityIconName } from './CapabilityIcon'
 
 type CapabilitySectionProps = {
   id: string

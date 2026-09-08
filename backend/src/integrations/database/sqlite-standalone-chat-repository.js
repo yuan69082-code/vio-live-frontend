@@ -600,6 +600,11 @@ export function createSqliteStandaloneChatRepository(connection) {
     findExecutionByTurn(turnId) {
       return mapExecution(findExecutionByTurn.get(turnId));
     },
+    listExecutionsForProjection() {
+      return connection.prepare(`${executionSelect} ORDER BY started_at, execution_id`)
+        .all()
+        .map(mapExecution);
+    },
     listAmbiguousExecutions() {
       return listAmbiguousExecutions.all().map(mapExecution);
     },

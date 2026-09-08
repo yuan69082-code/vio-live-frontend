@@ -1,4 +1,21 @@
-import { CapabilityIconName } from '../../data/capabilityMock'
+export type CapabilityIconName =
+  | 'model'
+  | 'mcp'
+  | 'skill'
+  | 'plugin'
+  | 'tool'
+  | 'device'
+  | 'plus'
+  | 'test'
+  | 'shield'
+  | 'clock'
+  | 'update'
+  | 'trash'
+  | 'settings'
+  | 'spark'
+  | 'link'
+  | 'phone'
+  | 'laptop'
 
 function CapabilityIcon({ name }: { name: CapabilityIconName }) {
   const sharedProps = {

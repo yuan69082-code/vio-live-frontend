@@ -1,0 +1,79 @@
+.manager { display: grid; gap: 12px; }
+.summary, .warning, .confirmation, .execution, .result, .historyFilters {
+  border: 1px solid rgba(111, 79, 173, .15); border-radius: 16px; background: rgba(255, 255, 255, .72); box-shadow: 0 10px 28px rgba(67, 45, 111, .07); backdrop-filter: blur(18px);
+}
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: center; gap: 8px; padding: 12px; }
+.summary > div { display: grid; gap: 2px; min-width: 0; }
+.summary strong { overflow: hidden; color: #4d3d72; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.summary span { color: #8e8398; font-size: 8px; }
+.manager button, .manager select, .manager input, .manager textarea { font: inherit; }
+.manager button {
+  min-height: 34px; border: 1px solid rgba(103, 76, 164, .18); border-radius: 10px; padding: 7px 10px; color: #634a9d; background: rgba(246, 242, 254, .94); font-size: 9px; font-weight: 730; cursor: pointer;
+}
+.manager button:disabled { opacity: .5; cursor: not-allowed; }
+.error, .notice { margin: 0; border-radius: 12px; padding: 9px 11px; font-size: 9px; line-height: 1.5; }
+.error { border: 1px solid rgba(169, 70, 104, .22); color: #9d4164; background: rgba(254, 239, 245, .92); overflow-wrap: anywhere; }
+.notice { border: 1px solid rgba(92, 132, 104, .2); color: #477757; background: rgba(239, 250, 242, .92); }
+.warning, .confirmation { display: grid; gap: 7px; padding: 12px; }
+.warning strong, .confirmation strong { color: #654b9f; font-size: 12px; }
+.warning p, .confirmation p, .execution p { margin: 0; color: #786f7e; font-size: 9px; line-height: 1.5; }
+.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 11px; padding: 11px; border: 1px solid rgba(112, 82, 177, .12); border-radius: 14px; background: rgba(252, 250, 255, .68); }
+.form h3, .historyFilters h3 { grid-column: 1 / -1; margin: 0; color: #4d4056; font-size: 11px; }
+.form label, .execution label, .historyFilters label { display: grid; gap: 4px; min-width: 0; color: #6e6475; font-size: 8px; font-weight: 700; }
+.form input, .form select, .execution input, .execution select, .execution textarea, .historyFilters select {
+  min-width: 0; width: 100%; border: 1px solid rgba(103, 76, 164, .18); border-radius: 9px; padding: 8px 9px; outline: none; color: #3f3747; background: rgba(255, 255, 255, .9); font-size: 9px;
+}
+.form textarea, .execution textarea { resize: vertical; line-height: 1.5; }
+.form fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; grid-column: 1 / -1; margin: 0; border: 1px dashed rgba(112, 82, 177, .18); border-radius: 11px; padding: 9px; }
+.form legend { color: #795ead; font-size: 8px; font-weight: 750; }
+.form .check { display: flex; grid-column: 1 / -1; align-items: flex-start; gap: 7px; line-height: 1.5; }
+.form .check input { width: auto; margin-top: 2px; }
+.form > button[type="submit"] { grid-column: 1 / -1; color: white; background: linear-gradient(135deg, #8060c7, #6745ae); }
+.list { display: grid; gap: 7px; }
+.list > p { margin: 0; color: #8f8595; font-size: 9px; }
+.list article { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 10px; border: 1px solid rgba(108, 79, 169, .11); border-radius: 12px; background: rgba(255, 255, 255, .67); }
+.list article > div:first-child { display: grid; min-width: 0; gap: 3px; }
+.list strong, .result strong { color: #4e4257; font-size: 10px; overflow-wrap: anywhere; }
+.list span, .list small { color: #82758d; font-size: 8px; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.confirmation .actions, .warning .actions { margin-top: 2px; }
+.execution { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 11px; padding: 12px; }
+.execution h3, .execution > p, .execution label:last-of-type, .execution .actions, .execution > button { grid-column: 1 / -1; }
+.execution h3 { margin: 0; color: #4d4056; font-size: 12px; }
+.result { display: grid; gap: 9px; margin-top: 10px; padding: 12px; }
+.result header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.result header > div { display: grid; gap: 3px; }
+.result header span { color: #7355ad; font-size: 9px; font-weight: 730; }
+.result dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.result dl div { min-width: 0; border-radius: 9px; padding: 7px; background: rgba(245, 242, 250, .75); }
+.result dt { color: #8c8193; font-size: 7px; }
+.result dd { margin: 2px 0 0; color: #514759; font-size: 8px; overflow-wrap: anywhere; }
+.result pre { max-height: 220px; margin: 0; overflow: auto; border-radius: 10px; padding: 9px; color: #50445a; background: #f5f2f8; font-size: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.historyFilters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: end; gap: 7px; margin-top: 11px; padding: 10px; }
+.history { display: grid; gap: 6px; margin-top: 8px; }
+.history > p { color: #8a7f90; font-size: 9px; }
+.history > button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 8px; text-align: left; }
+.history > button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history > button span { color: #6c569b; }
+.history > button small { grid-column: 1 / -1; color: #948a9a; }
+.empty { display: grid; gap: 6px; border: 1px solid rgba(111, 79, 173, .14); border-radius: 16px; padding: 15px; background: rgba(255, 255, 255, .72); }
+.empty h2, .empty p { margin: 0; }
+.empty h2 { font-size: 14px; }
+.empty p { color: #817687; font-size: 9px; }
+
+@media (max-width: 560px) {
+  .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .summary > button { grid-column: 1 / -1; }
+  .form, .execution, .historyFilters { grid-template-columns: 1fr; }
+  .form h3, .form > button[type="submit"], .execution h3, .execution > p, .execution label:last-of-type, .execution .actions, .execution > button, .historyFilters h3 { grid-column: auto; }
+  .list article { grid-template-columns: 1fr; }
+  .list article > button, .list article > .actions { justify-self: stretch; }
+  .result dl { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 390px) {
+  .manager { gap: 9px; }
+  .summary { grid-template-columns: 1fr 1fr; }
+  .summary > div:first-child, .summary > button { grid-column: 1 / -1; }
+  .form fieldset { grid-template-columns: 1fr; }
+}

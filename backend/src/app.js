@@ -37,6 +37,7 @@ import { createSqliteStandaloneChatRepository } from './integrations/database/sq
 import { createSqliteMultiConversationRepository } from './integrations/database/sqlite-multi-conversation-repository.js';
 import { createSqliteContextAssemblyRepository } from './integrations/database/sqlite-context-assembly-repository.js';
 import { createSqliteLocalMemoryRepository } from './integrations/database/sqlite-local-memory-repository.js';
+import { createSqliteUnifiedCapabilityRepository } from './integrations/database/sqlite-unified-capability-repository.js';
 import { createManagedChatAttachmentStore } from './integrations/storage/managed-chat-attachment-store.js';
 import { createSqliteSubjectRepository } from './integrations/database/sqlite-subject-repository.js';
 import { createSqliteSubjectStateRepository } from './integrations/database/sqlite-subject-state-repository.js';
@@ -51,6 +52,7 @@ import { createSqliteContinuityCapabilityRepository } from './integrations/datab
 import { createSqliteContinuityConversationTurnRepository } from './integrations/database/sqlite-continuity-conversation-turn-repository.js';
 import { createEnvironmentApiCredentialStore } from './integrations/secrets/environment-api-credential-store.js';
 import { createOpenAiCompatibleModelExecutor } from './integrations/model-providers/openai-compatible-model-executor.js';
+import { createMcpStreamableHttpClient } from './integrations/mcp/mcp-streamable-http-client.js';
 import { createApiProviderService } from './modules/api-providers/api-provider-service.js';
 import { createAssistantGlobalSettingsService } from './modules/assistant-global-settings/assistant-global-settings-service.js';
 import { createAssistantPrivateSpaceService } from './modules/assistant-private-spaces/assistant-private-space-service.js';
@@ -97,6 +99,7 @@ import { createSubjectRuntimeStatusService } from './modules/subject-runtime/sub
 import { createStandaloneChatService } from './modules/standalone-chat/standalone-chat-service.js';
 import { createMultiConversationService } from './modules/standalone-chat/multi-conversation-service.js';
 import { createToolUsageService } from './modules/tool-usage/tool-usage-service.js';
+import { createUnifiedCapabilityExecutionService } from './modules/capability-execution/unified-capability-execution-service.js';
 import { createUserService } from './modules/users/user-service.js';
 import { createUserSpaceService } from './modules/user-spaces/user-space-service.js';
 
@@ -120,6 +123,7 @@ export function createApplication({
   modelContextLimitPort = null,
   contextSourceAccessPort = null,
   contextSummaryBuilder = null,
+  mcpClient: providedMcpClient = null,
 }) {
   const subjectRuntimeAdapter = providedSubjectRuntimeAdapter
     ?? createNoneSubjectRuntimeAdapter();
@@ -184,6 +188,7 @@ export function createApplication({
   const multiConversationRepository = createSqliteMultiConversationRepository(database.connection);
   const contextAssemblyRepository = createSqliteContextAssemblyRepository(database.connection);
   const localMemoryRepository = createSqliteLocalMemoryRepository(database);
+  const unifiedCapabilityRepository = createSqliteUnifiedCapabilityRepository(database.connection);
   const legacyCredentialStore = providedCredentialStore ?? createEnvironmentApiCredentialStore(environment);
   const credentialStore = {
     describeApiKey(args) {
@@ -513,6 +518,25 @@ export function createApplication({
   });
   const personalIdentityService = createPersonalIdentityService({repository:personalRepository,userRepository,userSpaceRepository,
     subjectService,userSpaceService,permissionService,runInTransaction:database.runInTransaction,vault:personalVault,clock:personalClock});
+  const personalConfigurationService = createPersonalConfigurationService({repository:personalRepository,identityService:personalIdentityService,
+    apiProviderService,modelService,modelRoutingRuleService,permissionService,securityService,confirmationService,
+    credentialBindingRepository:apiProviderCredentialRepository,connectionChecker:providedConnectionChecker??createProviderConnectionChecker(),vault:personalVault,
+    runInTransaction:database.runInTransaction,clock:personalClock});
+  const mcpClient = providedMcpClient ?? createMcpStreamableHttpClient();
+  const unifiedCapabilityExecutionService = createUnifiedCapabilityExecutionService({
+    repository: unifiedCapabilityRepository,
+    capabilityRegistryService,
+    personalIdentityService,
+    personalConfigurationService,
+    permissionService,
+    permissionChecker,
+    securityService,
+    mcpClient,
+    standaloneChatRepository,
+    modelService,
+    runInTransaction: database.runInTransaction,
+    clock: personalClock,
+  });
   let multiConversationService = null;
   const multiConversationPort = Object.freeze({
     createDefaultConversation(context) {
@@ -581,6 +605,7 @@ export function createApplication({
     faultInjector: standaloneChatFaultInjector,
     multiConversationPort,
     contextAssemblyService,
+    unifiedExecutionPort: unifiedCapabilityExecutionService,
   });
   const attachmentRoot = standaloneChatAttachmentRoot ?? join(
     dirname(config.databasePath === ':memory:' ? resolve('data/vio.db') : config.databasePath),
@@ -608,14 +633,10 @@ export function createApplication({
     clock: personalClock,
     faultInjector: standaloneChatFaultInjector,
   });
-  const personalConfigurationService = createPersonalConfigurationService({repository:personalRepository,identityService:personalIdentityService,
-    apiProviderService,modelService,modelRoutingRuleService,permissionService,securityService,confirmationService,
-    credentialBindingRepository:apiProviderCredentialRepository,connectionChecker:providedConnectionChecker??createProviderConnectionChecker(),vault:personalVault,
-    runInTransaction:database.runInTransaction,clock:personalClock});
   const personalDeletionService=createPersonalDeletionService({database,identityService:personalIdentityService,configurationService:personalConfigurationService,
     repository:personalRepository,vault:personalVault,managedCopies:personalManagedCopies,clock:personalClock,beforeOnlineDelete:personalDeletionBeforeOnlineDelete});
   const personalHttpAccess = createPersonalHttpAccess({identityService:personalIdentityService,configurationService:personalConfigurationService,deletionService:personalDeletionService,vault:personalVault,
-    standaloneChatService,multiConversationService,contextAssemblyService,localMemoryService,
+    standaloneChatService,multiConversationService,contextAssemblyService,localMemoryService,unifiedCapabilityExecutionService,
     secureCookies:config.personalAccess.secureCookies,allowedOrigin:config.personalAccess.allowedOrigin});
   const router = createRouter({
     personalHttpAccess,
@@ -677,6 +698,7 @@ export function createApplication({
     multiConversationService,
     contextAssemblyService,
     localMemoryService,
+    unifiedCapabilityExecutionService,
     personalManagedCopies,
     continuityRequestService,
     continuityResultService,
@@ -706,6 +728,10 @@ export function createApplication({
         logger.error?.('[vio] personal recovery deferred',{code:'PERSONAL_RECOVERY_DATABASE_BUSY'});
       }
       await standaloneChatService.initialize();
+      try{unifiedCapabilityExecutionService.initialize();}catch(error){
+        if(error.errcode!==5&&error.code!=='SQLITE_BUSY')throw error;
+        logger.error?.('[vio] capability recovery deferred',{code:'CAPABILITY_RECOVERY_DATABASE_BUSY'});
+      }
       await continuityCapabilityService?.initialize();
       await continuityDeliveryService.initialize();
       await continuityConversationTurnService.initialize();

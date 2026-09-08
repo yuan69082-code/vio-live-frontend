@@ -7,11 +7,11 @@ function CapabilityHeader() {
         <CapabilityIcon name="spark" />
       </span>
       <div>
-        <span>CAPABILITY CENTER · 服务端配置</span>
+        <span>CAPABILITY CENTER · R6 UNIFIED EXECUTION</span>
         <h1>能力中心</h1>
-        <p>模型 / API 已接线；其他能力分组仍为原型</p>
+        <p>真实配置、显式执行、恢复与统一历史</p>
       </div>
-      <span className="capability-header-badge">混合状态</span>
+      <span className="capability-header-badge">服务端事实</span>
     </header>
   )
 }

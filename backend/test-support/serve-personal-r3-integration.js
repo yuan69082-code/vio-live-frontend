@@ -1,4 +1,4 @@
-// Opt-in disposable R3 browser integration environment. It owns every
+// Opt-in disposable R3-R6 browser integration environment. It owns every
 // database, attachment, credential, Provider and proxy fact that it creates,
 // listens on loopback only, and never discovers or contacts a real Engine.
 import assert from 'node:assert/strict';
@@ -20,10 +20,12 @@ if (!Number.isInteger(requestedPublicPort) || requestedPublicPort < 1024
 const PUBLIC_PORT = requestedPublicPort;
 const FRONTEND_ORIGIN = 'http://127.0.0.1:5173';
 const PROVIDER_BEHAVIORS = new Set(['success', '429', 'disconnect', 'timeout']);
-const DROP_KINDS = new Set(['turn', 'regeneration', 'conversation', 'attachment', 'memory']);
+const MCP_BEHAVIORS = new Set(['success', '429', 'disconnect', 'timeout']);
+const DROP_KINDS = new Set(['turn', 'regeneration', 'conversation', 'attachment', 'memory', 'capability']);
 const MAX_PROXY_RESPONSE_BYTES = 2 * 1024 * 1024;
 const ENABLE_R4_CONTEXT = process.argv.includes('--r4-context');
 const ENABLE_R5_MEMORY = process.argv.includes('--r5-memory');
+const ENABLE_R6_CAPABILITY = process.argv.includes('--r6-capability');
 const disposableSecret = (label) => `${label}-${randomBytes(18).toString('base64url')}`;
 
 const fixture = createIsolatedTestEnvironment({
@@ -52,6 +54,9 @@ const {
 } = await import('../src/modules/subject-runtime/subject-runtime-port-v1.js');
 const { createNoneSubjectRuntimeAdapter } = await import(
   '../src/modules/subject-runtime/none-subject-runtime-adapter.js'
+);
+const { createMcpStreamableHttpClient, MCP_PROTOCOL_VERSION } = await import(
+  '../src/integrations/mcp/mcp-streamable-http-client.js'
 );
 
 let r4RuntimeEnabled = false;
@@ -110,10 +115,10 @@ const R4_PROJECTION_PORT = Object.freeze({
 const spaces = new Map([
   ['owner-a', {
     key: 'owner-a',
-    passphrase: ENABLE_R5_MEMORY
+    passphrase: ENABLE_R5_MEMORY || ENABLE_R6_CAPABILITY
       ? disposableSecret('controlled-r5-browser-passphrase-a')
       : 'controlled-r3-browser-passphrase-a',
-    credential: ENABLE_R5_MEMORY
+    credential: ENABLE_R5_MEMORY || ENABLE_R6_CAPABILITY
       ? disposableSecret('controlled-r5-loopback-credential-a')
       : 'controlled-r3-loopback-credential-a',
     ownerName: 'R3 browser owner A',
@@ -121,10 +126,10 @@ const spaces = new Map([
   }],
   ['owner-b', {
     key: 'owner-b',
-    passphrase: ENABLE_R5_MEMORY
+    passphrase: ENABLE_R5_MEMORY || ENABLE_R6_CAPABILITY
       ? disposableSecret('controlled-r5-browser-passphrase-b')
       : 'controlled-r3-browser-passphrase-b',
-    credential: ENABLE_R5_MEMORY
+    credential: ENABLE_R5_MEMORY || ENABLE_R6_CAPABILITY
       ? disposableSecret('controlled-r5-loopback-credential-b')
       : 'controlled-r3-loopback-credential-b',
     ownerName: 'R3 browser owner B',
@@ -135,6 +140,7 @@ let activeSpaceKey = 'owner-a';
 let dropNext = null;
 let droppedResponses = 0;
 let nextProviderBehavior = 'success';
+let nextMcpBehavior = 'success';
 let stopping = false;
 
 const providerCalls = new Map([...spaces.keys()].map((key) => [key, 0]));
@@ -203,6 +209,69 @@ const provider = createServer(async (request, response) => {
 await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
 const providerOrigin = `http://127.0.0.1:${provider.address().port}`;
 
+const mcpRequests = [];
+const mcpServer = createServer(async (request, response) => {
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  let body = null;
+  try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch {}
+  mcpRequests.push({
+    method: request.method,
+    path: request.url,
+    protocolVersion: request.headers['mcp-protocol-version'],
+    mcpMethod: request.headers['mcp-method'],
+    bodyMethod: body?.method ?? null,
+  });
+  const behavior = nextMcpBehavior;
+  nextMcpBehavior = 'success';
+  if (behavior === 'disconnect') { request.socket.destroy(); return; }
+  if (behavior === 'timeout') return;
+  if (behavior === '429') { response.writeHead(429); response.end(); return; }
+  if (request.method !== 'POST' || request.url !== '/mcp'
+      || request.headers['mcp-protocol-version'] !== MCP_PROTOCOL_VERSION) {
+    response.writeHead(400, { 'content-type': 'application/json' });
+    response.end('{"error":"invalid_controlled_mcp_request"}');
+    return;
+  }
+  const echoTool = {
+    name: 'echo',
+    title: 'Controlled R6 echo',
+    description: 'Returns one bounded string from the disposable browser fixture.',
+    inputSchema: {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: { text: { type: 'string', maxLength: 2000 } },
+      required: ['text'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: { echoed: { type: 'string', maxLength: 2000 } },
+      required: ['echoed'],
+      additionalProperties: false,
+    },
+  };
+  const result = body?.method === 'tools/list'
+    ? { resultType: 'complete', tools: [echoTool], ttlMs: 60_000, cacheScope: 'private' }
+    : {
+        resultType: 'complete',
+        content: [{ type: 'text', text: body?.params?.arguments?.text ?? '' }],
+        structuredContent: { echoed: body?.params?.arguments?.text ?? '' },
+        isError: false,
+      };
+  response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+  response.end(JSON.stringify({ jsonrpc: '2.0', id: body?.id, result }));
+});
+await new Promise((resolve) => mcpServer.listen(0, '127.0.0.1', resolve));
+const mcpOrigin = `http://127.0.0.1:${mcpServer.address().port}`;
+const mcpServiceUrl = `${mcpOrigin}/mcp`;
+const mcpClient = createMcpStreamableHttpClient({
+  allowedLoopbackOrigins: [mcpOrigin],
+  connectTimeoutMs: 200,
+  responseTimeoutMs: 2_000,
+});
+
 async function internalCall(space, path, method = 'GET', body = undefined, headers = {}) {
   const response = await fetch(`${space.origin}/api/v1/personal${path}`, {
     method,
@@ -267,6 +336,7 @@ function createSpaceApplication(space) {
     providerConnectionChecker: createProviderConnectionChecker({
       allowedLoopbackOrigins: [providerOrigin],
     }),
+    ...(ENABLE_R6_CAPABILITY ? { mcpClient } : {}),
     standaloneChatAttachmentRoot: join(fixture.root, `${space.key}-attachments`),
     ...(ENABLE_R4_CONTEXT ? {
       subjectRuntimeAdapter: createR4RuntimeAdapter(),
@@ -400,6 +470,7 @@ function matchesDrop(kind, method, pathname) {
   if (kind === 'attachment') return /\/api\/v1\/personal\/chat\/conversations\/[^/]+\/attachments$/u.test(pathname);
   if (kind === 'memory') return /\/api\/v1\/personal\/memories(?:\/.*)?$/u.test(pathname)
     && (method === 'POST' || method === 'PATCH');
+  if (kind === 'capability') return /\/api\/v1\/personal\/capability-executions(?:\/.*)?$/u.test(pathname);
   return false;
 }
 
@@ -425,6 +496,12 @@ function publicSpace(space) {
       memoryDeletions: count('personal_local_memory_deletions'),
       contextMemoryLinks: count('personal_context_memory_source_links'),
     } : {}),
+    ...(ENABLE_R6_CAPABILITY ? {
+      capabilities: count('r6_capability_definitions'),
+      capabilityExecutions: count('r6_unified_executions'),
+      capabilityAttempts: count('r6_execution_attempts'),
+      capabilityResults: count('r6_execution_results'),
+    } : {}),
     r4Context: ENABLE_R4_CONTEXT ? 'enabled' : 'disabled',
     ...(ENABLE_R4_CONTEXT ? {
       subjectRuntime: {
@@ -444,11 +521,14 @@ function controlResponse() {
     dropNext,
     droppedResponses,
     nextProviderBehavior,
+    nextMcpBehavior,
+    mcpRequests: mcpRequests.length,
     engine: 'not_accessed',
     r4RuntimeProjection: ENABLE_R4_CONTEXT
       ? (r4RuntimeEnabled ? 'enabled' : 'disabled')
       : 'unavailable',
     externalProvider: 'not_used',
+    externalMcp: 'not_used',
     providerCharge: 'not_incurred',
   };
 }
@@ -499,12 +579,14 @@ async function handleControl(request, response) {
     if (value.action === 'switch-owner' && spaces.has(value.owner)) activeSpaceKey = value.owner;
     else if (value.action === 'drop-next' && DROP_KINDS.has(value.kind)) dropNext = value.kind;
     else if (value.action === 'provider-next' && PROVIDER_BEHAVIORS.has(value.behavior)) nextProviderBehavior = value.behavior;
+    else if (value.action === 'mcp-next' && MCP_BEHAVIORS.has(value.behavior)) nextMcpBehavior = value.behavior;
     else if (value.action === 'r4-runtime' && ENABLE_R4_CONTEXT
         && typeof value.enabled === 'boolean') await setR4RuntimeProjection(value.enabled);
     else if (value.action === 'restart-active') await restartSpace(spaces.get(activeSpaceKey));
     else if (value.action === 'clear-faults') {
       dropNext = null;
       nextProviderBehavior = 'success';
+      nextMcpBehavior = 'success';
     } else if (value.action === 'stop') {
       response.writeHead(202, { 'content-type': 'application/json' });
       response.end('{"status":"stopping"}');
@@ -570,13 +652,16 @@ const proxy = createServer((request, response) => {
 });
 await new Promise((resolve) => proxy.listen(PUBLIC_PORT, '127.0.0.1', resolve));
 
-const browserAccessFile = ENABLE_R5_MEMORY ? join(fixture.root, 'r5-browser-access.json') : null;
+const browserAccessFile = ENABLE_R6_CAPABILITY
+  ? join(fixture.root, 'r6-browser-access.json')
+  : ENABLE_R5_MEMORY ? join(fixture.root, 'r5-browser-access.json') : null;
 if (browserAccessFile) {
   writeFileSync(browserAccessFile, JSON.stringify({
     owners: [...spaces.values()].map((space) => ({
       key: space.key,
       loginPassphrase: space.passphrase,
     })),
+    ...(ENABLE_R6_CAPABILITY ? { mcpServiceUrl } : {}),
   }), { encoding: 'utf8', flag: 'wx' });
 }
 
@@ -588,7 +673,7 @@ process.stdout.write(`${JSON.stringify({
   controlHeader: CONTROL_HEADER,
   owners: [...spaces.values()].map((space) => ({
     key: space.key,
-    ...(ENABLE_R5_MEMORY ? {} : { loginPassphrase: space.passphrase }),
+    ...(ENABLE_R5_MEMORY || ENABLE_R6_CAPABILITY ? {} : { loginPassphrase: space.passphrase }),
     assistantNames: space.assistantNames,
   })),
   browserAccessFile,
@@ -597,6 +682,8 @@ process.stdout.write(`${JSON.stringify({
   r4RuntimeProjection: ENABLE_R4_CONTEXT ? 'toggle_via_control' : 'unavailable',
   faultInjection: [...DROP_KINDS],
   providerBehaviors: [...PROVIDER_BEHAVIORS],
+  mcp: ENABLE_R6_CAPABILITY ? 'controlled_loopback' : 'disabled',
+  mcpBehaviors: [...MCP_BEHAVIORS],
   attachmentFixtures,
   fixtureRoot: fixture.root,
   engine: 'not_accessed',
@@ -614,6 +701,8 @@ async function shutdown() {
     space.app = null;
   }
   await new Promise((resolve) => provider.close(resolve));
+  mcpServer.closeAllConnections();
+  await new Promise((resolve) => mcpServer.close(resolve));
   fixture.remove();
   process.stdout.write('fixture_removed=true\n');
   process.exit(0);
@@ -631,6 +720,9 @@ for await (const command of commands) {
     process.stdout.write(`${JSON.stringify(controlResponse())}\n`);
   } else if (verb === 'provider-next' && PROVIDER_BEHAVIORS.has(value)) {
     nextProviderBehavior = value;
+    process.stdout.write(`${JSON.stringify(controlResponse())}\n`);
+  } else if (verb === 'mcp-next' && MCP_BEHAVIORS.has(value)) {
+    nextMcpBehavior = value;
     process.stdout.write(`${JSON.stringify(controlResponse())}\n`);
   } else if (verb === 'r4-runtime' && ENABLE_R4_CONTEXT && ['on', 'off'].includes(value)) {
     await setR4RuntimeProjection(value === 'on');

@@ -55,7 +55,7 @@ function memoryReadContext(request) {
   }
   return {confirmationId:confirmationId??null,securitySessionId:securitySessionId??null};
 }
-export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,standaloneChatService,multiConversationService,contextAssemblyService,localMemoryService,vault,secureCookies=false,allowedOrigin=null}) {
+export function createPersonalHttpAccess({identityService:identity,configurationService,deletionService,standaloneChatService,multiConversationService,contextAssemblyService,localMemoryService,unifiedCapabilityExecutionService,vault,secureCookies=false,allowedOrigin=null}) {
   function authenticate(request,write=false) {
     const context=identity.authenticate(tokenFrom(request));
     if(write) {
@@ -144,6 +144,19 @@ export function createPersonalHttpAccess({identityService:identity,configuration
       else if(method==='GET'&&path==='/diagnostics') send(identity.diagnostics(user));
       else if(method==='GET'&&path==='/vault') send(vault.publicTransport(user));
       else if(method==='POST'&&path==='/vault/unlock') send(identity.unlock(context,await readJsonBody(request)));
+      else if(method==='GET'&&path==='/capabilities') send(unifiedCapabilityExecutionService.catalog(context));
+      else if(method==='POST'&&path==='/capabilities/local-tools') send(unifiedCapabilityExecutionService.installLocalTool(context,rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&path==='/capabilities/mcp-servers') send(unifiedCapabilityExecutionService.installMcp(context,rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&/^\/capabilities\/mcp-servers\/[^/]+\/discovery$/.test(path)) send(await unifiedCapabilityExecutionService.discoverMcp(context,decodeChatPathSegment(path.split('/')[3],'capabilityId'),rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='GET'&&/^\/capabilities\/mcp-servers\/[^/]+\/discovery\/by-idempotency-key\/[^/]+$/.test(path)) {const parts=path.split('/');send(unifiedCapabilityExecutionService.getMcpDiscoveryOperation(context,decodeChatPathSegment(parts[3],'capabilityId'),decodeChatPathSegment(parts[6],'idempotencyKey')));}
+      else if(method==='POST'&&path==='/capabilities/skills') send(unifiedCapabilityExecutionService.installSkill(context,rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&path==='/capabilities/plugins') send(unifiedCapabilityExecutionService.installPlugin(context,rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='POST'&&/^\/capabilities\/plugins\/[^/]+\/lifecycle$/.test(path)) send(unifiedCapabilityExecutionService.pluginLifecycle(context,decodeChatPathSegment(path.split('/')[3],'capabilityId'),rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='GET'&&path==='/capability-executions') send(unifiedCapabilityExecutionService.listExecutions(context,{category:url.searchParams.get('category')??undefined,status:url.searchParams.get('status')??undefined,cursor:url.searchParams.get('cursor')??undefined,limit:url.searchParams.get('limit')??undefined}));
+      else if(method==='POST'&&path==='/capability-executions') send(await unifiedCapabilityExecutionService.createExecution(context,rejectChatIdentityFields(await readJsonBody(request)),key));
+      else if(method==='GET'&&/^\/capability-executions\/by-idempotency-key\/[^/]+$/.test(path)) send(unifiedCapabilityExecutionService.getByKey(context,decodeChatPathSegment(path.split('/')[3],'idempotencyKey')));
+      else if(method==='GET'&&/^\/capability-executions\/[^/]+$/.test(path)) send(unifiedCapabilityExecutionService.getExecution(context,decodeChatPathSegment(path.split('/')[2],'executionId')));
+      else if(method==='POST'&&/^\/capability-executions\/[^/]+\/recovery$/.test(path)) send(await unifiedCapabilityExecutionService.recoverExecution(context,decodeChatPathSegment(path.split('/')[2],'executionId'),rejectChatIdentityFields(await readJsonBody(request)),key));
       else if(method==='GET'&&path==='/memories') send(localMemoryService.list(context,{
         query:url.searchParams.get('query')??undefined,kind:url.searchParams.get('kind')??undefined,
         status:url.searchParams.get('status')??undefined,

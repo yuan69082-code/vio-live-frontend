@@ -1058,6 +1058,38 @@ Router 的 `execution` 始终返回 `modelCall=not_performed` 与 `externalApiCa
 
 策略、偏好、确认和最终安全结果写入最小 AuditLog。审计记录包含请求用户/主体、资源、动作、风险和最终结果，但不保存任意请求正文、秘密或外部响应。
 
+## R6 统一能力目录与执行 API
+
+R6 的精确公共合同见
+[`R6_UNIFIED_CAPABILITY_EXECUTION_CONTRACT.md`](R6_UNIFIED_CAPABILITY_EXECUTION_CONTRACT.md)。
+以下接口全部位于 `/api/v1/personal`，身份与当前助手只来自 R2
+个人会话；写请求还要求 CSRF 与 `Idempotency-Key`：
+
+- `GET /capabilities`：查询 `model_api`、`local_tool`、`mcp_tool`、
+  `skill`、`plugin_action` 的统一目录。
+- `POST /capabilities/local-tools`：安装内置确定性本地 Tool。
+- `POST /capabilities/mcp-servers`：登记经过显式信任的 MCP HTTPS
+  endpoint。
+- `POST /capabilities/mcp-servers/:capabilityId/discovery`：按 MCP
+  `2026-07-28` 执行一次受控 `tools/list`。
+- `GET /capabilities/mcp-servers/:capabilityId/discovery/by-idempotency-key/:key`：
+  只读查询发现操作；不会重新访问 MCP。
+- `POST /capabilities/skills`：保存不可变的本地 Tool/MCP 步骤编排。
+- `POST /capabilities/plugins`：保存只映射 Skill 的本地 Plugin manifest；
+  不安装或执行代码。
+- `POST /capabilities/plugins/:capabilityId/lifecycle`：明确执行
+  `enable|disable|uninstall`。
+- `POST /capability-executions`、`GET /capability-executions`、
+  `GET /capability-executions/:executionId`、
+  `GET /capability-executions/by-idempotency-key/:key` 与
+  `POST /capability-executions/:executionId/recovery`：创建、分页查询、
+  query-first 恢复和明确 `resume|retry|cancel`。
+
+目录不返回 endpoint、凭据或 manifest 原文；执行响应不返回输入或
+MCP 原始响应。R1 模型调用只投影到统一账本，不由这些接口再次执行。
+明确 429/5xx 可进入 `retryable` 并等待新 recovery；发送后断线或超时
+进入 `outcome_unknown`，不得盲目重试。
+
 ## Tool、MCP、Skill 与 Plugin Registry API
 
 四类 Registry 都属于用户范围，`status` 只支持 `enabled`、`disabled`，创建时默认 `disabled`。`enabled` 仅表示注册项可进入能力选择，不表示 MCP 已连接、Plugin 已安装或 Skill/Tool 可执行。同一用户内同类注册项名称唯一；所有读取和更新都校验用户归属。
